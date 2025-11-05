@@ -26,6 +26,8 @@ function App() {
   const [includeMap, setIncludeMap] = React.useState({});
   const [collapsedTeams, setCollapsedTeams] = React.useState({});
 
+  const [activePage] = React.useState('configure');
+
   // ---------- Escalation Policies (for responder requests) ----------
   const [escalationPolicies, setEscalationPolicies] = React.useState([]); // [{id, name, html_url, num_levels, teams:[] }]
   const [isLoadingEPs, setIsLoadingEPs] = React.useState(false);
@@ -589,25 +591,53 @@ function App() {
 
   const activeCount = active.length;
 
-  // ---------- UI ----------
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="bg-indigo-600 text-white p-4 shadow">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-semibold">PagerDuty Incident Noise Simulator</h1>
-          <div className="space-x-2">
-            {!isRunning ? (
-              <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white">Start</button>
-            ) : (
-              <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white">Pause</button>
-            )}
-            <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white">Clear Log</button>
-            <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900">Clear Active</button>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto p-4 space-y-6">
+  function ConfigureView({
+    pdSubdomain,
+    setPdSubdomain,
+    apiToken,
+    setApiToken,
+    globalRoutingKey,
+    setGlobalRoutingKey,
+    fromEmail,
+    setFromEmail,
+    isLoadingTeams,
+    fetchAllTeams,
+    isLoadingServices,
+    fetchAllServices,
+    teams,
+    selectedTeamIds,
+    setSelectedTeamIds,
+    fetchAllEPs,
+    services,
+    servicesGroupedByTeam,
+    selectAllServices,
+    isTeamCollapsed,
+    toggleTeamCollapsed,
+    setTeamServicesInclude,
+    updateServiceInclude,
+    triggerIncidentForService,
+    escalationPolicies,
+    isLoadingEPs,
+    selectedEPIds,
+    toggleEP,
+    selectAllEPs,
+    ratePerMinute,
+    setRatePerMinute,
+    noteProbability,
+    setNoteProbability,
+    responderProbabilityMultiplier,
+    setResponderProbabilityMultiplier,
+    autoResolveMinSec,
+    setAutoResolveMinSec,
+    autoResolveMaxSec,
+    setAutoResolveMaxSec,
+    severityWeights,
+    setSeverityWeights,
+    universalResponderCfg,
+    setUniversalResponderCfg,
+  }) {
+    return (
+      <>
         <section className="bg-white shadow rounded p-4">
           <h2 className="text-lg font-semibold mb-3">Organization & Credentials</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -862,6 +892,76 @@ function App() {
           </div>
           <p className="text-xs text-gray-500 mt-2">Applies to all services. Responder requests use your selected Escalation Policies.</p>
         </section>
+      </>
+    );
+  }
+
+  // ---------- UI ----------
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <header className="bg-indigo-600 text-white p-4 shadow">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <h1 className="text-xl font-semibold">PagerDuty Incident Noise Simulator</h1>
+          <div className="space-x-2">
+            {!isRunning ? (
+              <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white">Start</button>
+            ) : (
+              <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white">Pause</button>
+            )}
+            <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white">Clear Log</button>
+            <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900">Clear Active</button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-4 space-y-6">
+        {activePage === 'configure' && (
+          <ConfigureView
+            pdSubdomain={pdSubdomain}
+            setPdSubdomain={setPdSubdomain}
+            apiToken={apiToken}
+            setApiToken={setApiToken}
+            globalRoutingKey={globalRoutingKey}
+            setGlobalRoutingKey={setGlobalRoutingKey}
+            fromEmail={fromEmail}
+            setFromEmail={setFromEmail}
+            isLoadingTeams={isLoadingTeams}
+            fetchAllTeams={fetchAllTeams}
+            isLoadingServices={isLoadingServices}
+            fetchAllServices={fetchAllServices}
+            teams={teams}
+            selectedTeamIds={selectedTeamIds}
+            setSelectedTeamIds={setSelectedTeamIds}
+            fetchAllEPs={fetchAllEPs}
+            services={services}
+            servicesGroupedByTeam={servicesGroupedByTeam}
+            selectAllServices={selectAllServices}
+            isTeamCollapsed={isTeamCollapsed}
+            toggleTeamCollapsed={toggleTeamCollapsed}
+            setTeamServicesInclude={setTeamServicesInclude}
+            updateServiceInclude={updateServiceInclude}
+            triggerIncidentForService={triggerIncidentForService}
+            escalationPolicies={escalationPolicies}
+            isLoadingEPs={isLoadingEPs}
+            selectedEPIds={selectedEPIds}
+            toggleEP={toggleEP}
+            selectAllEPs={selectAllEPs}
+            ratePerMinute={ratePerMinute}
+            setRatePerMinute={setRatePerMinute}
+            noteProbability={noteProbability}
+            setNoteProbability={setNoteProbability}
+            responderProbabilityMultiplier={responderProbabilityMultiplier}
+            setResponderProbabilityMultiplier={setResponderProbabilityMultiplier}
+            autoResolveMinSec={autoResolveMinSec}
+            setAutoResolveMinSec={setAutoResolveMinSec}
+            autoResolveMaxSec={autoResolveMaxSec}
+            setAutoResolveMaxSec={setAutoResolveMaxSec}
+            severityWeights={severityWeights}
+            setSeverityWeights={setSeverityWeights}
+            universalResponderCfg={universalResponderCfg}
+            setUniversalResponderCfg={setUniversalResponderCfg}
+          />
+        )}
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-white shadow rounded p-4">
