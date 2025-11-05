@@ -52,6 +52,7 @@ function App() {
   const [log, setLog] = React.useState([]);
   // active rec: { dedupKey, serviceId, serviceName, startedAt, incidentId, mapAttempts, nextEvalAt, ackAt, acked, firstResponderAt, responderRequested, severity }
   const [active, setActive] = React.useState([]);
+  const [activePage, setActivePage] = React.useState('configure');
 
   // Timers/refs for schedulers
   const fireTimerRef = React.useRef(null);
@@ -74,6 +75,7 @@ function App() {
     if (st.severityWeights) setSeverityWeights(st.severityWeights);
     if (st.includeMap) setIncludeMap(st.includeMap);
     if (st.selectedEPIds) setSelectedEPIds(st.selectedEPIds);
+    if (st.activePage === 'monitor' || st.activePage === 'configure') setActivePage(st.activePage);
   }, []);
 
   // ---------- Persist settings whenever they change ----------
@@ -83,10 +85,10 @@ function App() {
       selectedTeamIds, universalResponderCfg,
       ratePerMinute, noteProbability, responderProbabilityMultiplier,
       autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap,
-      selectedEPIds,
+      selectedEPIds, activePage,
     };
     saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds]);
+  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage]);
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
@@ -593,344 +595,370 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="bg-indigo-600 text-white p-4 shadow">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-semibold">PagerDuty Incident Noise Simulator</h1>
-          <div className="space-x-2">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <h1 className="text-xl font-semibold">PagerDuty Incident Noise Simulator</h1>
+            <nav aria-label="Primary" className="flex items-center gap-1 rounded-md bg-indigo-500/60 p-1">
+              <button
+                type="button"
+                onClick={() => setActivePage('configure')}
+                aria-current={activePage === 'configure' ? 'page' : undefined}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600 ${activePage === 'configure' ? 'bg-white text-indigo-600 shadow' : 'text-white hover:bg-indigo-500/70'}`}
+              >
+                Configure
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePage('monitor')}
+                aria-current={activePage === 'monitor' ? 'page' : undefined}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600 ${activePage === 'monitor' ? 'bg-white text-indigo-600 shadow' : 'text-white hover:bg-indigo-500/70'}`}
+              >
+                Monitor
+              </button>
+            </nav>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {!isRunning ? (
-              <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white">Start</button>
+              <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">Start</button>
             ) : (
-              <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white">Pause</button>
+              <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">Pause</button>
             )}
-            <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white">Clear Log</button>
-            <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900">Clear Active</button>
+            <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">Clear Log</button>
+            <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">Clear Active</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-4 space-y-6">
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Organization & Credentials</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">PD Subdomain</label>
-              <input value={pdSubdomain} onChange={(e) => setPdSubdomain(e.target.value)} placeholder="your-domain" className="w-full border rounded px-3 py-2" />
-              <p className="text-xs text-gray-500 mt-1">Links: https://{pdSubdomain || 'your-domain'}.pagerduty.com</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">REST API Token</label>
-              <input value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder="xYz123..." className="w-full border rounded px-3 py-2" />
-              <p className="text-xs text-gray-500 mt-1">Stored in your browser's localStorage</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Global Routing Key (Events v2)</label>
-              <input value={globalRoutingKey} onChange={(e) => setGlobalRoutingKey(e.target.value)} placeholder="ROUTING_KEY" className="w-full border rounded px-3 py-2" />
-              <p className="text-xs text-gray-500 mt-1">Sent via Global Event Orchestration</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">From Email</label>
-              <input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="you@company.com" className="w-full border rounded px-3 py-2" />
-              <p className="text-xs text-gray-500 mt-1">Required for notes/responders endpoints</p>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center gap-2">
-            <button disabled={isLoadingTeams} onClick={fetchAllTeams} className={`px-3 py-1.5 rounded text-white ${isLoadingTeams ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-              {isLoadingTeams ? 'Loading Teams…' : 'Load Teams'}
-            </button>
-            <button disabled={isLoadingServices} onClick={fetchAllServices} className={`px-3 py-1.5 rounded text-white ${isLoadingServices ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-              {isLoadingServices ? 'Loading Services…' : 'Load Services'}
-            </button>
-          </div>
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold">Teams ({teams.length})</h2>
-          </div>
-          {teams.length === 0 ? (
-            <p className="text-sm text-gray-500">Load teams to filter Services and Escalation Policies.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                {teams.map((t) => {
-                  const checked = selectedTeamIds.includes(t.id);
-                  return (
-                    <label key={t.id} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={checked} onChange={(e) => {
-                        setSelectedTeamIds((prev) => {
-                          if (e.target.checked) return [...new Set([...prev, t.id])];
-                          return prev.filter((id) => id !== t.id);
-                        });
-                      }} />
-                      <span>{t.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-          <div className="mt-3 flex items-center gap-2">
-            <button onClick={() => { fetchAllServices(); fetchAllEPs(); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded">Apply Team Filter (Reload Services & EPs)</button>
-          </div>
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold">Services ({services.length})</h2>
-            <div className="space-x-2">
-              <button onClick={() => selectAllServices(true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Select All</button>
-              <button onClick={() => selectAllServices(false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Deselect All</button>
-            </div>
-          </div>
-          {services.length === 0 ? (
-            <p className="text-sm text-gray-500">No services loaded yet. Click "Load Services" above.</p>
-          ) : (
-            <div className="space-y-3">
-              {servicesGroupedByTeam.map((group) => {
-                const isCollapsed = isTeamCollapsed(group.teamId);
-                return (
-                  <div key={group.teamId} className="border rounded">
-                    <div className="flex items-center justify-between bg-gray-100 px-3 py-2 rounded-t">
-                      <button type="button" onClick={() => toggleTeamCollapsed(group.teamId)} className="flex items-center gap-2 text-left">
-                        <span className="font-mono text-xs">{isCollapsed ? '>' : 'v'}</span>
-                        <span className="font-semibold">{group.teamName}</span>
-                        <span className="text-xs text-gray-600">({group.services.length})</span>
-                      </button>
-                      <div className="space-x-2">
-                        <button onClick={() => setTeamServicesInclude(group.teamId, true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm">Select Team</button>
-                        <button onClick={() => setTeamServicesInclude(group.teamId, false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm">Deselect Team</button>
-                      </div>
-                    </div>
-                    {!isCollapsed && (
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                          <thead>
-                            <tr className="text-left border-b">
-                              <th className="py-2 pr-4">Include</th>
-                              <th className="py-2 pr-4">Service</th>
-                              <th className="py-2 pr-4">Teams</th>
-                              <th className="py-2 pr-4">Service ID</th>
-                              <th className="py-2 pr-4">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.services.map((s) => (
-                              <tr key={`${group.teamId}-${s.id}`} className="border-b last:border-0">
-                                <td className="py-2 pr-4">
-                                  <input type="checkbox" checked={!!s.include} onChange={(e) => updateServiceInclude(s.id, e.target.checked)} />
-                                </td>
-                                <td className="py-2 pr-4">
-                                  {s.html_url ? (
-                                    <a href={s.html_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{s.name}</a>
-                                  ) : (
-                                    <span>{s.name}</span>
-                                  )}
-                                </td>
-                                <td className="py-2 pr-4 text-xs text-gray-600">{(s.teams || []).map((t) => t.name).join(', ') || '—'}</td>
-                                <td className="py-2 pr-4 font-mono text-xs">{s.id}</td>
-                                <td className="py-2 pr-4">
-                                  <button onClick={() => triggerIncidentForService(s)} className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded">Trigger</button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Escalation Policies</h2>
-          <div className="flex items-center gap-2 mb-2">
-            <button disabled={isLoadingEPs} onClick={fetchAllEPs} className={`px-3 py-1.5 rounded text-white ${isLoadingEPs ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-              {isLoadingEPs ? 'Loading Escalation Policies…' : 'Load Escalation Policies'}
-            </button>
-            <button onClick={() => selectAllEPs(true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Select All</button>
-            <button onClick={() => selectAllEPs(false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Deselect All</button>
-            <span className="text-sm text-gray-600">Selected: {selectedEPIds.length}</span>
-          </div>
-          {escalationPolicies.length === 0 ? (
-            <p className="text-sm text-gray-500">No escalation policies loaded. Click "Load Escalation Policies" to fetch from your PD domain.</p>
-          ) : (
-            <div className="max-h-64 overflow-auto border rounded p-2">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {escalationPolicies.map((ep) => (
-                  <label key={ep.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedEPIds.includes(ep.id)}
-                      onChange={(e) => toggleEP(ep.id, e.target.checked)}
-                    />
-                    <span>
-                      {ep.html_url ? (<a href={ep.html_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{ep.name}</a>) : ep.name}
-                      <span className="text-gray-500">{typeof ep.num_levels === 'number' ? ` • ${ep.num_levels} level(s)` : ''}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-          <p className="text-xs text-gray-500 mt-2">Responder requests will randomly pick an Escalation Policy you selected.</p>
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Simulation Settings</h2>
-          <div className="grid grid-cols-1 md-grid-cols-3 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Incidents per minute</label>
-              <input type="number" min={0} value={ratePerMinute} onChange={(e) => setRatePerMinute(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
-              <p className="text-xs text-gray-500 mt-1">Average over time (Poisson). 6 = ~6 total incidents/minute.</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Note probability per 60s tick (0-1)</label>
-              <input type="number" min={0} max={1} step={0.05} value={noteProbability} onChange={(e) => setNoteProbability(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Responder probability multiplier</label>
-              <input type="number" min={0} max={2} step={0.05} value={responderProbabilityMultiplier} onChange={(e) => setResponderProbabilityMultiplier(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
-              <p className="text-xs text-gray-500 mt-1">Scales global per-severity probabilities</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Auto-resolve min (sec)</label>
-              <input type="number" min={10} value={autoResolveMinSec} onChange={(e) => setAutoResolveMinSec(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Auto-resolve max (sec)</label>
-              <input type="number" min={10} value={autoResolveMaxSec} onChange={(e) => setAutoResolveMaxSec(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Severity weights</label>
-              <div className="grid grid-cols-4 gap-2">
-                {Object.keys(severityWeights).map((k) => (
-                  <div key={k} className="flex items-center space-x-1">
-                    <span className="text-xs w-14 capitalize">{k}</span>
-                    <input type="number" min={0} step={0.05} value={severityWeights[k]} onChange={(e) => setSeverityWeights({ ...severityWeights, [k]: Number(e.target.value) })} className="w-20 border rounded px-2 py-1"/>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Universal Responder Settings</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <h3 className="font-semibold">Critical</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-sm">Probability
-                  <input type="number" min={0} max={1} step={0.05} value={universalResponderCfg.prob.critical}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, prob: { ...p.prob, critical: Number(e.target.value) } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-                <label className="text-sm">First min (sec)
-                  <input type="number" min={0} value={universalResponderCfg.first.critical.minSec}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, critical: { ...p.first.critical, minSec: Number(e.target.value) } } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-                <label className="text-sm">First max (sec)
-                  <input type="number" min={0} value={universalResponderCfg.first.critical.maxSec}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, critical: { ...p.first.critical, maxSec: Number(e.target.value) } } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-semibold">Non-Critical</h3>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-sm">Probability
-                  <input type="number" min={0} max={1} step={0.05} value={universalResponderCfg.prob.nonCritical}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, prob: { ...p.prob, nonCritical: Number(e.target.value) } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-                <label className="text-sm">First min (sec)
-                  <input type="number" min={0} value={universalResponderCfg.first.nonCritical.minSec}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, nonCritical: { ...p.first.nonCritical, minSec: Number(e.target.value) } } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-                <label className="text-sm">First max (sec)
-                  <input type="number" min={0} value={universalResponderCfg.first.nonCritical.maxSec}
-                    onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, nonCritical: { ...p.first.nonCritical, maxSec: Number(e.target.value) } } }))}
-                    className="w-full border rounded px-2 py-1" />
-                </label>
-              </div>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">Applies to all services. Responder requests use your selected Escalation Policies.</p>
-        </section>
-
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white shadow rounded p-4">
-            <h2 className="text-lg font-semibold mb-3">Active Simulated Incidents ({activeCount})</h2>
-            <div className="max-h-96 overflow-auto">
-              {active.length === 0 ? (<p className="text-sm text-gray-500">None</p>) : (
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-2 pr-4">Service</th>
-                      <th className="py-2 pr-4">Severity</th>
-                      <th className="py-2 pr-4">Dedup Key</th>
-                      <th className="py-2 pr-4">Incident ID</th>
-                      <th className="py-2 pr-4">Ack</th>
-                      <th className="py-2 pr-4">Attempts</th>
-                      <th className="py-2 pr-4">Age</th>
-                      <th className="py-2 pr-4">Next Eval</th>
-                      <th className="py-2 pr-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {active.map((rec) => (
-                      <tr key={rec.dedupKey} className="border-b last:border-0">
-                        <td className="py-2 pr-4">{rec.serviceName}</td>
-                        <td className="py-2 pr-4 capitalize">{rec.severity}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">{rec.dedupKey}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">{rec.incidentId || <span className="text-gray-400">(mapping...)</span>}</td>
-                        <td className="py-2 pr-4">{rec.acked ? 'Yes' : 'No'}</td>
-                        <td className="py-2 pr-4">{rec.mapAttempts || 0}</td>
-                        <td className="py-2 pr-4">{Math.floor((Date.now() - rec.startedAt) / 1000)}s</td>
-                        <td className="py-2 pr-4">{rec.nextEvalAt ? Math.max(0, Math.ceil((rec.nextEvalAt - Date.now()) / 1000)) + 's' : '—'}</td>
-                        <td className="py-2 pr-4 space-x-2">
-                          <button onClick={() => addNote(rec, randomNote())} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Add Note</button>
-                          <button onClick={() => addResponder(rec)} className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">Add Responder</button>
-                          <button onClick={() => acknowledgeIncident(rec)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded">Ack</button>
-                          <button onClick={() => resolveIncident(rec)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">Resolve</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white shadow rounded p-4">
-            <h2 className="text-lg font-semibold mb-3">Log</h2>
-            <div className="max-h-96 overflow-auto space-y-1 font-mono text-xs">
-              {log.map((l, idx) => (
-                <div key={idx} className={ l.type === "error" ? "text-red-600" : l.type === "warn" ? "text-yellow-700" : "text-gray-800" }>
-                  [{l.ts}] {l.type.toUpperCase()}: {l.msg}
+        {activePage === 'configure' ? (
+          <>
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Organization & Credentials</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">PD Subdomain</label>
+                  <input value={pdSubdomain} onChange={(e) => setPdSubdomain(e.target.value)} placeholder="your-domain" className="w-full border rounded px-3 py-2" />
+                  <p className="text-xs text-gray-500 mt-1">Links: https://{pdSubdomain || 'your-domain'}.pagerduty.com</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
+                <div>
+                  <label className="block text-sm font-medium mb-1">REST API Token</label>
+                  <input value={apiToken} onChange={(e) => setApiToken(e.target.value)} placeholder="xYz123..." className="w-full border rounded px-3 py-2" />
+                  <p className="text-xs text-gray-500 mt-1">Stored in your browser's localStorage</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Global Routing Key (Events v2)</label>
+                  <input value={globalRoutingKey} onChange={(e) => setGlobalRoutingKey(e.target.value)} placeholder="ROUTING_KEY" className="w-full border rounded px-3 py-2" />
+                  <p className="text-xs text-gray-500 mt-1">Sent via Global Event Orchestration</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">From Email</label>
+                  <input value={fromEmail} onChange={(e) => setFromEmail(e.target.value)} placeholder="you@company.com" className="w-full border rounded px-3 py-2" />
+                  <p className="text-xs text-gray-500 mt-1">Required for notes/responders endpoints</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button disabled={isLoadingTeams} onClick={fetchAllTeams} className={`px-3 py-1.5 rounded text-white ${isLoadingTeams ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  {isLoadingTeams ? 'Loading Teams…' : 'Load Teams'}
+                </button>
+                <button disabled={isLoadingServices} onClick={fetchAllServices} className={`px-3 py-1.5 rounded text-white ${isLoadingServices ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  {isLoadingServices ? 'Loading Services…' : 'Load Services'}
+                </button>
+              </div>
+            </section>
 
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Notes for Global Event Orchestration</h2>
-          <ul className="list-disc pl-6 text-sm text-gray-700 space-y-1">
-            <li>Incidents are generated as a Poisson process at the configured average rate. For example, 6 ≈ 6 total incidents per minute on average.</li>
-            <li>Events use the single Global Routing Key you provide; acknowledge/resolve also go through Events API using the same dedup_key.</li>
-            <li>Dynamic routing should match on <span className="font-mono">event.payload.custom_details.service_name</span> exactly to the PD Service Name.</li>
-            <li>Every 60s per active incident, the simulator evaluates adding a note and requesting responders based on global per-severity probabilities.</li>
-            <li>Auto-ack happens at a random time between 30 seconds and 5 minutes after trigger. Auto-resolve happens in your configured window.</li>
-            <li>Incident ID mapping retries reduced: up to 3 attempts every 15s; if not found, we assume it was grouped/suppressed and remove it from the simulation.</li>
-            <li>Responder requests now target Escalation Policies, not individual users. Selection persists in localStorage (v7).</li>
-          </ul>
-        </section>
+            <section className="bg-white shadow rounded p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold">Teams ({teams.length})</h2>
+              </div>
+              {teams.length === 0 ? (
+                <p className="text-sm text-gray-500">Load teams to filter Services and Escalation Policies.</p>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    {teams.map((t) => {
+                      const checked = selectedTeamIds.includes(t.id);
+                      return (
+                        <label key={t.id} className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" checked={checked} onChange={(e) => {
+                            setSelectedTeamIds((prev) => {
+                              if (e.target.checked) return [...new Set([...prev, t.id])];
+                              return prev.filter((id) => id !== t.id);
+                            });
+                          }} />
+                          <span>{t.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <button onClick={() => { fetchAllServices(); fetchAllEPs(); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded">Apply Team Filter (Reload Services & EPs)</button>
+              </div>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-semibold">Services ({services.length})</h2>
+                <div className="space-x-2">
+                  <button onClick={() => selectAllServices(true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Select All</button>
+                  <button onClick={() => selectAllServices(false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Deselect All</button>
+                </div>
+              </div>
+              {services.length === 0 ? (
+                <p className="text-sm text-gray-500">No services loaded yet. Click "Load Services" above.</p>
+              ) : (
+                <div className="space-y-3">
+                  {servicesGroupedByTeam.map((group) => {
+                    const isCollapsed = isTeamCollapsed(group.teamId);
+                    return (
+                      <div key={group.teamId} className="border rounded">
+                        <div className="flex items-center justify-between bg-gray-100 px-3 py-2 rounded-t">
+                          <button type="button" onClick={() => toggleTeamCollapsed(group.teamId)} className="flex items-center gap-2 text-left">
+                            <span className="font-mono text-xs">{isCollapsed ? '>' : 'v'}</span>
+                            <span className="font-semibold">{group.teamName}</span>
+                            <span className="text-xs text-gray-600">({group.services.length})</span>
+                          </button>
+                          <div className="space-x-2">
+                            <button onClick={() => setTeamServicesInclude(group.teamId, true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm">Select Team</button>
+                            <button onClick={() => setTeamServicesInclude(group.teamId, false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm">Deselect Team</button>
+                          </div>
+                        </div>
+                        {!isCollapsed && (
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                              <thead>
+                                <tr className="text-left border-b">
+                                  <th className="py-2 pr-4">Include</th>
+                                  <th className="py-2 pr-4">Service</th>
+                                  <th className="py-2 pr-4">Teams</th>
+                                  <th className="py-2 pr-4">Service ID</th>
+                                  <th className="py-2 pr-4">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.services.map((s) => (
+                                  <tr key={`${group.teamId}-${s.id}`} className="border-b last:border-0">
+                                    <td className="py-2 pr-4">
+                                      <input type="checkbox" checked={!!s.include} onChange={(e) => updateServiceInclude(s.id, e.target.checked)} />
+                                    </td>
+                                    <td className="py-2 pr-4">
+                                      {s.html_url ? (
+                                        <a href={s.html_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{s.name}</a>
+                                      ) : (
+                                        <span>{s.name}</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2 pr-4 text-xs text-gray-600">{(s.teams || []).map((t) => t.name).join(', ') || '—'}</td>
+                                    <td className="py-2 pr-4 font-mono text-xs">{s.id}</td>
+                                    <td className="py-2 pr-4">
+                                      <button onClick={() => triggerIncidentForService(s)} className="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded">Trigger</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Escalation Policies</h2>
+              <div className="flex items-center gap-2 mb-2">
+                <button disabled={isLoadingEPs} onClick={fetchAllEPs} className={`px-3 py-1.5 rounded text-white ${isLoadingEPs ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                  {isLoadingEPs ? 'Loading Escalation Policies…' : 'Load Escalation Policies'}
+                </button>
+                <button onClick={() => selectAllEPs(true)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Select All</button>
+                <button onClick={() => selectAllEPs(false)} className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">Deselect All</button>
+                <span className="text-sm text-gray-600">Selected: {selectedEPIds.length}</span>
+              </div>
+              {escalationPolicies.length === 0 ? (
+                <p className="text-sm text-gray-500">No escalation policies loaded. Click "Load Escalation Policies" to fetch from your PD domain.</p>
+              ) : (
+                <div className="max-h-64 overflow-auto border rounded p-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {escalationPolicies.map((ep) => (
+                      <label key={ep.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedEPIds.includes(ep.id)}
+                          onChange={(e) => toggleEP(ep.id, e.target.checked)}
+                        />
+                        <span>
+                          {ep.html_url ? (<a href={ep.html_url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{ep.name}</a>) : ep.name}
+                          <span className="text-gray-500">{typeof ep.num_levels === 'number' ? ` • ${ep.num_levels} level(s)` : ''}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-2">Responder requests will randomly pick an Escalation Policy you selected.</p>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Simulation Settings</h2>
+              <div className="grid grid-cols-1 md-grid-cols-3 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Incidents per minute</label>
+                  <input type="number" min={0} value={ratePerMinute} onChange={(e) => setRatePerMinute(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
+                  <p className="text-xs text-gray-500 mt-1">Average over time (Poisson). 6 = ~6 total incidents/minute.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Note probability per 60s tick (0-1)</label>
+                  <input type="number" min={0} max={1} step={0.05} value={noteProbability} onChange={(e) => setNoteProbability(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Responder probability multiplier</label>
+                  <input type="number" min={0} max={2} step={0.05} value={responderProbabilityMultiplier} onChange={(e) => setResponderProbabilityMultiplier(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
+                  <p className="text-xs text-gray-500 mt-1">Scales global per-severity probabilities</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Auto-resolve min (sec)</label>
+                  <input type="number" min={10} value={autoResolveMinSec} onChange={(e) => setAutoResolveMinSec(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Auto-resolve max (sec)</label>
+                  <input type="number" min={10} value={autoResolveMaxSec} onChange={(e) => setAutoResolveMaxSec(Number(e.target.value))} className="w-full border rounded px-3 py-2"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Severity weights</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {Object.keys(severityWeights).map((k) => (
+                      <div key={k} className="flex items-center space-x-1">
+                        <span className="text-xs w-14 capitalize">{k}</span>
+                        <input type="number" min={0} step={0.05} value={severityWeights[k]} onChange={(e) => setSeverityWeights({ ...severityWeights, [k]: Number(e.target.value) })} className="w-20 border rounded px-2 py-1"/>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Universal Responder Settings</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Critical</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-sm">Probability
+                      <input type="number" min={0} max={1} step={0.05} value={universalResponderCfg.prob.critical}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, prob: { ...p.prob, critical: Number(e.target.value) } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                    <label className="text-sm">First min (sec)
+                      <input type="number" min={0} value={universalResponderCfg.first.critical.minSec}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, critical: { ...p.first.critical, minSec: Number(e.target.value) } } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                    <label className="text-sm">First max (sec)
+                      <input type="number" min={0} value={universalResponderCfg.first.critical.maxSec}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, critical: { ...p.first.critical, maxSec: Number(e.target.value) } } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Non-Critical</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-sm">Probability
+                      <input type="number" min={0} max={1} step={0.05} value={universalResponderCfg.prob.nonCritical}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, prob: { ...p.prob, nonCritical: Number(e.target.value) } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                    <label className="text-sm">First min (sec)
+                      <input type="number" min={0} value={universalResponderCfg.first.nonCritical.minSec}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, nonCritical: { ...p.first.nonCritical, minSec: Number(e.target.value) } } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                    <label className="text-sm">First max (sec)
+                      <input type="number" min={0} value={universalResponderCfg.first.nonCritical.maxSec}
+                        onChange={(e) => setUniversalResponderCfg((p) => ({ ...p, first: { ...p.first, nonCritical: { ...p.first.nonCritical, maxSec: Number(e.target.value) } } }))}
+                        className="w-full border rounded px-2 py-1" />
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">Applies to all services. Responder requests use your selected Escalation Policies.</p>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Notes for Global Event Orchestration</h2>
+              <ul className="list-disc pl-6 text-sm text-gray-700 space-y-1">
+                <li>Incidents are generated as a Poisson process at the configured average rate. For example, 6 ≈ 6 total incidents per minute on average.</li>
+                <li>Events use the single Global Routing Key you provide; acknowledge/resolve also go through Events API using the same dedup_key.</li>
+                <li>Dynamic routing should match on <span className="font-mono">event.payload.custom_details.service_name</span> exactly to the PD Service Name.</li>
+                <li>Every 60s per active incident, the simulator evaluates adding a note and requesting responders based on global per-severity probabilities.</li>
+                <li>Auto-ack happens at a random time between 30 seconds and 5 minutes after trigger. Auto-resolve happens in your configured window.</li>
+                <li>Incident ID mapping retries reduced: up to 3 attempts every 15s; if not found, we assume it was grouped/suppressed and remove it from the simulation.</li>
+                <li>Responder requests now target Escalation Policies, not individual users. Selection persists in localStorage (v7).</li>
+              </ul>
+            </section>
+          </>
+        ) : (
+          <>
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white shadow rounded p-4">
+                <h2 className="text-lg font-semibold mb-3">Active Simulated Incidents ({activeCount})</h2>
+                <div className="max-h-96 overflow-auto">
+                  {active.length === 0 ? (<p className="text-sm text-gray-500">None</p>) : (
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left border-b">
+                          <th className="py-2 pr-4">Service</th>
+                          <th className="py-2 pr-4">Severity</th>
+                          <th className="py-2 pr-4">Dedup Key</th>
+                          <th className="py-2 pr-4">Incident ID</th>
+                          <th className="py-2 pr-4">Ack</th>
+                          <th className="py-2 pr-4">Attempts</th>
+                          <th className="py-2 pr-4">Age</th>
+                          <th className="py-2 pr-4">Next Eval</th>
+                          <th className="py-2 pr-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {active.map((rec) => (
+                          <tr key={rec.dedupKey} className="border-b last:border-0">
+                            <td className="py-2 pr-4">{rec.serviceName}</td>
+                            <td className="py-2 pr-4 capitalize">{rec.severity}</td>
+                            <td className="py-2 pr-4 font-mono text-xs">{rec.dedupKey}</td>
+                            <td className="py-2 pr-4 font-mono text-xs">{rec.incidentId || <span className="text-gray-400">(mapping...)</span>}</td>
+                            <td className="py-2 pr-4">{rec.acked ? 'Yes' : 'No'}</td>
+                            <td className="py-2 pr-4">{rec.mapAttempts || 0}</td>
+                            <td className="py-2 pr-4">{Math.floor((Date.now() - rec.startedAt) / 1000)}s</td>
+                            <td className="py-2 pr-4">{rec.nextEvalAt ? Math.max(0, Math.ceil((rec.nextEvalAt - Date.now()) / 1000)) + 's' : '—'}</td>
+                            <td className="py-2 pr-4 space-x-2">
+                              <button onClick={() => addNote(rec, randomNote())} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Add Note</button>
+                              <button onClick={() => addResponder(rec)} className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">Add Responder</button>
+                              <button onClick={() => acknowledgeIncident(rec)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded">Ack</button>
+                              <button onClick={() => resolveIncident(rec)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">Resolve</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white shadow rounded p-4">
+                <h2 className="text-lg font-semibold mb-3">Log</h2>
+                <div className="max-h-96 overflow-auto space-y-1 font-mono text-xs">
+                  {log.map((l, idx) => (
+                    <div key={idx} className={ l.type === "error" ? "text-red-600" : l.type === "warn" ? "text-yellow-700" : "text-gray-800" }>
+                      [{l.ts}] {l.type.toUpperCase()}: {l.msg}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );
