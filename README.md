@@ -15,6 +15,7 @@ PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle tha
 - PagerDuty REST API token with `incidents.write` scope.
 - PagerDuty Events v2 Global Routing Key.
 - A PagerDuty user email that matches the “From Email” field in the UI.
+- Dynamic Routing rule that keys off `event.payload.custom_details.service_name` so incidents land on the same PagerDuty service that the simulator triggers.
 
 ## Getting Started
 
