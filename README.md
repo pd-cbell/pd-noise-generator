@@ -5,6 +5,7 @@ PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle tha
 ## Highlights
 - Browser UI powered by React (loaded via Babel) with persistent state in `localStorage`.
 - Express-based proxy that wraps the PagerDuty REST & Events APIs so the browser never exposes secrets directly.
+- Dual-view experience: **Configure** for setup, **Monitor** for live incident dashboards with filters, trend chart, and one-click clean-up.
 - Team-aware service selection with collapsible sections and quick “Select Team” actions.
 - Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities.
 - Responder requests resolve the configured “From Email” to a real PagerDuty user ID before making API calls, preventing 404/2100 errors.
@@ -53,6 +54,8 @@ Visit `http://localhost:3001` and populate the UI with:
 - **Service severity defaults**: Incidents trigger with a 20/40/25/15 Info/Warning/Error/Critical distribution.
 - **Responder requests**: The simulator caches the user ID associated with the supplied email and sends PagerDuty-compliant payloads (`requester_id`, `message`, `responder_request_targets`).
 - **Auto actions**: Incidents can auto-ack, auto-resolve, generate notes, and raise responder requests using configuration sliders.
+- **Info suppression**: Info-level triggers are sent to PagerDuty but intentionally skipped from the simulator’s tracking loop to reduce mapping/API chatter.
+- **Monitor tooling**: Trend chart samples the last 15 minutes every 30 seconds; table supports filters, sorting, incident detail drawer, and a “Resolve All” helper.
 
 ## Development Notes
 - The browser bundle is intentionally kept simple (Babel in the browser). For production use you may wish to move to a build step.

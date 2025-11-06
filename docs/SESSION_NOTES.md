@@ -1,29 +1,30 @@
-# Session Notes (v1.0.0 Release)
+# Session Notes (v1.1.0 Release)
 
-**Date:** 2025-11-05  
+**Date:** 2025-11-06  
 **Facilitator:** Automation Agent  
 
 ## Goals
-- Stabilize responder request flow for simulated customer usage.
-- Tidy UI service selection for large customer footprints.
-- Produce documentation and tag the first release.
+- Improve observability of the simulator while incidents are running.
+- Reduce noise from INFO-level events and streamline clean-up tasks.
+- Document Monitor workflows for future agents.
 
 ## Key Changes
-- Filtered NOC/SRE teams, grouped services by team, and defaulted sections to collapsed.
-- Adjusted severity defaults to 20/40/25/15 for more realistic distribution.
-- Resolved responder request 404s by resolving requester email to a PagerDuty user ID and posting `requester_id` payloads directly.
-- Exposed `/proxy/users` endpoint in the Express proxy for user lookups.
-- Added README plus session/agent notes, tagged `v1.0.0`, and pushed to GitHub.
+- Introduced Configure/Monitor tab layout with persistent view state.
+- Added Monitor dashboard upgrades: 15-minute trend chart, sortable/filterable incident table, log filters, and incident detail drawer.
+- Added “Resolve All” bulk control and suppressed INFO incidents from active tracking to cut incident ID mapping load.
+- Updated README and internal docs to reflect the Monitor experience and new release.
+- Tagged `v1.1.0`.
 
 ## Verification
-- Manual responder request executed via curl using PagerDuty token (`requester_id` payload) to confirm API acceptance.
-- Browser simulator tested with multiple incidents; responder requests now succeed when From Email matches an account.
+- Manual simulation run validating trend chart updates every 30s and Monitor filters/sorts.
+- Confirmed “Resolve All” clears active records and logging reflects batch action.
+- Verified INFO incidents still reach PagerDuty but no longer create local active records.
 
 ## Open Questions / Follow-Ups
-- Consider adding automated smoke tests (e.g., Node script hitting proxy with mocked responses).
-- Evaluate replacing in-browser Babel with a build step if performance becomes an issue.
-- Potential feature: saved service groups or per-team responder probability overrides.
+- Automate smoke coverage for Monitor trend data and filters (see Agent Notes).
+- Monitor whether INFO suppression needs user toggles vs permanent behavior.
+- Explore packaging the monitor chart as a reusable component for other demos.
 
 ## Next Steps
-- Monitor customer session feedback.
-- Plan v1.1 scope (testing, packaging improvements, UI polish).
+- Gather feedback from demo sessions on the new Monitor layout.
+- Scope automated checks or telemetry for the trend chart sampling loop.
