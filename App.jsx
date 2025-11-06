@@ -1,6 +1,7 @@
 const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
 const NO_TEAM_ID = "__no_team__";
 const NO_TEAM_NAME = "Unassigned (No Team)";
+const TREND_WINDOW_MS = 15 * 60 * 1000;
 
 function App() {
   // ---------- Local Storage Helpers ----------
@@ -52,10 +53,21 @@ function App() {
   const [log, setLog] = React.useState([]);
   // active rec: { dedupKey, serviceId, serviceName, startedAt, incidentId, mapAttempts, nextEvalAt, ackAt, acked, firstResponderAt, responderRequested, severity }
   const [active, setActive] = React.useState([]);
+  const [activePage, setActivePage] = React.useState('configure');
+  const [monitorSeverityFilter, setMonitorSeverityFilter] = React.useState('all');
+  const [monitorAckFilter, setMonitorAckFilter] = React.useState('all');
+  const [monitorMappingFilter, setMonitorMappingFilter] = React.useState('all');
+  const [monitorSort, setMonitorSort] = React.useState({ key: 'startedAt', direction: 'desc' });
+  const [selectedIncident, setSelectedIncident] = React.useState(null);
+  const [monitorTrend, setMonitorTrend] = React.useState([]);
+  const [logFilter, setLogFilter] = React.useState('all');
+  const [logAutoStick, setLogAutoStick] = React.useState(true);
 
   // Timers/refs for schedulers
   const fireTimerRef = React.useRef(null);
   const evalTimerRef = React.useRef(null);
+  const logContainerRef = React.useRef(null);
+  const latestActiveRef = React.useRef(0);
 
   // ---------- Load from Local Storage on first mount ----------
   React.useEffect(() => {
@@ -74,6 +86,7 @@ function App() {
     if (st.severityWeights) setSeverityWeights(st.severityWeights);
     if (st.includeMap) setIncludeMap(st.includeMap);
     if (st.selectedEPIds) setSelectedEPIds(st.selectedEPIds);
+    if (st.activePage && (st.activePage === 'configure' || st.activePage === 'monitor')) setActivePage(st.activePage);
   }, []);
 
   // ---------- Persist settings whenever they change ----------
@@ -84,13 +97,44 @@ function App() {
       ratePerMinute, noteProbability, responderProbabilityMultiplier,
       autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap,
       selectedEPIds,
+      activePage,
     };
     saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds]);
+  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage]);
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
   }, [fromEmail]);
+
+  React.useEffect(() => {
+    if (!selectedIncident) return;
+    const match = active.find((rec) => rec.dedupKey === selectedIncident.dedupKey);
+    if (!match) {
+      setSelectedIncident(null);
+    } else if (match !== selectedIncident) {
+      setSelectedIncident(match);
+    }
+  }, [active, selectedIncident]);
+
+  React.useEffect(() => {
+    if (!logAutoStick) return;
+    if (!logContainerRef.current) return;
+    logContainerRef.current.scrollTop = 0;
+  }, [log, logFilter, logAutoStick]);
+
+  React.useEffect(() => {
+    function capture() {
+      const nowTs = Date.now();
+      setMonitorTrend((prev) => {
+        const windowStart = nowTs - TREND_WINDOW_MS;
+        const trimmed = prev.filter((point) => point.ts >= windowStart);
+        return [...trimmed, { ts: nowTs, count: latestActiveRef.current }];
+      });
+    }
+    capture();
+    const interval = setInterval(capture, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const apiHeaders = React.useMemo(
     () => ({
@@ -356,6 +400,10 @@ function App() {
       // Auto-resolve time window
       const resolveDelay = (Math.min(autoResolveMinSec, autoResolveMaxSec) + Math.random() * Math.abs(autoResolveMaxSec - autoResolveMinSec)) * 1000;
       logMsg(`Triggered incident for ${svc.name} (severity=${severity}) dk=${dedupKey}`);
+      if (severity === 'info') {
+        logMsg(`Info severity suppressed; not tracking incident ${dedupKey}`, "info");
+        return null;
+      }
       const record = {
         dedupKey, serviceId: svc.id, serviceName: svc.name,
         startedAt: now,
@@ -586,28 +634,226 @@ function App() {
   function stop() { setIsRunning(false); clearTimeout(fireTimerRef.current); clearTimeout(evalTimerRef.current); logMsg("Simulation paused"); }
   function clearLog() { setLog([]); }
   function clearActive() { setActive([]); }
+  function resolveAll() {
+    if (active.length === 0) return;
+    active.forEach((rec) => resolveIncident(rec));
+    logMsg(`Resolve All issued for ${active.length} incident(s)`, "warn");
+  }
 
   const activeCount = active.length;
+  React.useEffect(() => {
+    latestActiveRef.current = activeCount;
+  }, [activeCount]);
+  const now = Date.now();
+  const ackedCount = React.useMemo(() => active.filter((rec) => rec.acked).length, [active]);
+  const unackedCount = activeCount - ackedCount;
+  const pendingResponderCount = React.useMemo(() => active.filter((rec) => !rec.responderRequested).length, [active]);
+  const stalledMappingCount = React.useMemo(
+    () => active.filter((rec) => !rec.incidentId && (rec.mapAttempts || 0) >= 3).length,
+    [active]
+  );
+
+  const severityRank = React.useMemo(() => ({ critical: 0, error: 1, warning: 2, info: 3 }), []);
+  const filteredActive = React.useMemo(() => {
+    return active.filter((rec) => {
+      if (monitorSeverityFilter === 'critical' && rec.severity !== 'critical') return false;
+      if (monitorAckFilter === 'acked' && !rec.acked) return false;
+      if (monitorAckFilter === 'unacked' && rec.acked) return false;
+      if (monitorMappingFilter === 'unmapped' && rec.incidentId) return false;
+      if (monitorMappingFilter === 'stalled') {
+        const attempts = rec.mapAttempts || 0;
+        if (rec.incidentId || attempts < 3) return false;
+      }
+      return true;
+    });
+  }, [active, monitorAckFilter, monitorMappingFilter, monitorSeverityFilter]);
+
+  const sortedActive = React.useMemo(() => {
+    const rows = [...filteredActive];
+    rows.sort((a, b) => {
+      let cmp = 0;
+      switch (monitorSort.key) {
+        case 'severity':
+          cmp = (severityRank[a.severity] ?? 99) - (severityRank[b.severity] ?? 99);
+          break;
+        case 'age':
+          cmp = (a.startedAt || 0) - (b.startedAt || 0);
+          break;
+        case 'attempts':
+          cmp = (a.mapAttempts || 0) - (b.mapAttempts || 0);
+          break;
+        default:
+          cmp = (a.startedAt || 0) - (b.startedAt || 0);
+          break;
+      }
+      if (cmp === 0) {
+        cmp = (a.dedupKey || '').localeCompare(b.dedupKey || '');
+      }
+      return monitorSort.direction === 'asc' ? cmp : -cmp;
+    });
+    return rows;
+  }, [filteredActive, monitorSort, severityRank]);
+
+  const isFilterActive = monitorSeverityFilter !== 'all' || monitorAckFilter !== 'all' || monitorMappingFilter !== 'all';
+  const latestTrendCount = monitorTrend.length ? monitorTrend[monitorTrend.length - 1].count : 0;
+  const trendGraph = React.useMemo(() => {
+    const nowTs = Date.now();
+    const windowStart = nowTs - TREND_WINDOW_MS;
+    const samples = monitorTrend.filter((point) => point.ts >= windowStart);
+    if (samples.length === 0) return null;
+    const width = 360;
+    const height = 160;
+    const padding = { top: 12, right: 16, bottom: 28, left: 44 };
+    const innerWidth = width - padding.left - padding.right;
+    const innerHeight = height - padding.top - padding.bottom;
+    const counts = samples.map((point) => point.count);
+    const maxCount = Math.max(...counts, 1);
+    const minCount = Math.min(...counts);
+    const sameValue = maxCount === minCount;
+    const range = sameValue ? 1 : maxCount - minCount;
+    const points = samples
+      .sort((a, b) => a.ts - b.ts)
+      .map((point) => {
+        const x = padding.left + ((point.ts - windowStart) / TREND_WINDOW_MS) * innerWidth;
+        const normalized = sameValue ? 0.5 : (point.count - minCount) / range;
+        const y = padding.top + (1 - normalized) * innerHeight;
+        return { x, y, count: point.count };
+      });
+    if (!points.length) return null;
+    const baselineY = padding.top + innerHeight;
+    const pathD = points.map((pt, idx) => `${idx === 0 ? 'M' : 'L'}${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`).join(' ');
+    const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(2)} ${baselineY.toFixed(2)} L ${points[0].x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
+    const yTicks = 4;
+    const ticks = Array.from({ length: yTicks + 1 }, (_, idx) => {
+      const value = sameValue ? minCount : minCount + (range * idx) / yTicks;
+      const normalized = sameValue ? 0.5 : (value - minCount) / range;
+      const y = padding.top + (1 - normalized) * innerHeight;
+      return { y, value: Math.round(value) };
+    });
+    return {
+      width,
+      height,
+      pathD,
+      areaD,
+      points,
+      ticks,
+      padding,
+      baselineY,
+      xStart: padding.left,
+      xEnd: width - padding.right,
+    };
+  }, [monitorTrend]);
+  const severityTone = React.useMemo(() => ({
+    critical: 'bg-red-600',
+    error: 'bg-orange-500',
+    warning: 'bg-amber-500',
+    info: 'bg-blue-500',
+  }), []);
+  const toggleSort = React.useCallback((key) => {
+    setMonitorSort((prev) => {
+      if (prev.key === key) {
+        return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, direction: key === 'severity' ? 'asc' : 'desc' };
+    });
+  }, []);
+  const sortIndicator = React.useCallback((key) => {
+    if (monitorSort.key !== key) return '↕';
+    return monitorSort.direction === 'asc' ? '▲' : '▼';
+  }, [monitorSort]);
+  const formatSeconds = React.useCallback((seconds) => {
+    const sec = Math.max(0, Math.floor(seconds));
+    if (sec < 60) return `${sec}s`;
+    if (sec < 3600) {
+      const minutes = Math.floor(sec / 60);
+      const rem = sec % 60;
+      return `${minutes}m${rem ? ` ${rem}s` : ''}`;
+    }
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    return `${hours}h${minutes ? ` ${minutes}m` : ''}`;
+  }, []);
+
+  const selectedIncidentLogs = React.useMemo(() => {
+    if (!selectedIncident) return [];
+    return log.filter((entry) => entry?.msg?.includes?.(selectedIncident.dedupKey)).slice(0, 20);
+  }, [log, selectedIncident]);
+
+  const logCounts = React.useMemo(() => {
+    let errors = 0; let warns = 0; let infos = 0;
+    log.forEach((entry) => {
+      if (entry?.type === 'error') errors += 1;
+      else if (entry?.type === 'warn') warns += 1;
+      else infos += 1;
+    });
+    return {
+      all: log.length,
+      error: errors,
+      warn: warns,
+      info: infos,
+    };
+  }, [log]);
+
+  const visibleLog = React.useMemo(() => {
+    if (logFilter === 'error') return log.filter((entry) => entry.type === 'error');
+    if (logFilter === 'warn') return log.filter((entry) => entry.type === 'warn');
+    if (logFilter === 'info') return log.filter((entry) => entry.type === 'info');
+    return log;
+  }, [log, logFilter]);
 
   // ---------- UI ----------
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="bg-indigo-600 text-white p-4 shadow">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold">PagerDuty Incident Noise Simulator</h1>
-          <div className="space-x-2">
-            {!isRunning ? (
-              <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white">Start</button>
-            ) : (
-              <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white">Pause</button>
-            )}
-            <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white">Clear Log</button>
-            <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900">Clear Active</button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <nav className="flex items-center gap-2" aria-label="Primary">
+              <button
+                type="button"
+                onClick={() => setActivePage('configure')}
+                aria-current={activePage === 'configure' ? 'page' : undefined}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600 ${
+                  activePage === 'configure' ? 'bg-white/20 text-white' : 'text-indigo-100 hover:bg-indigo-500/40'
+                }`}
+              >
+                Configure
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePage('monitor')}
+                aria-current={activePage === 'monitor' ? 'page' : undefined}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600 ${
+                  activePage === 'monitor' ? 'bg-white/20 text-white' : 'text-indigo-100 hover:bg-indigo-500/40'
+                }`}
+              >
+                Monitor
+              </button>
+            </nav>
+            <div className="flex items-center gap-2 sm:ml-auto">
+              {!isRunning ? (
+                <button onClick={start} className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">
+                  Start
+                </button>
+              ) : (
+                <button onClick={stop} className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">
+                  Pause
+                </button>
+              )}
+              <button onClick={clearLog} className="bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">
+                Clear Log
+              </button>
+              <button onClick={clearActive} className="bg-gray-200 hover:bg-gray-300 px-4 py-2 rounded text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600">
+                Clear Active
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 space-y-6">
+      <main className="max-w-7xl mx-auto p-4">
+        {activePage === 'configure' && (
+          <div className="space-y-6">
         <section className="bg-white shadow rounded p-4">
           <h2 className="text-lg font-semibold mb-3">Organization & Credentials</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -863,62 +1109,6 @@ function App() {
           <p className="text-xs text-gray-500 mt-2">Applies to all services. Responder requests use your selected Escalation Policies.</p>
         </section>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white shadow rounded p-4">
-            <h2 className="text-lg font-semibold mb-3">Active Simulated Incidents ({activeCount})</h2>
-            <div className="max-h-96 overflow-auto">
-              {active.length === 0 ? (<p className="text-sm text-gray-500">None</p>) : (
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left border-b">
-                      <th className="py-2 pr-4">Service</th>
-                      <th className="py-2 pr-4">Severity</th>
-                      <th className="py-2 pr-4">Dedup Key</th>
-                      <th className="py-2 pr-4">Incident ID</th>
-                      <th className="py-2 pr-4">Ack</th>
-                      <th className="py-2 pr-4">Attempts</th>
-                      <th className="py-2 pr-4">Age</th>
-                      <th className="py-2 pr-4">Next Eval</th>
-                      <th className="py-2 pr-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {active.map((rec) => (
-                      <tr key={rec.dedupKey} className="border-b last:border-0">
-                        <td className="py-2 pr-4">{rec.serviceName}</td>
-                        <td className="py-2 pr-4 capitalize">{rec.severity}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">{rec.dedupKey}</td>
-                        <td className="py-2 pr-4 font-mono text-xs">{rec.incidentId || <span className="text-gray-400">(mapping...)</span>}</td>
-                        <td className="py-2 pr-4">{rec.acked ? 'Yes' : 'No'}</td>
-                        <td className="py-2 pr-4">{rec.mapAttempts || 0}</td>
-                        <td className="py-2 pr-4">{Math.floor((Date.now() - rec.startedAt) / 1000)}s</td>
-                        <td className="py-2 pr-4">{rec.nextEvalAt ? Math.max(0, Math.ceil((rec.nextEvalAt - Date.now()) / 1000)) + 's' : '—'}</td>
-                        <td className="py-2 pr-4 space-x-2">
-                          <button onClick={() => addNote(rec, randomNote())} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded">Add Note</button>
-                          <button onClick={() => addResponder(rec)} className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded">Add Responder</button>
-                          <button onClick={() => acknowledgeIncident(rec)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded">Ack</button>
-                          <button onClick={() => resolveIncident(rec)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded">Resolve</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white shadow rounded p-4">
-            <h2 className="text-lg font-semibold mb-3">Log</h2>
-            <div className="max-h-96 overflow-auto space-y-1 font-mono text-xs">
-              {log.map((l, idx) => (
-                <div key={idx} className={ l.type === "error" ? "text-red-600" : l.type === "warn" ? "text-yellow-700" : "text-gray-800" }>
-                  [{l.ts}] {l.type.toUpperCase()}: {l.msg}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
         <section className="bg-white shadow rounded p-4">
           <h2 className="text-lg font-semibold mb-3">Notes for Global Event Orchestration</h2>
           <ul className="list-disc pl-6 text-sm text-gray-700 space-y-1">
@@ -931,6 +1121,446 @@ function App() {
             <li>Responder requests now target Escalation Policies, not individual users. Selection persists in localStorage (v7).</li>
           </ul>
         </section>
+
+          </div>
+        )}
+
+        {activePage === 'monitor' && (
+          <div className="space-y-6">
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-4">Current Load</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Active</p>
+                  <p className="mt-1 text-2xl font-semibold text-indigo-900">{activeCount}</p>
+                  <p className="text-xs text-indigo-700">Acked {ackedCount} / {activeCount}</p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Unacked</p>
+                  <p className="mt-1 text-2xl font-semibold text-amber-900">{unackedCount}</p>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Responder Pending</p>
+                  <p className="mt-1 text-2xl font-semibold text-blue-900">{pendingResponderCount}</p>
+                </div>
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Mapping Stalled</p>
+                  <p className="mt-1 text-2xl font-semibold text-rose-900">{stalledMappingCount}</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-semibold">Active Trend (15 minutes)</h2>
+                <p className="text-xs text-gray-500">Samples captured every 30 seconds</p>
+              </div>
+              {trendGraph ? (
+                <div className="mt-4">
+                  <svg
+                    viewBox={`0 0 ${trendGraph.width} ${trendGraph.height}`}
+                    className="h-32 w-full"
+                    preserveAspectRatio="none"
+                  >
+                    <defs>
+                      <linearGradient id="trendAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(16, 185, 129, 0.35)" />
+                        <stop offset="100%" stopColor="rgba(16, 185, 129, 0)" />
+                      </linearGradient>
+                    </defs>
+                    {trendGraph.ticks.map((tick, idx) => (
+                      <g key={`tick-${idx}`}>
+                        <line
+                          x1={trendGraph.xStart}
+                          y1={tick.y}
+                          x2={trendGraph.xEnd}
+                          y2={tick.y}
+                          stroke="rgba(15, 118, 110, 0.12)"
+                          strokeWidth="1"
+                        />
+                        <text
+                          x={trendGraph.xStart - 8}
+                          y={tick.y + 4}
+                          fontSize="11"
+                          textAnchor="end"
+                          fill="#0f766e"
+                        >
+                          {tick.value}
+                        </text>
+                      </g>
+                    ))}
+                    <line
+                      x1={trendGraph.xStart}
+                      y1={trendGraph.baselineY}
+                      x2={trendGraph.xEnd}
+                      y2={trendGraph.baselineY}
+                      stroke="rgba(15, 118, 110, 0.2)"
+                      strokeWidth="1.25"
+                    />
+                    <path d={trendGraph.areaD} fill="url(#trendAreaGradient)" />
+                    <path
+                      d={trendGraph.pathD}
+                      fill="none"
+                      stroke="#047857"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    {trendGraph.points.length > 0 && (
+                      <circle
+                        cx={trendGraph.points[trendGraph.points.length - 1].x}
+                        cy={trendGraph.points[trendGraph.points.length - 1].y}
+                        r="4"
+                        fill="#047857"
+                        stroke="#ffffff"
+                        strokeWidth="1.5"
+                      />
+                    )}
+                  </svg>
+                  <div className="mt-2 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                    <span>15m ago</span>
+                    <span>Now</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">Collecting samples… check back shortly.</p>
+              )}
+              <p className="mt-2 text-xs text-gray-500">Latest sample: {latestTrendCount} active incidents</p>
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex flex-col gap-4 rounded bg-white p-4 shadow">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <h2 className="text-lg font-semibold">
+                    Active Simulated Incidents ({sortedActive.length}{sortedActive.length !== activeCount ? ` / ${activeCount}` : ''})
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase text-gray-500">
+                      Severity
+                      <select
+                        value={monitorSeverityFilter}
+                        onChange={(e) => setMonitorSeverityFilter(e.target.value)}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="all">All</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase text-gray-500">
+                      Ack
+                      <select
+                        value={monitorAckFilter}
+                        onChange={(e) => setMonitorAckFilter(e.target.value)}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="all">All</option>
+                        <option value="acked">Acked</option>
+                        <option value="unacked">Unacked</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-1 text-xs font-semibold uppercase text-gray-500">
+                      Mapping
+                      <select
+                        value={monitorMappingFilter}
+                        onChange={(e) => setMonitorMappingFilter(e.target.value)}
+                        className="rounded border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="all">All</option>
+                        <option value="unmapped">Unmapped</option>
+                        <option value="stalled">Stalled</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMonitorSeverityFilter('all');
+                        setMonitorAckFilter('all');
+                        setMonitorMappingFilter('all');
+                      }}
+                      disabled={!isFilterActive}
+                      className={`rounded border px-3 py-1 text-xs font-semibold transition-colors ${isFilterActive ? 'border-indigo-500 text-indigo-600 hover:bg-indigo-50' : 'border-gray-300 text-gray-400'}`}
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-3 w-3 rounded-full bg-rose-200" aria-hidden="true" />
+                    Mapping stalled
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-3 w-3 rounded-full bg-amber-200" aria-hidden="true" />
+                    Responder pending
+                  </span>
+                </div>
+                <div className="max-h-96 overflow-auto rounded border border-gray-200">
+                  {sortedActive.length === 0 ? (
+                    <p className="p-4 text-sm text-gray-500">No incidents match the current filters.</p>
+                  ) : (
+                    <table className="min-w-full text-sm">
+                      <thead className="sticky top-0 bg-white shadow-sm">
+                        <tr className="text-left">
+                          <th className="py-2 pl-4 pr-4">Service</th>
+                          <th className="py-2 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort('severity')}
+                              className="flex items-center gap-1 text-sm font-semibold text-gray-700"
+                            >
+                              Severity
+                              <span aria-hidden="true" className="text-xs">{sortIndicator('severity')}</span>
+                              <span className="sr-only">Sort by severity</span>
+                            </button>
+                          </th>
+                          <th className="py-2 pr-4">Dedup Key</th>
+                          <th className="py-2 pr-4">Incident ID</th>
+                          <th className="py-2 pr-4">Ack</th>
+                          <th className="py-2 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort('attempts')}
+                              className="flex items-center gap-1 text-sm font-semibold text-gray-700"
+                            >
+                              Attempts
+                              <span aria-hidden="true" className="text-xs">{sortIndicator('attempts')}</span>
+                              <span className="sr-only">Sort by mapping attempts</span>
+                            </button>
+                          </th>
+                          <th className="py-2 pr-4">
+                            <button
+                              type="button"
+                              onClick={() => toggleSort('age')}
+                              className="flex items-center gap-1 text-sm font-semibold text-gray-700"
+                            >
+                              Age
+                              <span aria-hidden="true" className="text-xs">{sortIndicator('age')}</span>
+                              <span className="sr-only">Sort by age</span>
+                            </button>
+                          </th>
+                          <th className="py-2 pr-4">Next Eval</th>
+                          <th className="py-2 pr-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedActive.map((rec) => {
+                          const ageSeconds = rec.startedAt ? Math.floor((now - rec.startedAt) / 1000) : 0;
+                          const timeToNext = rec.nextEvalAt ? Math.max(0, Math.ceil((rec.nextEvalAt - now) / 1000)) : null;
+                          const mappingStalled = !rec.incidentId && (rec.mapAttempts || 0) >= 3;
+                          const responderPending = !rec.responderRequested;
+                          const rowClass = `border-b last:border-0 transition-colors ${mappingStalled ? 'bg-rose-50' : responderPending ? 'bg-amber-50' : ''}`;
+                          const severityShade = severityTone[rec.severity] || 'bg-gray-500';
+                          const acked = rec.acked;
+                          return (
+                            <tr key={rec.dedupKey} className={rowClass}>
+                              <td className="py-3 pl-4 pr-4 align-top">
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium text-gray-900">{rec.serviceName}</span>
+                                  <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide">
+                                    {mappingStalled && (
+                                      <span className="rounded bg-rose-200 px-1.5 py-0.5 text-rose-800">Mapping stalled</span>
+                                    )}
+                                    {responderPending && (
+                                      <span className="rounded bg-amber-200 px-1.5 py-0.5 text-amber-800">Responder pending</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 pr-4 align-top">
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold uppercase text-white ${severityShade}`}>
+                                  {rec.severity}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-4 align-top font-mono text-xs text-gray-700">{rec.dedupKey}</td>
+                              <td className="py-3 pr-4 align-top font-mono text-xs">
+                                {rec.incidentId ? (
+                                  <span>{rec.incidentId}</span>
+                                ) : (
+                                  <span className="text-rose-600">Pending…</span>
+                                )}
+                              </td>
+                              <td className="py-3 pr-4 align-top">
+                                {acked ? (
+                                  <span className="text-green-600 font-semibold">Acked</span>
+                                ) : (
+                                  <span className="text-amber-700 font-semibold">Open</span>
+                                )}
+                              </td>
+                              <td className="py-3 pr-4 align-top">{rec.mapAttempts || 0}</td>
+                              <td className="py-3 pr-4 align-top">
+                                <span className={ageSeconds > 300 ? 'font-semibold text-rose-600' : ''}>
+                                  {formatSeconds(ageSeconds)}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-4 align-top">
+                                {timeToNext != null ? formatSeconds(timeToNext) : '—'}
+                              </td>
+                              <td className="py-3 pr-4 align-top">
+                                <div className="flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedIncident(rec)}
+                                    className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                                  >
+                                    Details
+                                  </button>
+                                  <button onClick={() => addNote(rec, randomNote())} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold">Add Note</button>
+                                  <button onClick={() => addResponder(rec)} className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs font-semibold">Add Responder</button>
+                                  <button onClick={() => acknowledgeIncident(rec)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded text-xs font-semibold">Ack</button>
+                                  <button onClick={() => resolveIncident(rec)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-semibold">Resolve</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-gray-500">Table updates live as simulations run.</p>
+                  <button
+                    type="button"
+                    onClick={resolveAll}
+                    className="rounded border border-emerald-500 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Resolve All
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-4 rounded bg-white p-4 shadow">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <h2 className="text-lg font-semibold">Monitor Log</h2>
+                  <label className="flex items-center gap-2 text-xs font-semibold uppercase text-gray-500">
+                    <input
+                      type="checkbox"
+                      checked={logAutoStick}
+                      onChange={(e) => setLogAutoStick(e.target.checked)}
+                      className="h-3 w-3 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Auto-scroll
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { value: 'all', label: 'All', count: logCounts.all },
+                    { value: 'error', label: 'Errors', count: logCounts.error },
+                    { value: 'warn', label: 'Warnings', count: logCounts.warn },
+                    { value: 'info', label: 'Info', count: logCounts.info },
+                  ].map(({ value, label, count }) => {
+                    const isActive = logFilter === value;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setLogFilter(value)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${isActive ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600'}`}
+                      >
+                        {label}
+                        <span className="ml-1 text-[10px] opacity-80">({count})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  ref={logContainerRef}
+                  className="max-h-96 overflow-auto space-y-1 rounded border border-gray-200 bg-gray-50 p-2 font-mono text-xs"
+                >
+                  {visibleLog.length === 0 ? (
+                    <p className="text-gray-500">No log entries match the current filter.</p>
+                  ) : (
+                    visibleLog.map((entry, idx) => {
+                      const key = `${entry.ts}-${idx}`;
+                      const tone = entry.type === 'error'
+                        ? 'text-red-600'
+                        : entry.type === 'warn'
+                        ? 'text-amber-700'
+                        : 'text-gray-800';
+                      return (
+                        <div key={key} className={tone}>
+                          [{entry.ts}] {entry.type?.toUpperCase?.()}: {entry.msg}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </section>
+
+            {selectedIncident && (
+              <section className="space-y-4 rounded bg-white p-4 shadow">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Incident Details</h2>
+                    <p className="text-sm text-gray-500">
+                      {selectedIncident.serviceName} • {selectedIncident.dedupKey}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIncident(null)}
+                    className="rounded border border-gray-300 px-3 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Incident ID</p>
+                    <p className="font-mono text-sm">{selectedIncident.incidentId || 'Pending mapping'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Severity</p>
+                    <p className="capitalize">{selectedIncident.severity}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Acked</p>
+                    <p>{selectedIncident.acked ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Mapping attempts</p>
+                    <p>{selectedIncident.mapAttempts || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Age</p>
+                    <p>{formatSeconds(selectedIncident.startedAt ? Math.floor((now - selectedIncident.startedAt) / 1000) : 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Responder requested</p>
+                    <p>{selectedIncident.responderRequested ? 'Yes' : 'No'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Service ID</p>
+                    <p className="font-mono text-sm">{selectedIncident.serviceId}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase text-gray-500">Next evaluation</p>
+                    <p>
+                      {selectedIncident.nextEvalAt
+                        ? formatSeconds(Math.max(0, Math.ceil((selectedIncident.nextEvalAt - now) / 1000)))
+                        : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700">Recent log activity</h3>
+                  {selectedIncidentLogs.length === 0 ? (
+                    <p className="text-xs text-gray-500">No log entries referencing this incident yet.</p>
+                  ) : (
+                    <div className="mt-2 space-y-1 rounded border border-gray-200 bg-gray-50 p-2 font-mono text-xs">
+                      {selectedIncidentLogs.map((entry, idx) => (
+                        <div key={`${entry.ts}-${idx}`} className={entry.type === 'error' ? 'text-red-600' : entry.type === 'warn' ? 'text-amber-700' : 'text-gray-800'}>
+                          [{entry.ts}] {entry.type?.toUpperCase?.()}: {entry.msg}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
