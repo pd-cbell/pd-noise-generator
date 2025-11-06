@@ -48,6 +48,17 @@ Visit `http://localhost:3001` and populate the UI with:
 3. Select the services you want to simulate (per-team toggles help keep noise targeted).
 4. Press **Start** to begin the Poisson incident generation loop.
 
+### Running with Docker Compose
+
+The repository ships with a simple Docker setup so you can run the proxy/UI locally or drop it into an orchestrator:
+
+```bash
+cp .env.example .env  # add your PagerDuty credentials
+docker compose up --build
+```
+
+The service listens on `PORT` (defaults to `3001`) and uses the same `.env` values that `npm start` expects.
+
 ## Key Behaviors
 - **Local storage persistence**: All settings stick between sessions under the `pdns_settings_v7` key.
 - **Team filtering**: Teams starting with `NOC - ` and `SRE - ` are hidden for the simulated customer scenario.

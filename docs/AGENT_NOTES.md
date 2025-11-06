@@ -7,6 +7,7 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Use `.env` (copy from `.env.example`) to set `PD_FROM_EMAIL`, `PORT`, and optional `PD_API_BASE`.
 - For UI testing, supply valid PagerDuty credentials in the browser (REST API token, Global Routing Key, From Email). The simulator stores data in `localStorage` under `pdns_settings_v7`.
 - LocalStorage now also persists the active view (“configure” vs “monitor”) and monitor filters/sort state so the dashboard re-opens exactly how a user left it.
+- Docker support: build with `docker compose up --build` (defaults to port 3001 and consumes the same `.env` file). Update `.env` before composing; `.dockerignore` prevents leaking local credentials into the image layers.
 
 ## Key Endpoints
 - Proxy routes under `/proxy/...` forward to PagerDuty REST APIs using the server-side `From` header.

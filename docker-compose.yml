@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  noise-simulator:
+    build:
+      context: .
+    env_file:
+      - .env
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      # Allow overriding via docker-compose overrides without editing .env
+      PORT: "${PORT:-3001}"
+    restart: unless-stopped

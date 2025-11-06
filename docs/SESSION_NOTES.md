@@ -12,6 +12,7 @@
 - Introduced Configure/Monitor tab layout with persistent view state.
 - Added Monitor dashboard upgrades: 15-minute trend chart, sortable/filterable incident table, log filters, and incident detail drawer.
 - Added “Resolve All” bulk control and suppressed INFO incidents from active tracking to cut incident ID mapping load.
+- Added Dockerfile + docker-compose for easy local/infra deployments.
 - Updated README and internal docs to reflect the Monitor experience and new release.
 - Tagged `v1.1.0`.
 
