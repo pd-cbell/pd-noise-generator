@@ -69,7 +69,7 @@ git tag vX.Y.Z
 git push origin main --tags
 ```
 
-Current release: **v1.0.0**
+Current release: **v1.1.0**
 
 ## License
 
