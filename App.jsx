@@ -48,6 +48,13 @@ function App() {
   const [autoResolveMinSec, setAutoResolveMinSec] = React.useState(90);
   const [autoResolveMaxSec, setAutoResolveMaxSec] = React.useState(240);
   const [severityWeights, setSeverityWeights] = React.useState({ info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 });
+  const [autoHealConfig, setAutoHealConfig] = React.useState({
+    enabled: true,
+    warningProbability: 0.2,
+    minDelaySec: 30,
+    maxDelaySec: 90,
+  });
+  const [resumeExistingEnabled, setResumeExistingEnabled] = React.useState(true);
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -87,6 +94,8 @@ function App() {
     if (st.includeMap) setIncludeMap(st.includeMap);
     if (st.selectedEPIds) setSelectedEPIds(st.selectedEPIds);
     if (st.activePage && (st.activePage === 'configure' || st.activePage === 'monitor')) setActivePage(st.activePage);
+    if (st.autoHealConfig) setAutoHealConfig(st.autoHealConfig);
+    if (st.resumeExistingEnabled != null) setResumeExistingEnabled(Boolean(st.resumeExistingEnabled));
   }, []);
 
   // ---------- Persist settings whenever they change ----------
@@ -98,9 +107,11 @@ function App() {
       autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap,
       selectedEPIds,
       activePage,
+      autoHealConfig,
+      resumeExistingEnabled,
     };
     saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage]);
+  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled]);
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
@@ -261,6 +272,7 @@ function App() {
       }
       out.sort((a, b) => a.name.localeCompare(b.name)); setServices(out);
       logMsg(`Loaded ${out.length} services${selectedTeamIds.length ? ` (filtered by ${selectedTeamIds.length} team(s))` : ''}`);
+      return out;
     } catch (e) { logMsg(`Failed to load services: ${e.message || e}`, "error"); }
     finally { setIsLoadingServices(false); }
   }
@@ -292,6 +304,68 @@ function App() {
       logMsg(`Loaded ${out.length} escalation policies${selectedTeamIds.length ? ` (filtered by ${selectedTeamIds.length} team(s))` : ''}`);
     } catch (e) { logMsg(`Failed to load escalation policies: ${e.message || e}`, "error"); }
     finally { setIsLoadingEPs(false); }
+  }
+
+  const resumeInFlightRef = React.useRef(false);
+  async function resumeExistingIncidents(serviceSnapshot = services) {
+    if (!resumeExistingEnabled) return;
+    if (!apiToken) { logMsg("API token required to resume existing incidents", "warn"); return; }
+    const includedIds = (serviceSnapshot && serviceSnapshot.length ? serviceSnapshot : services)
+      .filter((svc) => svc.include)
+      .map((svc) => svc.id)
+      .filter(Boolean);
+    if (!includedIds.length) {
+      logMsg("No included services selected; skipping resume of existing incidents", "warn");
+      return;
+    }
+    if (resumeInFlightRef.current) return;
+    resumeInFlightRef.current = true;
+    try {
+      const statuses = ["triggered", "acknowledged"];
+      const limit = 100;
+      let offset = 0;
+      let more = true;
+      const collected = [];
+      while (more) {
+        const url = new URL("/proxy/incidents", window.location.origin);
+        url.searchParams.set("limit", String(limit));
+        url.searchParams.set("offset", String(offset));
+        statuses.forEach((status) => url.searchParams.append("statuses[]", status));
+        includedIds.forEach((svcId) => url.searchParams.append("service_ids[]", svcId));
+        const res = await fetch(url.toString(), { headers: apiHeaders });
+        const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
+        const mapped = (data?.incidents || []).map(mapPdIncidentToActive).filter(Boolean);
+        collected.push(...mapped);
+        more = Boolean(data?.more);
+        offset += data?.limit || mapped.length || 0;
+      }
+      if (!collected.length) {
+        logMsg("No existing PagerDuty incidents found for selected services", "info");
+        return;
+      }
+      let insertedCount = 0;
+      setActive((prev) => {
+        const dedup = new Set(prev.map((rec) => rec.dedupKey));
+        const ids = new Set(prev.map((rec) => rec.incidentId).filter(Boolean));
+        const toAdd = collected.filter((rec) => {
+          if (dedup.has(rec.dedupKey)) return false;
+          if (rec.incidentId && ids.has(rec.incidentId)) return false;
+          return true;
+        });
+        insertedCount = toAdd.length;
+        if (!insertedCount) return prev;
+        return [...prev, ...toAdd];
+      });
+      if (insertedCount) {
+        logMsg(`Resumed ${insertedCount} PagerDuty incident${insertedCount === 1 ? '' : 's'}`, "info");
+      } else {
+        logMsg("Existing incidents already tracked; nothing new to resume", "info");
+      }
+    } catch (e) {
+      logMsg(`Failed to resume incidents: ${e.message || e}`, "error");
+    } finally {
+      resumeInFlightRef.current = false;
+    }
   }
 
   function toggleEP(id, checked) {
@@ -346,6 +420,40 @@ function App() {
     });
     return map;
   }, [servicesGroupedByTeam]);
+
+  const serviceNameLookup = React.useMemo(() => {
+    const map = {};
+    services.forEach((svc) => { map[svc.id] = svc.name; });
+    return map;
+  }, [services]);
+
+  const mapPdIncidentToActive = React.useCallback((inc) => {
+    if (!inc) return null;
+    const serviceId = inc.service?.id || inc.service_id;
+    const serviceName = serviceNameLookup[serviceId] || inc.service?.summary || inc.summary || "Unknown Service";
+    const dedupKey = inc.incident_key || inc.dedup_key || inc.id || uid("pd");
+    const startedAt = inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
+    const severity = inc.severity || "info";
+    const acked = inc.status === "acknowledged";
+    return {
+      dedupKey,
+      serviceId,
+      serviceName,
+      startedAt,
+      incidentId: inc.id || null,
+      mapAttempts: 0,
+      nextEvalAt: Date.now() + 60_000,
+      ackAt: null,
+      acked,
+      firstResponderAt: null,
+      responderRequested: Boolean(inc.pending_actions && inc.pending_actions.length),
+      severity,
+      resolveAt: null,
+      autoHealAt: null,
+      autoHealScheduled: false,
+      syncedFromPd: true,
+    };
+  }, [serviceNameLookup]);
 
   const setTeamServicesInclude = React.useCallback((teamId, include) => {
     const ids = teamServiceIds[teamId];
@@ -404,6 +512,10 @@ function App() {
         logMsg(`Info severity suppressed; not tracking incident ${dedupKey}`, "info");
         return null;
       }
+      const shouldAutoHeal = severity === 'warning' && autoHealConfig?.enabled && Math.random() < Number(autoHealConfig.warningProbability || 0);
+      const autoHealDelay = shouldAutoHeal
+        ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000
+        : null;
       const record = {
         dedupKey, serviceId: svc.id, serviceName: svc.name,
         startedAt: now,
@@ -411,6 +523,9 @@ function App() {
         ackAt: now + ackDelay, acked: false, firstResponderAt: now + firstResponderDelay,
         responderRequested: false, severity,
         resolveAt: now + resolveDelay,
+        autoHealAt: autoHealDelay ? now + autoHealDelay : null,
+        autoHealScheduled: shouldAutoHeal,
+        syncedFromPd: false,
       };
       setActive((a) => [record, ...a]);
       // First mapping attempt after a short delay
@@ -463,7 +578,34 @@ function App() {
     };
     tick();
     return () => { stop = true; clearTimeout(evalTimerRef.current); };
-  }, [isRunning, noteProbability, responderProbabilityMultiplier, services, apiToken, fromEmail, globalRoutingKey, universalResponderCfg, selectedEPIds, autoResolveMinSec, autoResolveMaxSec]);
+  }, [isRunning, noteProbability, responderProbabilityMultiplier, services, apiToken, fromEmail, globalRoutingKey, universalResponderCfg, selectedEPIds, autoResolveMinSec, autoResolveMaxSec, autoHealConfig]);
+
+  // ---------- Auto-heal ticker (always running) ----------
+  const autoHealTickerRef = React.useRef(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      const toHeal = [];
+      setActive((prev) => prev.map((rec) => {
+        if (rec.autoHealScheduled && rec.autoHealAt && Date.now() >= rec.autoHealAt) {
+          toHeal.push(rec);
+          return { ...rec, autoHealScheduled: false, autoHealAt: null };
+        }
+        return rec;
+      }));
+      toHeal.forEach((rec) => {
+        logMsg(`Auto-healing dk=${rec.dedupKey} (${rec.serviceName})`, "info");
+        resolveIncident(rec);
+      });
+      autoHealTickerRef.current = setTimeout(tick, 1000);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      clearTimeout(autoHealTickerRef.current);
+    };
+  }, [autoHealConfig]);
 
   // ---------- Mapping + actions helpers ----------
   async function resolveIncidentIdForDedupKey(rec, fromTimer = false) {
@@ -625,11 +767,22 @@ function App() {
     }
   }
 
-  function start() {
+  async function start() {
     if (!globalRoutingKey) return logMsg("Provide the Global Routing Key", "warn");
     if (!apiToken) logMsg("Tip: Provide a REST API token + From email to enable notes/responders & ID mapping", "warn");
-    if (services.length === 0) { logMsg("No services loaded. Attempting to load now...", "warn"); fetchAllServices().then(() => setIsRunning(true)); }
-    else { if (!services.some((s) => s.include)) return logMsg("Include at least one service", "warn"); setIsRunning(true); logMsg("Simulation started"); }
+    let serviceSnapshot = services;
+    if (!serviceSnapshot.length) {
+      logMsg("No services loaded. Attempting to load now...", "warn");
+      const loaded = await fetchAllServices();
+      serviceSnapshot = loaded || services;
+    }
+    const included = serviceSnapshot.filter((s) => s.include);
+    if (!included.length) return logMsg("Include at least one service", "warn");
+    if (resumeExistingEnabled) {
+      await resumeExistingIncidents(serviceSnapshot);
+    }
+    setIsRunning(true);
+    logMsg("Simulation started");
   }
   function stop() { setIsRunning(false); clearTimeout(fireTimerRef.current); clearTimeout(evalTimerRef.current); logMsg("Simulation paused"); }
   function clearLog() { setLog([]); }
@@ -656,7 +809,7 @@ function App() {
   const severityRank = React.useMemo(() => ({ critical: 0, error: 1, warning: 2, info: 3 }), []);
   const filteredActive = React.useMemo(() => {
     return active.filter((rec) => {
-      if (monitorSeverityFilter === 'critical' && rec.severity !== 'critical') return false;
+      if (monitorSeverityFilter !== 'all' && rec.severity !== monitorSeverityFilter) return false;
       if (monitorAckFilter === 'acked' && !rec.acked) return false;
       if (monitorAckFilter === 'unacked' && rec.acked) return false;
       if (monitorMappingFilter === 'unmapped' && rec.incidentId) return false;
@@ -744,10 +897,10 @@ function App() {
     };
   }, [monitorTrend]);
   const severityTone = React.useMemo(() => ({
-    critical: 'bg-red-600',
-    error: 'bg-orange-500',
-    warning: 'bg-amber-500',
-    info: 'bg-blue-500',
+    critical: 'bg-red-600 text-white',
+    error: 'bg-orange-500 text-white',
+    warning: 'bg-amber-300 text-gray-900',
+    info: 'bg-sky-500 text-white',
   }), []);
   const toggleSort = React.useCallback((key) => {
     setMonitorSort((prev) => {
@@ -902,7 +1055,7 @@ function App() {
                   return (
                     <label key={t.id} className="flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={checked} onChange={(e) => {
-                        setSelectedTeamIds((prev) => {
+        setSelectedTeamIds((prev) => {
                           if (e.target.checked) return [...new Set([...prev, t.id])];
                           return prev.filter((id) => id !== t.id);
                         });
@@ -1060,6 +1213,78 @@ function App() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="bg-white shadow rounded p-4">
+          <h2 className="text-lg font-semibold mb-3">Auto-Heal Events</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Auto-heal sends an OK event for a subset of warning incidents after a short delay so you can demonstrate auto-pause flows.
+          </p>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={!!autoHealConfig.enabled}
+                onChange={(e) => setAutoHealConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+              />
+              Enable auto-heal for warnings
+            </label>
+            <div className="flex flex-wrap gap-3">
+              <label className="text-sm">
+                % of warnings
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round(Number(autoHealConfig.warningProbability || 0) * 100)}
+                  onChange={(e) => {
+                    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    setAutoHealConfig((prev) => ({ ...prev, warningProbability: pct / 100 }));
+                  }}
+                  className="w-24 border rounded px-2 py-1 ml-2"
+                />
+              </label>
+              <label className="text-sm">
+                Min delay (sec)
+                <input
+                  type="number"
+                  min={5}
+                  value={autoHealConfig.minDelaySec}
+                  onChange={(e) => setAutoHealConfig((prev) => ({ ...prev, minDelaySec: Math.max(0, Number(e.target.value) || 0) }))}
+                  className="w-24 border rounded px-2 py-1 ml-2"
+                />
+              </label>
+              <label className="text-sm">
+                Max delay (sec)
+                <input
+                  type="number"
+                  min={5}
+                  value={autoHealConfig.maxDelaySec}
+                  onChange={(e) => setAutoHealConfig((prev) => ({ ...prev, maxDelaySec: Math.max(0, Number(e.target.value) || 0) }))}
+                  className="w-24 border rounded px-2 py-1 ml-2"
+                />
+              </label>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Defaults: 20% of warning incidents auto-heal between 30–90 seconds. Delays are randomized per incident.
+          </p>
+        </section>
+
+        <section className="bg-white shadow rounded p-4">
+          <h2 className="text-lg font-semibold mb-3">Startup & Resume</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            When enabled, the simulator pulls any triggered/acknowledged incidents from PagerDuty for the services you&rsquo;ve included before starting a new run.
+          </p>
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={resumeExistingEnabled}
+              onChange={(e) => setResumeExistingEnabled(e.target.checked)}
+            />
+            Resume existing PagerDuty incidents when starting
+          </label>
+          <p className="text-xs text-gray-500 mt-2">Requires a REST API token; incidents appear with a “Synced” badge in the Monitor table.</p>
         </section>
 
         <section className="bg-white shadow rounded p-4">
@@ -1244,6 +1469,9 @@ function App() {
                       >
                         <option value="all">All</option>
                         <option value="critical">Critical</option>
+                        <option value="error">Error</option>
+                        <option value="warning">Warning</option>
+                        <option value="info">Info</option>
                       </select>
                     </label>
                     <label className="flex items-center gap-1 text-xs font-semibold uppercase text-gray-500">
@@ -1292,6 +1520,10 @@ function App() {
                   <span className="flex items-center gap-1">
                     <span className="inline-block h-3 w-3 rounded-full bg-amber-200" aria-hidden="true" />
                     Responder pending
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-3 w-3 rounded-full bg-emerald-200" aria-hidden="true" />
+                    Auto-heal queued
                   </span>
                 </div>
                 <div className="max-h-96 overflow-auto rounded border border-gray-200">
@@ -1348,7 +1580,11 @@ function App() {
                           const timeToNext = rec.nextEvalAt ? Math.max(0, Math.ceil((rec.nextEvalAt - now) / 1000)) : null;
                           const mappingStalled = !rec.incidentId && (rec.mapAttempts || 0) >= 3;
                           const responderPending = !rec.responderRequested;
-                          const rowClass = `border-b last:border-0 transition-colors ${mappingStalled ? 'bg-rose-50' : responderPending ? 'bg-amber-50' : ''}`;
+                          const autoHealPending = rec.autoHealScheduled && rec.autoHealAt && rec.autoHealAt > now;
+                          const autoHealCountdown = autoHealPending ? Math.max(0, Math.ceil((rec.autoHealAt - now) / 1000)) : null;
+                          const rowClass = `border-b last:border-0 transition-colors ${
+                            mappingStalled ? 'bg-rose-50' : responderPending ? 'bg-amber-50' : autoHealPending ? 'bg-emerald-50' : ''
+                          }`;
                           const severityShade = severityTone[rec.severity] || 'bg-gray-500';
                           const acked = rec.acked;
                           return (
@@ -1363,11 +1599,19 @@ function App() {
                                     {responderPending && (
                                       <span className="rounded bg-amber-200 px-1.5 py-0.5 text-amber-800">Responder pending</span>
                                     )}
+                                    {autoHealPending && (
+                                      <span className="rounded bg-emerald-200 px-1.5 py-0.5 text-emerald-900">
+                                        Auto-heal in {formatSeconds(autoHealCountdown)}
+                                      </span>
+                                    )}
+                                    {rec.syncedFromPd && (
+                                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-gray-800">Synced</span>
+                                    )}
                                   </div>
                                 </div>
                               </td>
                               <td className="py-3 pr-4 align-top">
-                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold uppercase text-white ${severityShade}`}>
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-white ${severityShade}`}>
                                   {rec.severity}
                                 </span>
                               </td>

@@ -8,6 +8,8 @@ These notes help future pairing sessions or automation agents quickly orient the
 - For UI testing, supply valid PagerDuty credentials in the browser (REST API token, Global Routing Key, From Email). The simulator stores data in `localStorage` under `pdns_settings_v7`.
 - LocalStorage now also persists the active view (“configure” vs “monitor”) and monitor filters/sort state so the dashboard re-opens exactly how a user left it.
 - Docker support: build with `docker compose up --build` (defaults to port 3001 and consumes the same `.env` file). Update `.env` before composing; `.dockerignore` prevents leaking local credentials into the image layers.
+- Auto-heal settings live under `autoHealConfig` in localStorage; defaults are enabled, 20% chance, 30–90s delay. Config UI writes sanitized values (0-100% and non-negative seconds).
+- Resume toggle lives under `resumeExistingEnabled`; when true the simulator calls `/proxy/incidents` for selected services before each run and tags synced incidents in the Monitor table.
 
 ## Key Endpoints
 - Proxy routes under `/proxy/...` forward to PagerDuty REST APIs using the server-side `From` header.
@@ -19,11 +21,14 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Hidden teams are determined by prefixes (`NOC - `, `SRE - `); adjust `HIDDEN_TEAM_PREFIXES` if customer naming conventions change.
 - Because the UI fetches directly from the proxy, CORS and auth headers are handled in `server.js`; changing the proxy structure requires updates in both layers.
 - Monitor tab skips INFO incidents on purpose—do not re-add them to the active queue unless you also revisit the performance prize for PD mapping calls.
+- Auto-heal logic runs even when the simulator is paused (dedicated ticker). Make sure `PD_FROM_EMAIL` and routing key remain valid so resolve events succeed.
 
 ## Testing Guidance
 - No automated tests yet; manual validation through the browser and curl is the current approach.
 - When adding features, consider wiring a lightweight script (Node or Playwright) to hit the proxy with mocked responses.
 - Use the Monitor tab’s “Resolve All” button to clear state between manual tests instead of refreshing the entire page.
+- To verify auto-heal, filter the Monitor table to warnings and watch for the green “Auto-heal in …” badge/countdown; logs show `Auto-healing` messages plus the final resolve.
+- To confirm resume behavior, start a run with the toggle enabled and watch for “Resumed N incidents” log entries plus gray “Synced” badges in Monitor.
 
 ## Release Process
 1. Update docs/notes as needed.

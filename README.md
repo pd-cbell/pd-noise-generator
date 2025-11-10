@@ -60,6 +60,20 @@ docker compose up --build
 
 The service listens on `PORT` (defaults to `3001`) and uses the same `.env` values that `npm start` expects.
 
+### Auto-Heal Warnings
+
+In the Configure tab you can enable **Auto-Heal Events** to automatically resend an OK event for a percentage of warning incidents. Configure:
+
+- **Enable toggle** – master switch.
+- **% of warnings** – probability (default 20%) that a warning incident auto-heals.
+- **Min/Max delay** – randomized window (default 30–90 seconds) before the OK event is sent.
+
+This is handy for demonstrating PagerDuty Auto-Pause, as alerts will self-resolve without manual action.
+
+### Resume Existing Incidents
+
+Before starting you can keep the **Resume existing PagerDuty incidents** toggle enabled (default). The simulator will pull any triggered/acknowledged incidents for the services you included so unfinished noise from a previous session shows up immediately with a “Synced” badge in the Monitor tab.
+
 ## Key Behaviors
 - **Local storage persistence**: All settings stick between sessions under the `pdns_settings_v7` key.
 - **Team filtering**: Teams starting with `NOC - ` and `SRE - ` are hidden for the simulated customer scenario.
@@ -68,6 +82,8 @@ The service listens on `PORT` (defaults to `3001`) and uses the same `.env` valu
 - **Auto actions**: Incidents can auto-ack, auto-resolve, generate notes, and raise responder requests using configuration sliders.
 - **Info suppression**: Info-level triggers are sent to PagerDuty but intentionally skipped from the simulator’s tracking loop to reduce mapping/API chatter.
 - **Monitor tooling**: Trend chart samples the last 15 minutes every 30 seconds; table supports filters, sorting, incident detail drawer, and a “Resolve All” helper.
+- **Auto-heal warnings**: Optional OK events resolve ~20% of warning incidents within a configurable window to showcase auto-pause flows.
+- **Resume support**: Optionally pulls real triggered/acknowledged incidents for the included services at startup so demos can pick up unattended noise.
 
 ## Development Notes
 - The browser bundle is intentionally kept simple (Babel in the browser). For production use you may wish to move to a build step.
