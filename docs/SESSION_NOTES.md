@@ -14,11 +14,13 @@
 - Monitor table shows “Auto-heal in …” badges, green row highlighting, and the log records each auto-heal action.
 - Added optional “Resume existing incidents” toggle so starting a run syncs triggered/ack’d PagerDuty incidents for the included services (shows “Synced” badge in Monitor).
 - README / agent docs cover Docker Compose usage, dynamic routing requirements, and the new auto-heal/resume workflow.
+- Added Observability Payload Mix controls plus failure campaign logic so payloads reflect CloudWatch/Datadog/New Relic/Splunk styles and cross-service correlation.
 ## Verification
 - Manual runs forcing warning incidents confirmed OK events hit PagerDuty within configured windows and incidents resolve automatically.
 - Monitor table countdowns/log entries validated against actual resolve timestamps.
 - Regression pass for Configure/Monitor persistence, Resolve All, and docker-compose startup.
 - Resume toggle validated by generating real incidents, restarting the simulator, and observing “Resumed N incidents” logs plus Synced badges.
+- Manual verification that campaign settings create related incidents with shared failure IDs and that observability weights influence payload composition.
 
 ## Open Questions / Follow-Ups
 - Add smoke tests or telemetry around the auto-heal ticker and trend data to catch regressions.

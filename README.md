@@ -70,6 +70,14 @@ In the Configure tab you can enable **Auto-Heal Events** to automatically resend
 
 This is handy for demonstrating PagerDuty Auto-Pause, as alerts will self-resolve without manual action.
 
+### Observability Payload Mix
+
+Use the **Observability Payload Mix** sliders to control how often incidents mimic CloudWatch alarms, Datadog monitors, New Relic APM traces, or Splunk log signatures. Each template has unique `summary`, `source`, and `custom_details` metadata so demos feel closer to real telemetry.
+
+### Failure Campaigns
+
+Enable **Failure Campaigns** to simulate correlated incidents across services in the same team. When a campaign triggers, siblings fire within a configurable window and share a `failure_id` / summary so the Monitor view can highlight the common cause.
+
 ### Resume Existing Incidents
 
 Before starting you can keep the **Resume existing PagerDuty incidents** toggle enabled (default). The simulator will pull any triggered/acknowledged incidents for the services you included so unfinished noise from a previous session shows up immediately with a “Synced” badge in the Monitor tab.
@@ -84,6 +92,8 @@ Before starting you can keep the **Resume existing PagerDuty incidents** toggle 
 - **Monitor tooling**: Trend chart samples the last 15 minutes every 30 seconds; table supports filters, sorting, incident detail drawer, and a “Resolve All” helper.
 - **Auto-heal warnings**: Optional OK events resolve ~20% of warning incidents within a configurable window to showcase auto-pause flows.
 - **Resume support**: Optionally pulls real triggered/acknowledged incidents for the included services at startup so demos can pick up unattended noise.
+- **Observability diversity**: Payload templates for CloudWatch, Datadog, New Relic, and Splunk styles with configurable weights.
+- **Campaign correlation**: Failure campaigns share IDs/summaries across services to demonstrate cross-service troubleshooting.
 
 ## Development Notes
 - The browser bundle is intentionally kept simple (Babel in the browser). For production use you may wish to move to a build step.

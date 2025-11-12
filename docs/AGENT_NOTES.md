@@ -22,6 +22,8 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Because the UI fetches directly from the proxy, CORS and auth headers are handled in `server.js`; changing the proxy structure requires updates in both layers.
 - Monitor tab skips INFO incidents on purpose—do not re-add them to the active queue unless you also revisit the performance prize for PD mapping calls.
 - Auto-heal logic runs even when the simulator is paused (dedicated ticker). Make sure `PD_FROM_EMAIL` and routing key remain valid so resolve events succeed.
+- Failure campaigns require services sharing at least one team; they push `failure_id`/`failure_summary` into `custom_details` so UI badges can cluster incidents.
+- Observability templates are defined in `OBS_SOURCE_TEMPLATES`. Adjust `sourceMix` weights (0–1) if you want to bias toward a particular tool.
 
 ## Testing Guidance
 - No automated tests yet; manual validation through the browser and curl is the current approach.
@@ -29,6 +31,7 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Use the Monitor tab’s “Resolve All” button to clear state between manual tests instead of refreshing the entire page.
 - To verify auto-heal, filter the Monitor table to warnings and watch for the green “Auto-heal in …” badge/countdown; logs show `Auto-healing` messages plus the final resolve.
 - To confirm resume behavior, start a run with the toggle enabled and watch for “Resumed N incidents” log entries plus gray “Synced” badges in Monitor.
+- For failure campaigns, look for the rose failure badge plus shared summaries; adjust settings to increase probability during tests.
 
 ## Release Process
 1. Update docs/notes as needed.

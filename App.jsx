@@ -55,6 +55,18 @@ function App() {
     maxDelaySec: 90,
   });
   const [resumeExistingEnabled, setResumeExistingEnabled] = React.useState(true);
+  const [sourceMix, setSourceMix] = React.useState({
+    cloudwatch: 0.25,
+    datadog: 0.25,
+    newrelic: 0.25,
+    splunk: 0.25,
+  });
+  const [campaignConfig, setCampaignConfig] = React.useState({
+    enabled: true,
+    probability: 0.35,
+    maxRelated: 3,
+    windowSec: 300,
+  });
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -75,6 +87,66 @@ function App() {
   const evalTimerRef = React.useRef(null);
   const logContainerRef = React.useRef(null);
   const latestActiveRef = React.useRef(0);
+  const campaignRef = React.useRef([]);
+  const restLimiterRef = React.useRef({
+    tokens: 25,
+    capacity: 25,
+    refillRatePerSec: 2.5,
+    queue: [],
+    lastRefill: Date.now(),
+  });
+  const takeRestToken = React.useCallback(() => {
+    const limiter = restLimiterRef.current;
+    const now = Date.now();
+    const elapsed = (now - limiter.lastRefill) / 1000;
+    if (elapsed > 0) {
+      limiter.tokens = Math.min(limiter.capacity, limiter.tokens + elapsed * limiter.refillRatePerSec);
+      limiter.lastRefill = now;
+    }
+    if (limiter.tokens >= 1) {
+      limiter.tokens -= 1;
+      return true;
+    }
+    return false;
+  }, []);
+
+  const throttledFetch = React.useCallback(async (url, options = {}) => {
+    if (typeof url === "string" && url.startsWith("/proxy/events")) {
+      return fetch(url, options);
+    }
+    const limiter = restLimiterRef.current;
+    return new Promise((resolve, reject) => {
+      const run = () => {
+        fetch(url, options).then(resolve).catch(reject);
+      };
+      if (takeRestToken()) {
+        run();
+      } else {
+        limiter.queue.push(run);
+        if (limiter.queue.length === 1) {
+          logMsg("REST API throttled locally; delaying requests to stay within limits", "warn");
+        }
+      }
+    });
+  }, [takeRestToken]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    function processQueue() {
+      if (cancelled) return;
+      const limiter = restLimiterRef.current;
+      if (limiter.queue.length === 0) return;
+      if (takeRestToken()) {
+        const next = limiter.queue.shift();
+        if (next) next();
+      }
+    }
+    const interval = setInterval(processQueue, 200);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [takeRestToken]);
 
   // ---------- Load from Local Storage on first mount ----------
   React.useEffect(() => {
@@ -96,6 +168,8 @@ function App() {
     if (st.activePage && (st.activePage === 'configure' || st.activePage === 'monitor')) setActivePage(st.activePage);
     if (st.autoHealConfig) setAutoHealConfig(st.autoHealConfig);
     if (st.resumeExistingEnabled != null) setResumeExistingEnabled(Boolean(st.resumeExistingEnabled));
+    if (st.sourceMix) setSourceMix(st.sourceMix);
+    if (st.campaignConfig) setCampaignConfig(st.campaignConfig);
   }, []);
 
   // ---------- Persist settings whenever they change ----------
@@ -109,9 +183,11 @@ function App() {
       activePage,
       autoHealConfig,
       resumeExistingEnabled,
+      sourceMix,
+      campaignConfig,
     };
     saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled]);
+  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled, sourceMix, campaignConfig]);
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
@@ -163,8 +239,16 @@ function App() {
     console.log(`[${ts}] ${type.toUpperCase()}: ${msg}`);
   };
 
-  function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-  function randChoiceWeighted(weights) {
+function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function shuffleArray(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+function randChoiceWeighted(weights) {
     const entries = Object.entries(weights);
     const total = entries.reduce((a, [, w]) => a + Number(w || 0), 0) || 1;
     let r = Math.random() * total;
@@ -176,13 +260,131 @@ function App() {
     const comps = ["DB","Cache","API","Queue","Worker","Gateway","Search","Billing"];
     return `${randomFrom(verbs)} in ${randomFrom(comps)} for ${serviceName}`;
   }
-  function randomSource() { const hosts = ["web-01","web-02","api-01","worker-05","edge-03","cron-02","db-01"]; return randomFrom(hosts) + ".corp"; }
-  function randomNote() {
-    const notes = [
-      "Investigating logs","Metrics look elevated","Rolling restart applied","Suspect recent deploy","Engaging on-call peer","Mitigation in progress","Scaling up replicas","Clearing stuck queue","Awaiting confirmation from DB team",
-    ];
-    return randomFrom(notes);
+function randomSource() { const hosts = ["web-01","web-02","api-01","worker-05","edge-03","cron-02","db-01"]; return randomFrom(hosts) + ".corp"; }
+const NOTE_LIBRARY = {
+  general: [
+    "Investigating telemetry anomalies",
+    "Validating dashboards with SREs",
+    "Coordinating with platform team",
+    "Collecting rollout data for comparison"
+  ],
+};
+const FAILURE_NARRATIVES = [
+  "Shared database latency impacting dependent services",
+  "Downstream cache cluster eviction storm",
+  "Regional network flap observed by backbone monitors",
+  "Partial deploy stuck across AZs",
+  "Throttling on shared integration endpoint",
+];
+function randomFailureSummary(teamName) {
+  const base = randomFrom(FAILURE_NARRATIVES);
+  return teamName ? `${base} (${teamName})` : base;
+}
+const OBS_SOURCE_TEMPLATES = [
+  {
+    id: "cloudwatch",
+    label: "AWS CloudWatch Alarm",
+    metrics: ["CPUUtilization", "RequestLatency", "Throttles", "HTTP5xx", "HealthyHostCount"],
+    regions: ["us-east-1", "us-west-2", "eu-west-1"],
+    build(svc, failureMeta) {
+      const metric = randomFrom(this.metrics);
+      const region = randomFrom(this.regions);
+      const threshold = (50 + Math.random() * 40).toFixed(0);
+      const value = (Number(threshold) + Math.random() * 30).toFixed(1);
+      return {
+        summary: `[CloudWatch] ${metric} breaching on ${svc.name}`,
+        source: `cw.${region}.amazonaws.com`,
+        component: svc.name,
+        custom_details: {
+          metric, region,
+          threshold,
+          observed_value: value,
+          failure_id: failureMeta?.id,
+          failure_summary: failureMeta?.summary,
+        },
+        noteTemplates: [
+          `CloudWatch alarm ${metric} breached ${value}/${threshold} in ${region}`,
+          `Auto-remediation evaluating ASG scaling for ${svc.name}`,
+        ],
+      };
+    },
+  },
+  {
+    id: "datadog",
+    label: "Datadog Monitor",
+    build(svc, failureMeta) {
+      const monitor = randomFrom(["request.error_rate", "latency.p95", "kafka.lag", "db.connections"]);
+      return {
+        summary: `[Datadog] ${monitor} abnormal for ${svc.name}`,
+        source: `datadoghq.com/monitors/${Math.floor(Math.random() * 90000)}`,
+        component: svc.name,
+        custom_details: {
+          monitor,
+          status: randomFrom(["Alert", "Warn"]),
+          tags: ["team:sre", `service:${svc.name}`],
+          failure_id: failureMeta?.id,
+          failure_summary: failureMeta?.summary,
+        },
+        noteTemplates: [
+          `Datadog monitor ${monitor} firing with correlated tags`,
+          "Reviewing APM traces for shared dependency impact",
+        ],
+      };
+    },
+  },
+  {
+    id: "newrelic",
+    label: "New Relic APM",
+    build(svc, failureMeta) {
+      const transaction = randomFrom(["/api/login", "/jobs/process", "/graphql/query", "/internal/reconcile"]);
+      return {
+        summary: `[NewRelic] Slow transaction ${transaction} on ${svc.name}`,
+        source: "newrelic.com/apm",
+        component: transaction,
+        custom_details: {
+          transaction,
+          apdex: (0.3 + Math.random() * 0.3).toFixed(2),
+          failure_id: failureMeta?.id,
+          failure_summary: failureMeta?.summary,
+        },
+        noteTemplates: [
+          `NR traces show ${transaction} allocating extra memory`,
+          "Comparing golden signals against previous deploy",
+        ],
+      };
+    },
+  },
+  {
+    id: "splunk",
+    label: "Splunk On-Call",
+    build(svc, failureMeta) {
+      const signature = randomFrom(["NullPointerException", "TimeoutError", "ConnectionReset", "CircuitBreakerOpen"]);
+      return {
+        summary: `[Splunk] ${signature} pattern detected in ${svc.name}`,
+        source: "splunkcloud.com",
+        component: svc.name,
+        custom_details: {
+          signature,
+          sample_log: `${signature}: ${svc.name} failing to reach upstream`,
+          failure_id: failureMeta?.id,
+          failure_summary: failureMeta?.summary,
+        },
+        noteTemplates: [
+          `Splunk saved search matched ${signature}`,
+          "Investigating correlated log spikes across services",
+        ],
+      };
+    },
+  },
+];
+function randomNote(rec) {
+  const pool = rec?.noteContext?.length ? rec.noteContext : NOTE_LIBRARY.general;
+  let note = randomFrom(pool);
+  if (rec?.failureSummary && Math.random() < 0.4) {
+    note += ` (related to ${rec.failureSummary})`;
   }
+  return note;
+}
 
   async function ensureRequesterId() {
     const email = (fromEmail || "").trim();
@@ -201,7 +403,7 @@ function App() {
       const url = new URL("/proxy/users", window.location.origin);
       url.searchParams.set("query", email);
       url.searchParams.set("limit", "25");
-      const res = await fetch(url.toString(), { headers: apiHeaders });
+      const res = await throttledFetch(url.toString(), { headers: apiHeaders });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || res.statusText);
       const users = Array.isArray(data?.users) ? data.users : [];
@@ -231,7 +433,7 @@ function App() {
       while (more) {
         const url = new URL("/proxy/teams", window.location.origin);
         url.searchParams.set("limit", String(limit)); url.searchParams.set("offset", String(offset));
-        const res = await fetch(url.toString(), { headers: apiHeaders });
+        const res = await throttledFetch(url.toString(), { headers: apiHeaders });
         const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
         const batch = (data?.teams || []).map((t) => ({ id: t.id, name: t.name, html_url: t.html_url }));
         out.push(...batch);
@@ -258,7 +460,7 @@ function App() {
         url.searchParams.set("limit", String(limit)); url.searchParams.set("offset", String(offset));
         url.searchParams.append("include[]", "teams");
         selectedTeamIds.forEach((id) => url.searchParams.append("team_ids[]", id));
-        const res = await fetch(url.toString(), { headers: apiHeaders });
+        const res = await throttledFetch(url.toString(), { headers: apiHeaders });
         const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
         const batch = (data?.services || []).map((s) => ({
           id: s.id,
@@ -288,7 +490,7 @@ function App() {
         url.searchParams.set("limit", String(limit)); url.searchParams.set("offset", String(offset));
         url.searchParams.append("include[]", "teams");
         selectedTeamIds.forEach((id) => url.searchParams.append("team_ids[]", id));
-        const res = await fetch(url.toString(), { headers: apiHeaders });
+        const res = await throttledFetch(url.toString(), { headers: apiHeaders });
         const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
         const batch = (data?.escalation_policies || []).map((ep) => ({
           id: ep.id,
@@ -332,7 +534,7 @@ function App() {
         url.searchParams.set("offset", String(offset));
         statuses.forEach((status) => url.searchParams.append("statuses[]", status));
         includedIds.forEach((svcId) => url.searchParams.append("service_ids[]", svcId));
-        const res = await fetch(url.toString(), { headers: apiHeaders });
+        const res = await throttledFetch(url.toString(), { headers: apiHeaders });
         const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
         const mapped = (data?.incidents || []).map(mapPdIncidentToActive).filter(Boolean);
         collected.push(...mapped);
@@ -451,6 +653,10 @@ function App() {
       resolveAt: null,
       autoHealAt: null,
       autoHealScheduled: false,
+      observabilitySource: "PagerDuty",
+      failureId: inc?.custom_details?.failure_id || null,
+      failureSummary: inc?.custom_details?.failure_summary || null,
+      noteContext: [],
       syncedFromPd: true,
     };
   }, [serviceNameLookup]);
@@ -482,20 +688,43 @@ function App() {
   }
 
   // ---------- Events/Incidents ----------
-  async function triggerIncidentForService(svc) {
-    if (!globalRoutingKey) { logMsg("Global Routing Key required for Events API", "warn"); return null; }
+  async function triggerIncidentForService(svc, campaignContext = null) {
+    if (!globalRoutingKey) { logMsg("Provide the Global Routing Key", "warn"); return null; }
     const dedupKey = uid("dk");
     const severity = randChoiceWeighted(severityWeights);
-    const body = {
-      routing_key: globalRoutingKey.trim(), event_action: "trigger", dedup_key: dedupKey,
-      payload: {
-        summary: randomSummary(svc.name), source: randomSource(), severity,
-        component: "simulator", group: svc.name, class: "demo",
-        custom_details: { service_name: svc.name, simulator: "PagerDuty Noise Simulator", seed: dedupKey, severity },
-      },
-      client: "PD Noise Simulator", client_url: "https://example.local/simulator",
-    };
+    const template = selectObservabilityTemplate();
+    let failureMeta = campaignContext || null;
     try {
+      if (!failureMeta) {
+        failureMeta = startCampaignForService(svc);
+      }
+      const templatePayload = template.build(svc, failureMeta);
+      const customDetails = {
+        service_name: svc.name,
+        simulator: "PagerDuty Noise Simulator",
+        seed: dedupKey,
+        severity,
+        observability_source: template.label,
+        failure_id: failureMeta?.id || templatePayload?.custom_details?.failure_id,
+        failure_summary: failureMeta?.summary || templatePayload?.custom_details?.failure_summary,
+        ...(templatePayload?.custom_details || {}),
+      };
+      const body = {
+        routing_key: globalRoutingKey.trim(),
+        event_action: "trigger",
+        dedup_key: dedupKey,
+        payload: {
+          summary: templatePayload.summary || randomSummary(svc.name),
+          source: templatePayload.source || randomSource(),
+          severity,
+          component: templatePayload.component || svc.name,
+          group: templatePayload.group || svc.name,
+          class: templatePayload.className || templatePayload.class || "demo",
+          custom_details: customDetails,
+        },
+        client: "PD Noise Simulator",
+        client_url: "https://example.local/simulator",
+      };
       const res = await fetch("/proxy/events", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(`Events API error: ${res.status} ${data?.message || res.statusText}`);
@@ -504,10 +733,9 @@ function App() {
       const isCrit = severity === 'critical';
       const win = isCrit ? cfg.first.critical : cfg.first.nonCritical;
       const firstResponderDelay = (win.minSec + Math.random() * Math.max(0, win.maxSec - win.minSec)) * 1000;
-      const ackDelay = (30 + Math.random() * (300 - 30)) * 1000; // 30s to 5m
-      // Auto-resolve time window
+      const ackDelay = (30 + Math.random() * (300 - 30)) * 1000;
       const resolveDelay = (Math.min(autoResolveMinSec, autoResolveMaxSec) + Math.random() * Math.abs(autoResolveMaxSec - autoResolveMinSec)) * 1000;
-      logMsg(`Triggered incident for ${svc.name} (severity=${severity}) dk=${dedupKey}`);
+      logMsg(`Triggered incident for ${svc.name} (severity=${severity}) dk=${dedupKey} via ${template.label}`);
       if (severity === 'info') {
         logMsg(`Info severity suppressed; not tracking incident ${dedupKey}`, "info");
         return null;
@@ -517,21 +745,34 @@ function App() {
         ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000
         : null;
       const record = {
-        dedupKey, serviceId: svc.id, serviceName: svc.name,
+        dedupKey,
+        serviceId: svc.id,
+        serviceName: svc.name,
         startedAt: now,
-        incidentId: null, mapAttempts: 0, nextEvalAt: now + 60_000,
-        ackAt: now + ackDelay, acked: false, firstResponderAt: now + firstResponderDelay,
-        responderRequested: false, severity,
+        incidentId: null,
+        mapAttempts: 0,
+        nextEvalAt: now + 60_000,
+        ackAt: now + ackDelay,
+        acked: false,
+        firstResponderAt: now + firstResponderDelay,
+        responderRequested: false,
+        severity,
         resolveAt: now + resolveDelay,
         autoHealAt: autoHealDelay ? now + autoHealDelay : null,
         autoHealScheduled: shouldAutoHeal,
+        observabilitySource: template.label,
+        noteContext: templatePayload.noteTemplates || [],
+        failureId: customDetails.failure_id || null,
+        failureSummary: customDetails.failure_summary || null,
         syncedFromPd: false,
       };
       setActive((a) => [record, ...a]);
-      // First mapping attempt after a short delay
       setTimeout(() => resolveIncidentIdForDedupKey(record, true).catch((e) => logMsg(e.message, "warn")), 4000);
       return record;
-    } catch (e) { logMsg(e.message || String(e), "error"); return null; }
+    } catch (e) {
+      logMsg(e.message || String(e), "error");
+      return null;
+    }
   }
 
   // ---------- Scheduler: Poisson process for triggering incidents ----------
@@ -551,13 +792,14 @@ function App() {
       if (targets.length === 0) {
         logMsg("No included services to target", "warn");
       } else {
-        const svc = randomFrom(targets);
-        await triggerIncidentForService(svc);
+        const campaignSelection = popCampaignService();
+        const svc = campaignSelection?.svc || randomFrom(targets);
+        await triggerIncidentForService(svc, campaignSelection?.metadata);
       }
       // Schedule next regardless
       scheduleNextFire();
     }, delayMs);
-  }, [isRunning, ratePerMinute, services]);
+  }, [isRunning, ratePerMinute, services, popCampaignService]);
 
   // Reschedule fire timer whenever rpm/services change while running
   React.useEffect(() => { if (isRunning) scheduleNextFire(); return () => clearTimeout(fireTimerRef.current); }, [isRunning, scheduleNextFire]);
@@ -620,7 +862,7 @@ function App() {
     async function search(url) {
       url.searchParams.set("limit", "100"); statuses.forEach((s) => url.searchParams.append("statuses[]", s));
       url.searchParams.set("since", sinceISO); url.searchParams.set("sort_by", "created_at:desc");
-      const res = await fetch(url.toString(), { headers: apiHeaders });
+      const res = await throttledFetch(url.toString(), { headers: apiHeaders });
       const data = await res.json(); if (!res.ok) throw new Error(`Incidents lookup failed: ${res.status} ${data?.error?.message || res.statusText}`);
       return data?.incidents || [];
     }
@@ -678,7 +920,7 @@ function App() {
     if (!rec.incidentId) { logMsg(`Cannot add note yet; mapping pending for ${rec.dedupKey}`, "warn"); return; }
     const id = rec.incidentId;
     try {
-      const res = await fetch(`/proxy/incidents/${id}/notes`, { method: "POST", headers: apiHeaders, body: JSON.stringify({ note: { content } }) });
+      const res = await throttledFetch(`/proxy/incidents/${id}/notes`, { method: "POST", headers: apiHeaders, body: JSON.stringify({ note: { content } }) });
       const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
       logMsg(`Added note to ${id}: ${content}`);
     } catch (e) { logMsg(`Note add failed: ${e.message}`, "error"); }
@@ -716,7 +958,7 @@ function App() {
       ],
     };
     try {
-      const res = await fetch(`/proxy/incidents/${id}/responder_requests`, { method: "POST", headers: apiHeaders, body: JSON.stringify(body) });
+      const res = await throttledFetch(`/proxy/incidents/${id}/responder_requests`, { method: "POST", headers: apiHeaders, body: JSON.stringify(body) });
       const text = await res.text();
       let data;
       try { data = text ? JSON.parse(text) : undefined; } catch { data = undefined; }
@@ -743,7 +985,7 @@ function App() {
     const now = Date.now();
     // Per-60s evaluation
     if (rec.nextEvalAt && now >= rec.nextEvalAt) {
-      if (Math.random() < noteProbability) { addNote(rec, randomNote()); }
+      if (Math.random() < noteProbability) { addNote(rec, randomNote(rec)); }
       // Responder per-tick probability based on severity
       const cfg = universalResponderCfg;
       const baseProb = (rec.severity === 'critical') ? cfg.prob.critical : cfg.prob.nonCritical;
@@ -770,6 +1012,7 @@ function App() {
   async function start() {
     if (!globalRoutingKey) return logMsg("Provide the Global Routing Key", "warn");
     if (!apiToken) logMsg("Tip: Provide a REST API token + From email to enable notes/responders & ID mapping", "warn");
+    campaignRef.current = [];
     let serviceSnapshot = services;
     if (!serviceSnapshot.length) {
       logMsg("No services loaded. Attempting to load now...", "warn");
@@ -902,6 +1145,66 @@ function App() {
     warning: 'bg-amber-300 text-gray-900',
     info: 'bg-sky-500 text-white',
   }), []);
+  const selectObservabilityTemplate = React.useCallback(() => {
+    const entries = OBS_SOURCE_TEMPLATES.map((tpl) => ({
+      tpl,
+      weight: Math.max(0, Number(sourceMix[tpl.id]) || 0),
+    }));
+    let total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+    if (total <= 0) {
+      entries.forEach((entry) => { entry.weight = 1; });
+      total = entries.length;
+    }
+    let roll = Math.random() * total;
+    for (const entry of entries) {
+      roll -= entry.weight;
+      if (roll <= 0) return entry.tpl;
+    }
+    return entries[entries.length - 1].tpl;
+  }, [sourceMix]);
+  const popCampaignService = React.useCallback(() => {
+    const now = Date.now();
+    const remaining = [];
+    let selection = null;
+    campaignRef.current.forEach((campaign) => {
+      if (campaign.expiresAt <= now || campaign.pending.size === 0) {
+        return;
+      }
+      if (!selection) {
+        const iterator = campaign.pending.values().next();
+        if (!iterator.done) {
+          const targetId = iterator.value;
+          const svc = services.find((s) => s.id === targetId && s.include);
+          if (svc) {
+            campaign.pending.delete(targetId);
+            selection = { svc, metadata: { id: campaign.id, summary: campaign.summary } };
+          }
+        }
+      }
+      if (campaign.pending.size > 0) {
+        remaining.push(campaign);
+      }
+    });
+    campaignRef.current = remaining;
+    return selection;
+  }, [services]);
+  const startCampaignForService = React.useCallback((svc) => {
+    if (!campaignConfig.enabled) return null;
+    const probability = Math.max(0, Math.min(1, Number(campaignConfig.probability) || 0));
+    if (Math.random() >= probability) return null;
+    const primaryTeam = Array.isArray(svc?.teams) ? svc.teams[0] : null;
+    if (!primaryTeam?.id) return null;
+    const siblings = services.filter((s) => s.id !== svc.id && s.include && Array.isArray(s.teams) && s.teams.some((t) => t.id === primaryTeam.id)).map((s) => s.id);
+    if (!siblings.length) return null;
+    const desired = Math.min(Math.max(1, campaignConfig.maxRelated || 1), siblings.length);
+    const pendingIds = new Set(shuffleArray(siblings).slice(0, desired));
+    if (!pendingIds.size) return null;
+    const summary = randomFailureSummary(primaryTeam.name);
+    const expiresAt = Date.now() + Math.max(30, Number(campaignConfig.windowSec) || 300) * 1000;
+    const campaign = { id: uid("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt };
+    campaignRef.current = [...campaignRef.current, campaign];
+    return { id: campaign.id, summary };
+  }, [campaignConfig, services]);
   const toggleSort = React.useCallback((key) => {
     setMonitorSort((prev) => {
       if (prev.key === key) {
@@ -1272,6 +1575,90 @@ function App() {
         </section>
 
         <section className="bg-white shadow rounded p-4">
+          <h2 className="text-lg font-semibold mb-3">Observability Payload Mix</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Tune how frequently incidents resemble each observability source. Values are normalized automatically.
+          </p>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {OBS_SOURCE_TEMPLATES.map((tpl) => {
+              const pct = Math.round((Number(sourceMix[tpl.id]) || 0) * 100);
+              return (
+                <label key={tpl.id} className="text-sm font-semibold">
+                  {tpl.label}
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={pct}
+                    onChange={(e) => {
+                      const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                      setSourceMix((prev) => ({ ...prev, [tpl.id]: val / 100 }));
+                    }}
+                    className="mt-1 w-full border rounded px-2 py-1"
+                  />
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">Examples: CloudWatch Alarms, Datadog Monitors, New Relic APM, Splunk log searches.</p>
+        </section>
+
+        <section className="bg-white shadow rounded p-4">
+          <h2 className="text-lg font-semibold mb-3">Failure Campaigns</h2>
+          <p className="text-sm text-gray-600 mb-3">
+            Simulate cascading failures across services in the same team by sharing a failure ID/summary.
+          </p>
+          <div className="flex flex-col gap-3">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={!!campaignConfig.enabled}
+                onChange={(e) => setCampaignConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
+              />
+              Enable correlated incident campaigns
+            </label>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label className="text-sm">
+                Trigger chance (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={Math.round((Number(campaignConfig.probability) || 0) * 100)}
+                  onChange={(e) => {
+                    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    setCampaignConfig((prev) => ({ ...prev, probability: pct / 100 }));
+                  }}
+                  className="mt-1 w-full border rounded px-2 py-1"
+                />
+              </label>
+              <label className="text-sm">
+                Max related services
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={campaignConfig.maxRelated}
+                  onChange={(e) => setCampaignConfig((prev) => ({ ...prev, maxRelated: Math.max(1, Number(e.target.value) || 1) }))}
+                  className="mt-1 w-full border rounded px-2 py-1"
+                />
+              </label>
+              <label className="text-sm">
+                Window (sec)
+                <input
+                  type="number"
+                  min={30}
+                  value={campaignConfig.windowSec}
+                  onChange={(e) => setCampaignConfig((prev) => ({ ...prev, windowSec: Math.max(30, Number(e.target.value) || 30) }))}
+                  className="mt-1 w-full border rounded px-2 py-1"
+                />
+              </label>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">Correlated incidents show a badge in Monitor with the shared failure summary.</p>
+        </section>
+
+        <section className="bg-white shadow rounded p-4">
           <h2 className="text-lg font-semibold mb-3">Startup & Resume</h2>
           <p className="text-sm text-gray-600 mb-3">
             When enabled, the simulator pulls any triggered/acknowledged incidents from PagerDuty for the services you&rsquo;ve included before starting a new run.
@@ -1532,9 +1919,9 @@ function App() {
                   ) : (
                     <table className="min-w-full text-sm">
                       <thead className="sticky top-0 bg-white shadow-sm">
-                        <tr className="text-left">
-                          <th className="py-2 pl-4 pr-4">Service</th>
-                          <th className="py-2 pr-4">
+                    <tr className="text-left">
+                      <th className="py-2 pl-4 pr-4">Service</th>
+                      <th className="py-2 pr-4">
                             <button
                               type="button"
                               onClick={() => toggleSort('severity')}
@@ -1545,7 +1932,8 @@ function App() {
                               <span className="sr-only">Sort by severity</span>
                             </button>
                           </th>
-                          <th className="py-2 pr-4">Dedup Key</th>
+                          <th className="py-2 pr-4">Source</th>
+                      <th className="py-2 pr-4">Dedup Key</th>
                           <th className="py-2 pr-4">Incident ID</th>
                           <th className="py-2 pr-4">Ack</th>
                           <th className="py-2 pr-4">
@@ -1592,6 +1980,9 @@ function App() {
                               <td className="py-3 pl-4 pr-4 align-top">
                                 <div className="flex flex-col gap-1">
                                   <span className="font-medium text-gray-900">{rec.serviceName}</span>
+                                  {rec.failureSummary && (
+                                    <span className="text-xs text-rose-700">Failure: {rec.failureSummary}</span>
+                                  )}
                                   <div className="flex flex-wrap gap-1 text-[10px] uppercase tracking-wide">
                                     {mappingStalled && (
                                       <span className="rounded bg-rose-200 px-1.5 py-0.5 text-rose-800">Mapping stalled</span>
@@ -1615,6 +2006,7 @@ function App() {
                                   {rec.severity}
                                 </span>
                               </td>
+                              <td className="py-3 pr-4 align-top text-xs text-gray-600">{rec.observabilitySource || 'Simulated'}</td>
                               <td className="py-3 pr-4 align-top font-mono text-xs text-gray-700">{rec.dedupKey}</td>
                               <td className="py-3 pr-4 align-top font-mono text-xs">
                                 {rec.incidentId ? (
@@ -1648,7 +2040,7 @@ function App() {
                                   >
                                     Details
                                   </button>
-                                  <button onClick={() => addNote(rec, randomNote())} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold">Add Note</button>
+                          <button onClick={() => addNote(rec, randomNote(rec))} className="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-semibold">Add Note</button>
                                   <button onClick={() => addResponder(rec)} className="bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded text-xs font-semibold">Add Responder</button>
                                   <button onClick={() => acknowledgeIncident(rec)} className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded text-xs font-semibold">Ack</button>
                                   <button onClick={() => resolveIncident(rec)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs font-semibold">Resolve</button>
@@ -1809,3 +2201,17 @@ function App() {
     </div>
   );
 }
+  const takeRestToken = React.useCallback(() => {
+    const limiter = restLimiterRef.current;
+    const now = Date.now();
+    const elapsed = (now - limiter.lastRefill) / 1000;
+    if (elapsed > 0) {
+      limiter.tokens = Math.min(limiter.capacity, limiter.tokens + elapsed * limiter.refillRatePerSec);
+      limiter.lastRefill = now;
+    }
+    if (limiter.tokens >= 1) {
+      limiter.tokens -= 1;
+      return true;
+    }
+    return false;
+  }, []);
