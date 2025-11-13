@@ -30,3 +30,15 @@
 ## Next Steps
 - Finalize v1.2.0 release notes + tag once QA passes.
 - Explore scripted data seeding + Playwright smoke to cover Monitor filters/trend/auto-heal.
+
+## v1.3 – Change Events
+
+### Highlights
+- Added `/proxy/change_events` plus integration-aware service loading (`include[]=integrations`) so the browser never needs to expose change integration keys directly.
+- Services now capture `changeIntegrations` (types `events_api_v2_inbound_integration`, `change_event_transform_inbound_integration`) and the Configure tab reports coverage per team with an enable/disable toggle.
+- Failure campaigns emit 1–3 related change events for covered services (preferring the origin service) so demos show correlated deploy signals alongside incidents.
+- Added a quick `curl | jq` snippet (README/Agent Notes) to verify change coverage outside the UI.
+
+### Validation
+- Manual API calls confirmed integrations load with the expected types.
+- Ran campaigns with change-enabled services to confirm Monitor log entries (“Sent change event…”) and PagerDuty change events appeared as expected.

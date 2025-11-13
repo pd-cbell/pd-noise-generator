@@ -9,6 +9,7 @@ PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle tha
 - Team-aware service selection with collapsible sections and quick “Select Team” actions.
 - Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities.
 - Responder requests resolve the configured “From Email” to a real PagerDuty user ID before making API calls, preventing 404/2100 errors.
+- Failure campaigns can emit related PagerDuty Change Events (types `events_api_v2_inbound_integration` and `change_event_transform_inbound_integration`) for selected services so demos include correlated deployments.
 
 ## Requirements
 - Node.js 16+
@@ -78,6 +79,29 @@ Use the **Observability Payload Mix** sliders to control how often incidents mim
 
 Enable **Failure Campaigns** to simulate correlated incidents across services in the same team. When a campaign triggers, siblings fire within a configurable window and share a `failure_id` / summary so the Monitor view can highlight the common cause.
 
+When services have PagerDuty Change Events integrations (type `events_api_v2_inbound_integration` or `change_event_transform_inbound_integration`) and are included in the run, the simulator will also emit 1–3 related change events per campaign using those integration keys. The Configure tab surfaces which teams have change coverage and lets you disable change emissions if needed.
+
+#### Verifying Change Coverage
+
+```bash
+curl -s \
+  -H "Authorization: Token token=$PAGERDUTY_TOKEN" \
+  -H "Accept: application/vnd.pagerduty+json;version=2" \
+  -H "From: automation@pagerduty.com" \
+  "https://api.pagerduty.com/services?limit=100&include[]=integrations" |
+jq '.services[]
+    | {id, name,
+       change_integrations: [
+         .integrations[]?
+         | select(.type=="events_api_v2_inbound_integration"
+                  or .type=="change_event_transform_inbound_integration")
+         | {id, name, integration_key}
+       ]}
+    | select(.change_integrations|length>0)'
+```
+
+The Configure view logs `services=… withChange=…` when it detects these integrations and automatically enables the “Emit related change events” toggle once at least one included service exposes an integration key.
+
 ### Resume Existing Incidents
 
 Before starting you can keep the **Resume existing PagerDuty incidents** toggle enabled (default). The simulator will pull any triggered/acknowledged incidents for the services you included so unfinished noise from a previous session shows up immediately with a “Synced” badge in the Monitor tab.
@@ -90,6 +114,7 @@ Before starting you can keep the **Resume existing PagerDuty incidents** toggle 
 - **Auto actions**: Incidents can auto-ack, auto-resolve, generate notes, and raise responder requests using configuration sliders.
 - **Info suppression**: Info-level triggers are sent to PagerDuty but intentionally skipped from the simulator’s tracking loop to reduce mapping/API chatter.
 - **Monitor tooling**: Trend chart samples the last 15 minutes every 30 seconds; table supports filters, sorting, incident detail drawer, and a “Resolve All” helper.
+- **Change coverage awareness**: Scans selected services for change-event integrations and emits correlated change events during failure campaigns when coverage exists.
 - **Auto-heal warnings**: Optional OK events resolve ~20% of warning incidents within a configurable window to showcase auto-pause flows.
 - **Resume support**: Optionally pulls real triggered/acknowledged incidents for the included services at startup so demos can pick up unattended noise.
 - **Observability diversity**: Payload templates for CloudWatch, Datadog, New Relic, and Splunk styles with configurable weights.

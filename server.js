@@ -16,6 +16,7 @@ const {
 } = process.env;
 
 const PD_EVENTS_URL = 'https://events.pagerduty.com/v2/enqueue';
+const PD_CHANGE_EVENTS_URL = 'https://events.pagerduty.com/v2/change/enqueue';
 const pdRestBase = PD_API_BASE.replace(/\/$/, '');
 
 if (!PD_FROM_EMAIL) {
@@ -39,7 +40,19 @@ function buildRestHeaders(req) {
   return headers;
 }
 
-async function proxyRequest(targetUrl, options, res) {
+const MAX_PROXY_RETRIES = 3;
+
+function shouldRetry(err, attempt) {
+  if (!err) return false;
+  if (attempt >= MAX_PROXY_RETRIES) return false;
+  return err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function proxyRequest(targetUrl, options, res, attempt = 1) {
   try {
     const upstreamRes = await fetch(targetUrl, options);
     const body = await upstreamRes.text();
@@ -60,6 +73,13 @@ async function proxyRequest(targetUrl, options, res) {
     }
     res.send(body);
   } catch (err) {
+    if (shouldRetry(err, attempt)) {
+      const delay = 200 * attempt;
+      console.warn(`[proxy] ${options?.method || 'GET'} ${targetUrl} attempt ${attempt} failed (${err.code}). Retrying in ${delay}ms.`);
+      await wait(delay);
+      await proxyRequest(targetUrl, options, res, attempt + 1);
+      return;
+    }
     console.error('Proxy request failed:', err);
     res.status(500).json({ error: 'Proxy request failed', details: err.message });
   }
@@ -89,6 +109,18 @@ app.post('/proxy/events', async (req, res) => {
   await proxyRequest(PD_EVENTS_URL, options, res);
 });
 
+app.post('/proxy/change_events', async (req, res) => {
+  const options = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: restBody(req),
+  };
+  await proxyRequest(PD_CHANGE_EVENTS_URL, options, res);
+});
+
 async function handleRest(method, req, res) {
   const headers = buildRestHeaders(req);
   if (!headers) {
@@ -107,6 +139,7 @@ async function handleRest(method, req, res) {
 
 app.get('/proxy/teams', (req, res) => handleRest('GET', req, res));
 app.get('/proxy/services', (req, res) => handleRest('GET', req, res));
+app.get('/proxy/services/:id/integrations', (req, res) => handleRest('GET', req, res));
 app.get('/proxy/escalation_policies', (req, res) => handleRest('GET', req, res));
 app.get('/proxy/incidents', (req, res) => handleRest('GET', req, res));
 app.get('/proxy/users', (req, res) => handleRest('GET', req, res));

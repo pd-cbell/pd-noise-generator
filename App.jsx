@@ -2,6 +2,7 @@ const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
 const NO_TEAM_ID = "__no_team__";
 const NO_TEAM_NAME = "Unassigned (No Team)";
 const TREND_WINDOW_MS = 15 * 60 * 1000;
+const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
 
 function App() {
   // ---------- Local Storage Helpers ----------
@@ -67,6 +68,8 @@ function App() {
     maxRelated: 3,
     windowSec: 300,
   });
+  const [changeEventsEnabled, setChangeEventsEnabled] = React.useState(true);
+  const [lastChangeEvent, setLastChangeEvent] = React.useState(null);
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -88,6 +91,7 @@ function App() {
   const logContainerRef = React.useRef(null);
   const latestActiveRef = React.useRef(0);
   const campaignRef = React.useRef([]);
+  const changeEventsToggleTouchedRef = React.useRef(false);
   const restLimiterRef = React.useRef({
     tokens: 25,
     capacity: 25,
@@ -454,11 +458,12 @@ function randomNote(rec) {
     if (!apiToken) { logMsg("Provide a REST API token to load services", "warn"); return; }
     setIsLoadingServices(true);
     try {
-      const out = []; let offset = 0; const limit = 100; let more = true;
+      const out = []; let offset = 0; const limit = 100; let more = true; let changeEnabled = 0;
       while (more) {
         const url = new URL("/proxy/services", window.location.origin);
         url.searchParams.set("limit", String(limit)); url.searchParams.set("offset", String(offset));
         url.searchParams.append("include[]", "teams");
+        url.searchParams.append("include[]", "integrations");
         selectedTeamIds.forEach((id) => url.searchParams.append("team_ids[]", id));
         const res = await throttledFetch(url.toString(), { headers: apiHeaders });
         const data = await res.json(); if (!res.ok) throw new Error(data?.error?.message || res.statusText);
@@ -468,12 +473,21 @@ function randomNote(rec) {
           html_url: s.html_url,
           include: includeMap[s.id] ?? false, // persist selection
           teams: (s.teams || []).map((t) => ({ id: t.id, name: t.name })),
+          changeIntegrations: (s.integrations || [])
+            .filter((integration) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
+            .map((integration) => ({
+              id: integration.id,
+              name: integration.summary || integration.name || integration.type,
+              integrationKey: integration.integration_key,
+              vendor: integration.vendor?.summary || integration.vendor?.name || null,
+            })),
         }));
+        batch.forEach((svc) => { if (svc.changeIntegrations.length) changeEnabled += 1; });
         out.push(...batch);
         more = Boolean(data?.more); offset += data?.limit || batch.length || 0;
       }
       out.sort((a, b) => a.name.localeCompare(b.name)); setServices(out);
-      logMsg(`Loaded ${out.length} services${selectedTeamIds.length ? ` (filtered by ${selectedTeamIds.length} team(s))` : ''}`);
+      logMsg(`Loaded ${out.length} services${selectedTeamIds.length ? ` (filtered by ${selectedTeamIds.length} team(s))` : ''}${changeEnabled ? ` (${changeEnabled} with change integrations)` : ''}`);
       return out;
     } catch (e) { logMsg(`Failed to load services: ${e.message || e}`, "error"); }
     finally { setIsLoadingServices(false); }
@@ -628,6 +642,129 @@ function randomNote(rec) {
     services.forEach((svc) => { map[svc.id] = svc.name; });
     return map;
   }, [services]);
+
+  const changeTargetsByTeam = React.useMemo(() => {
+    const map = {};
+    services.forEach((svc) => {
+      if (!svc.include) return;
+      const integrations = Array.isArray(svc.changeIntegrations) ? svc.changeIntegrations : [];
+      if (!integrations.length) return;
+      const svcTeams = Array.isArray(svc.teams) && svc.teams.length > 0
+        ? svc.teams
+        : [{ id: NO_TEAM_ID, name: NO_TEAM_NAME }];
+      svcTeams.forEach((team) => {
+        if (!map[team.id]) {
+          map[team.id] = { team, services: [] };
+        }
+        map[team.id].services.push({
+          serviceId: svc.id,
+          serviceName: svc.name,
+          integrations,
+          teamId: team.id,
+          teamName: team.name,
+        });
+      });
+    });
+    return map;
+  }, [services]);
+
+  const changeCoverage = React.useMemo(() => {
+    const included = services.filter((svc) => svc.include);
+    const includedWithChange = included.filter((svc) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
+    const totalChange = services.filter((svc) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
+    return {
+      included: included.length,
+      includedWithChange,
+      total: services.length,
+      totalChange,
+    };
+  }, [services]);
+
+  const changeIntegrationStats = React.useMemo(() => ({
+    scanned: services.length,
+    withChange: services.filter((svc) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length,
+  }), [services]);
+
+  const changeCoverageSummary = React.useMemo(() => {
+    const entries = Object.values(changeTargetsByTeam).map((entry) => {
+      const teamName = entry.team?.name || "Unknown Team";
+      return `${teamName}: ${entry.services.length}`;
+    });
+    if (!entries.length) return null;
+    if (entries.length <= 3) return entries.join(" • ");
+    return `${entries.slice(0, 3).join(" • ")} +${entries.length - 3} more`;
+  }, [changeTargetsByTeam]);
+
+  const hasChangeCoverage = changeCoverage.totalChange > 0;
+
+  React.useEffect(() => {
+    if (!hasChangeCoverage) {
+      changeEventsToggleTouchedRef.current = false;
+      if (changeEventsEnabled) setChangeEventsEnabled(false);
+      return;
+    }
+    if (!changeEventsEnabled && !changeEventsToggleTouchedRef.current) {
+      setChangeEventsEnabled(true);
+    }
+  }, [hasChangeCoverage, changeEventsEnabled]);
+
+  const emitChangeEventForService = React.useCallback(async (target, campaignMeta, team) => {
+    if (!target?.integrations?.length) return;
+    const integration = randomFrom(target.integrations);
+    if (!integration?.integrationKey) return;
+    const body = {
+      routing_key: integration.integrationKey,
+      event_action: "trigger",
+      payload: {
+        summary: `[Change] ${target.serviceName} update related to ${campaignMeta.summary}`,
+        source: "PD Noise Simulator",
+        component: target.serviceName,
+        timestamp: new Date().toISOString(),
+        custom_details: {
+          failure_id: campaignMeta.id,
+          failure_summary: campaignMeta.summary,
+          service_id: target.serviceId,
+          team: team?.name || "Unknown Team",
+        },
+      },
+    };
+    try {
+      const res = await fetch("/proxy/change_events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || res.statusText);
+      setLastChangeEvent({ ts: Date.now(), serviceName: target.serviceName, failureSummary: campaignMeta.summary });
+      logMsg(`Sent change event for ${target.serviceName} (${campaignMeta.summary})`, "info");
+    } catch (e) {
+      logMsg(`Failed to send change event for ${target.serviceName}: ${e.message || e}`, "warn");
+    }
+  }, [logMsg]);
+
+  const triggerCampaignChangeEvents = React.useCallback((team, campaignMeta, originService) => {
+    if (!changeEventsEnabled) return;
+    if (!team?.id) return;
+    const teamTargets = changeTargetsByTeam[team.id];
+    const available = teamTargets?.services ? [...teamTargets.services] : [];
+    if (!available.length) {
+      logMsg(`No change integrations selected for ${team?.name || "team"}; skipping change events`, "info");
+      return;
+    }
+    const picks = [];
+    const originIdx = available.findIndex((entry) => entry.serviceId === originService.id);
+    if (originIdx >= 0) {
+      picks.push(available.splice(originIdx, 1)[0]);
+    }
+    const maxPerCampaign = Math.min(3, available.length + picks.length);
+    const desired = Math.min(maxPerCampaign, Math.max(1, Math.floor(Math.random() * 3) + 1));
+    const shuffled = shuffleArray(available);
+    while (picks.length < desired && shuffled.length) {
+      picks.push(shuffled.shift());
+    }
+    picks.forEach((target) => emitChangeEventForService(target, campaignMeta, team));
+  }, [changeEventsEnabled, changeTargetsByTeam, emitChangeEventForService, logMsg]);
 
   const mapPdIncidentToActive = React.useCallback((inc) => {
     if (!inc) return null;
@@ -1203,8 +1340,10 @@ function randomNote(rec) {
     const expiresAt = Date.now() + Math.max(30, Number(campaignConfig.windowSec) || 300) * 1000;
     const campaign = { id: uid("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt };
     campaignRef.current = [...campaignRef.current, campaign];
-    return { id: campaign.id, summary };
-  }, [campaignConfig, services]);
+    const metadata = { id: campaign.id, summary };
+    triggerCampaignChangeEvents(primaryTeam, metadata, svc);
+    return metadata;
+  }, [campaignConfig, services, randomFailureSummary, triggerCampaignChangeEvents]);
   const toggleSort = React.useCallback((key) => {
     setMonitorSort((prev) => {
       if (prev.key === key) {
@@ -1656,6 +1795,33 @@ function randomNote(rec) {
             </div>
           </div>
           <p className="mt-2 text-xs text-gray-500">Correlated incidents show a badge in Monitor with the shared failure summary.</p>
+          <div className="mt-3 border-t pt-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={changeEventsEnabled}
+                onChange={(e) => {
+                  changeEventsToggleTouchedRef.current = true;
+                  setChangeEventsEnabled(e.target.checked);
+                }}
+                disabled={!hasChangeCoverage}
+              />
+              Emit related change events
+            </label>
+            <p className="text-xs text-gray-500">
+              {hasChangeCoverage
+                ? `${changeCoverage.includedWithChange}/${changeCoverage.included || 0} included services have change integrations (${changeIntegrationStats.withChange} total)`
+                : "No selected services have change integrations; load services to refresh coverage."}
+            </p>
+            {changeCoverageSummary && (
+              <p className="text-xs text-gray-500">Teams with coverage: {changeCoverageSummary}</p>
+            )}
+            {lastChangeEvent && (
+              <p className="text-xs text-green-700">
+                Last change event ({new Date(lastChangeEvent.ts).toLocaleTimeString()}): {lastChangeEvent.serviceName} — {lastChangeEvent.failureSummary}
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="bg-white shadow rounded p-4">
