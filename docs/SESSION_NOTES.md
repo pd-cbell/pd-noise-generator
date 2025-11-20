@@ -70,3 +70,64 @@
 - Explore import/export (JSON download) so presets can be shared outside a single browser.
 - Evaluate whether `/proxy/templates` + authenticated storage is necessary for multi-presenter teams.
 - Update release notes + demos once schema stabilizes; add smoke coverage for Save/Load in future automation suites.
+
+### Profiles Support (v1.3.1)
+
+#### Key Changes
+- Added a Profiles card to the top of the Configure view with Active Profile picker, New Profile button, and Save / Save As / Delete controls.
+- Auto-synced all Configure state (credentials, selections, sliders, filters, template metadata) into profile settings so form edits persist instantly.
+- Logged profile usage at run start (`Simulation started (profile: ...)`) for operator clarity.
+- Updated docs to describe workflow plus troubleshooting tips.
+
+#### Storage Contract
+```jsonc
+{
+  "version": 1,
+  "activeProfileId": "profile_xxx",
+  "profiles": [
+    {
+      "id": "profile_xxx",
+      "name": "Customer Warmup",
+      "description": "low-noise run",
+      "createdAt": 1731012000000,
+      "updatedAt": 1731108400000,
+      "settings": {
+        "pdSubdomain": "",
+        "apiToken": "",
+        "globalRoutingKey": "",
+        "fromEmail": "",
+        "selectedTeamIds": [],
+        "selectedEPIds": [],
+        "includeMap": {},
+        "universalResponderCfg": { ... },
+        "ratePerMinute": 6,
+        "noteProbability": 0.5,
+        "responderProbabilityMultiplier": 1,
+        "autoResolveMinSec": 90,
+        "autoResolveMaxSec": 240,
+        "severityWeights": { "info": 0.2, "warning": 0.4, "error": 0.25, "critical": 0.15 },
+        "autoHealConfig": { ...DEFAULT_AUTO_HEAL_CONFIG },
+        "resumeExistingEnabled": true,
+        "sourceMix": { ...DEFAULT_SOURCE_MIX },
+        "campaignConfig": { ...DEFAULT_CAMPAIGN_CONFIG },
+        "changeEventsEnabled": true,
+        "activeTemplateId": null,
+        "lastRunTemplateName": null,
+        "activePage": "configure",
+        "monitorSeverityFilter": "all",
+        "monitorAckFilter": "all",
+        "monitorMappingFilter": "all",
+        "monitorSort": { "key": "startedAt", "direction": "desc" },
+        "logFilter": "all",
+        "logAutoStick": true
+      }
+    }
+  ]
+}
+```
+
+#### Migration & CRUD Flow
+- On first load the app checks for `pdns_profiles_v1`; missing data triggers a one-time migration that wraps the old `pdns_settings_v7` payload in a `Default Profile`. A dismissible banner informs presenters about the upgrade.
+- Profiles auto-sync while editing; **Save** simply updates metadata + resort ordering, while **Save As** clones the current snapshot and activates it immediately.
+- **New Profile** seeds sanitized defaults (blank credentials, balanced sliders) so presenters can stage multiple personas within the same browser.
+- **Delete** is disabled when only one profile exists; otherwise it removes the current entry, selects the next-most-recent profile, and hydrates Configure with that snapshot.

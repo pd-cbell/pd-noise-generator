@@ -7,6 +7,7 @@ PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle tha
 - Express-based proxy that wraps the PagerDuty REST & Events APIs so the browser never exposes secrets directly (implemented in `server.js`).
 - Dual-view experience: **Configure** for setup, **Monitor** for live incident dashboards with filters, trend chart, and one-click clean-up (view logic in `App.jsx`).
 - Template library on the Configure tab lets you save/load local presets so presenters can jump between demo scenarios quickly (Template UI in `App.jsx`).
+- Profiles card on the Configure tab stores full-run presets under `pdns_profiles_v1`, making it easy to swap between customer-ready configurations.
 - Team-aware service selection with collapsible sections and quick “Select Team” actions (UI helpers live in `PD Incident Noise Simulator.jsx`).
 - Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities (scheduler + automation lives in `PD Incident Noise Simulator.jsx`).
 - Responder requests resolve the configured “From Email” to a real PagerDuty user ID before making API calls, preventing 404/2100 errors (front-end caching in `PD Incident Noise Simulator.jsx`, proxy calls in `server.js`).
@@ -116,8 +117,20 @@ Use the **Template Library** card on the Configure tab (implemented in `App.jsx`
 3. Each saved template shows quick stats (rate, auto-heal, resume, change events, failure campaign settings) with **Load**, **Overwrite**, and **Delete** actions.
 4. Loading a template populates the Configure form immediately, and Monitor now surfaces the “Last run template” label plus start-up log entries (e.g., `Simulation started (template: Customer Warmup)`).
 
+### Profiles
+
+Profiles capture the entire Configure state (credentials, selections, sliders, filters) so presenters can hot-swap between fully-populated runs:
+
+1. Use the **Profiles** card at the top of the Configure tab to pick the active profile. Settings auto-sync as you edit so switching tabs or reloading keeps the run intact.
+2. **Save** refreshes the profile metadata (name, description, `updatedAt`) and leaves it pinned to the top of the dropdown.
+3. **Save As** clones the current settings into a brand-new profile with a generated ID. Rename/describe it before or after saving.
+4. **New Profile** clears the Configure form to default-safe values so you can stage a fresh persona or region.
+5. **Delete** removes the selected profile (at least one profile must remain). On upgrade, any existing `pdns_settings_v7` payload is migrated automatically into a `Default Profile` entry.
+
+Profiles live entirely in `localStorage` under the `pdns_profiles_v1` key (`{ activeProfileId, profiles: [...] }`). Use browser tools to export/share if needed; secrets remain local just like before.
+
 ## Key Behaviors
-- **Local storage persistence**: All settings stick between sessions under the `pdns_settings_v7` key.
+- **Local storage persistence**: Profile data lives under the `pdns_profiles_v1` key and auto-syncs with the active selection.
 - **Team filtering**: Teams starting with `NOC - ` and `SRE - ` are hidden for the simulated customer scenario.
 - **Service severity defaults**: Incidents trigger with a 20/40/25/15 Info/Warning/Error/Critical distribution.
 - **Responder requests**: The simulator caches the user ID associated with the supplied email and sends PagerDuty-compliant payloads (`requester_id`, `message`, `responder_request_targets`).

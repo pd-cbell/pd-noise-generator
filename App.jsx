@@ -5,6 +5,11 @@ const TREND_WINDOW_MS = 15 * 60 * 1000;
 const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
 const TEMPLATE_LIBRARY_KEY = "pdns_template_library_v1";
 const TEMPLATE_VERSION = 1;
+const PROFILES_KEY = "pdns_profiles_v1";
+const PROFILES_VERSION = 1;
+const DEFAULT_PROFILE_NAME = "Default Profile";
+const DEFAULT_SEVERITY_WEIGHTS = { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 };
+const DEFAULT_MONITOR_SORT = { key: 'startedAt', direction: 'desc' };
 const DEFAULT_RESPONDER_CONFIG = {
   prob: { critical: 0.35, nonCritical: 0.2 },
   first: {
@@ -40,11 +45,137 @@ function cloneTemplateValue(value) {
   }
 }
 
+function generateId(prefix = "id") {
+  let unique;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    unique = crypto.randomUUID();
+  } else {
+    unique = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+  return `${prefix}_${unique}`;
+}
+
+function sanitizeProfileSettings(partial = {}) {
+  const safe = (val, fallback) => (val === undefined || val === null ? fallback : val);
+  const sanitizeSort = (sort) => {
+    if (!sort || typeof sort !== 'object') return cloneTemplateValue(DEFAULT_MONITOR_SORT);
+    const validKeys = ['startedAt', 'age', 'attempts', 'severity'];
+    const key = validKeys.includes(sort.key) ? sort.key : (DEFAULT_MONITOR_SORT.key || 'startedAt');
+    const direction = sort.direction === 'asc' ? 'asc' : 'desc';
+    return { key, direction };
+  };
+  return {
+    pdSubdomain: partial.pdSubdomain || "",
+    apiToken: partial.apiToken || "",
+    globalRoutingKey: partial.globalRoutingKey || "",
+    fromEmail: partial.fromEmail || "",
+    selectedTeamIds: Array.isArray(partial.selectedTeamIds) ? [...partial.selectedTeamIds] : [],
+    selectedEPIds: Array.isArray(partial.selectedEPIds) ? [...partial.selectedEPIds] : [],
+    includeMap: partial.includeMap && typeof partial.includeMap === 'object' ? { ...partial.includeMap } : {},
+    universalResponderCfg: partial.universalResponderCfg ? cloneTemplateValue(partial.universalResponderCfg) : cloneTemplateValue(DEFAULT_RESPONDER_CONFIG),
+    ratePerMinute: Number(safe(partial.ratePerMinute, 6)) || 0,
+    noteProbability: Number(safe(partial.noteProbability, 0.5)) || 0,
+    responderProbabilityMultiplier: Number(safe(partial.responderProbabilityMultiplier, 1)) || 0,
+    autoResolveMinSec: Number(safe(partial.autoResolveMinSec, 90)) || 0,
+    autoResolveMaxSec: Number(safe(partial.autoResolveMaxSec, 240)) || 0,
+    severityWeights: partial.severityWeights ? cloneTemplateValue(partial.severityWeights) : cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS),
+    autoHealConfig: partial.autoHealConfig ? cloneTemplateValue(partial.autoHealConfig) : cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG),
+    resumeExistingEnabled: Boolean(safe(partial.resumeExistingEnabled, true)),
+    sourceMix: partial.sourceMix ? cloneTemplateValue(partial.sourceMix) : cloneTemplateValue(DEFAULT_SOURCE_MIX),
+    campaignConfig: partial.campaignConfig ? cloneTemplateValue(partial.campaignConfig) : cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG),
+    changeEventsEnabled: Boolean(safe(partial.changeEventsEnabled, true)),
+    activeTemplateId: partial.activeTemplateId || null,
+    lastRunTemplateName: partial.lastRunTemplateName || null,
+    activePage: partial.activePage === 'monitor' ? 'monitor' : 'configure',
+    monitorSeverityFilter: partial.monitorSeverityFilter || 'all',
+    monitorAckFilter: partial.monitorAckFilter || 'all',
+    monitorMappingFilter: partial.monitorMappingFilter || 'all',
+    monitorSort: sanitizeSort(partial.monitorSort),
+    logFilter: partial.logFilter || 'all',
+    logAutoStick: partial.logAutoStick === false ? false : true,
+  };
+}
+
+function createProfile({ id, name = DEFAULT_PROFILE_NAME, description = "", settings = {}, createdAt, updatedAt } = {}) {
+  const ts = Date.now();
+  return {
+    id: id || generateId('profile'),
+    version: PROFILES_VERSION,
+    name,
+    description,
+    createdAt: createdAt || ts,
+    updatedAt: updatedAt || ts,
+    settings: sanitizeProfileSettings(settings),
+  };
+}
+
+function sortProfiles(entries = []) {
+  return [...entries].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+
+function areSettingsEqual(a, b) {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
+}
+
 function App() {
   // ---------- Local Storage Helpers ----------
   const LS_KEY = 'pdns_settings_v7';
-  const loadLS = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } };
-  const saveLS = (obj) => { try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch {} };
+  const loadLegacySettings = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } };
+  const readStoredProfiles = () => {
+    try {
+      const raw = localStorage.getItem(PROFILES_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed?.profiles)) return null;
+      const normalized = parsed.profiles
+        .map((profile) => {
+          if (!profile?.id) return null;
+          return createProfile({
+            id: profile.id,
+            name: profile.name || DEFAULT_PROFILE_NAME,
+            description: profile.description || "",
+            settings: profile.settings || {},
+            createdAt: profile.createdAt,
+            updatedAt: profile.updatedAt,
+          });
+        })
+        .filter(Boolean);
+      if (!normalized.length) return null;
+      const sorted = sortProfiles(normalized);
+      const activeId = sorted.some((profile) => profile.id === parsed.activeProfileId)
+        ? parsed.activeProfileId
+        : sorted[0].id;
+      return {
+        profiles: sorted,
+        activeProfileId: activeId,
+        activeProfile: sorted.find((p) => p.id === activeId) || sorted[0],
+        migrated: false,
+      };
+    } catch {
+      return null;
+    }
+  };
+  const bootstrapProfiles = () => {
+    const stored = readStoredProfiles();
+    if (stored) return stored;
+    const legacy = loadLegacySettings();
+    const migrated = legacy && Object.keys(legacy).length > 0;
+    const fallback = createProfile({
+      name: DEFAULT_PROFILE_NAME,
+      description: migrated ? 'Migrated from previous settings' : 'Fresh profile',
+      settings: legacy || {},
+    });
+    return {
+      profiles: [fallback],
+      activeProfileId: fallback.id,
+      activeProfile: fallback,
+      migrated,
+    };
+  };
   const sortTemplates = (entries = []) => [...entries].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   const loadTemplateLibrary = () => {
     try {
@@ -62,6 +193,19 @@ function App() {
       localStorage.setItem(TEMPLATE_LIBRARY_KEY, JSON.stringify(entries));
     } catch {}
   };
+  const persistProfilesToStorage = React.useCallback((entries, activeId) => {
+    try {
+      const payload = {
+        version: PROFILES_VERSION,
+        activeProfileId: activeId || null,
+        profiles: entries.map((profile) => ({
+          ...profile,
+          settings: sanitizeProfileSettings(profile.settings || {}),
+        })),
+      };
+      localStorage.setItem(PROFILES_KEY, JSON.stringify(payload));
+    } catch {}
+  }, []);
 
   // ---------- Org/domain + credentials ----------
   const [pdSubdomain, setPdSubdomain] = React.useState("");
@@ -95,7 +239,7 @@ function App() {
   const [responderProbabilityMultiplier, setResponderProbabilityMultiplier] = React.useState(1.0);
   const [autoResolveMinSec, setAutoResolveMinSec] = React.useState(90);
   const [autoResolveMaxSec, setAutoResolveMaxSec] = React.useState(240);
-  const [severityWeights, setSeverityWeights] = React.useState({ info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 });
+  const [severityWeights, setSeverityWeights] = React.useState(() => cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS));
   const [autoHealConfig, setAutoHealConfig] = React.useState(() => cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
   const [resumeExistingEnabled, setResumeExistingEnabled] = React.useState(true);
   const [sourceMix, setSourceMix] = React.useState(() => cloneTemplateValue(DEFAULT_SOURCE_MIX));
@@ -108,6 +252,13 @@ function App() {
   const [templateDescriptionInput, setTemplateDescriptionInput] = React.useState("");
   const [templateError, setTemplateError] = React.useState(null);
   const [lastRunTemplateName, setLastRunTemplateName] = React.useState(null);
+  const [profiles, setProfiles] = React.useState([]);
+  const [activeProfileId, setActiveProfileId] = React.useState(null);
+  const [profileNameInput, setProfileNameInput] = React.useState("");
+  const [profileDescriptionInput, setProfileDescriptionInput] = React.useState("");
+  const [profileError, setProfileError] = React.useState(null);
+  const [profileMigrationBanner, setProfileMigrationBanner] = React.useState(false);
+  const [profilesReady, setProfilesReady] = React.useState(false);
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -117,11 +268,12 @@ function App() {
   const [monitorSeverityFilter, setMonitorSeverityFilter] = React.useState('all');
   const [monitorAckFilter, setMonitorAckFilter] = React.useState('all');
   const [monitorMappingFilter, setMonitorMappingFilter] = React.useState('all');
-  const [monitorSort, setMonitorSort] = React.useState({ key: 'startedAt', direction: 'desc' });
+  const [monitorSort, setMonitorSort] = React.useState(() => cloneTemplateValue(DEFAULT_MONITOR_SORT));
   const [selectedIncident, setSelectedIncident] = React.useState(null);
   const [monitorTrend, setMonitorTrend] = React.useState([]);
   const [logFilter, setLogFilter] = React.useState('all');
   const [logAutoStick, setLogAutoStick] = React.useState(true);
+  const activeProfile = React.useMemo(() => profiles.find((profile) => profile.id === activeProfileId) || null, [profiles, activeProfileId]);
   const activeTemplate = React.useMemo(() => templates.find((tpl) => tpl.id === activeTemplateId) || null, [templates, activeTemplateId]);
 
   // Timers/refs for schedulers
@@ -199,32 +351,84 @@ function App() {
     };
   }, [takeRestToken]);
 
-  // ---------- Load from Local Storage on first mount ----------
+  // ---------- Load Profiles on mount ----------
   React.useEffect(() => {
-    const st = loadLS();
-    if (st.pdSubdomain) setPdSubdomain(st.pdSubdomain);
-    if (st.apiToken) setApiToken(st.apiToken);
-    if (st.globalRoutingKey) setGlobalRoutingKey(st.globalRoutingKey);
-    if (st.fromEmail) setFromEmail(st.fromEmail);
-    if (st.selectedTeamIds) setSelectedTeamIds(st.selectedTeamIds);
-    if (st.universalResponderCfg) setUniversalResponderCfg(st.universalResponderCfg);
-    if (st.ratePerMinute != null) setRatePerMinute(st.ratePerMinute);
-    if (st.noteProbability != null) setNoteProbability(st.noteProbability);
-    if (st.responderProbabilityMultiplier != null) setResponderProbabilityMultiplier(st.responderProbabilityMultiplier);
-    if (st.autoResolveMinSec != null) setAutoResolveMinSec(st.autoResolveMinSec);
-    if (st.autoResolveMaxSec != null) setAutoResolveMaxSec(st.autoResolveMaxSec);
-    if (st.severityWeights) setSeverityWeights(st.severityWeights);
-    if (st.includeMap) setIncludeMap(st.includeMap);
-    if (st.selectedEPIds) setSelectedEPIds(st.selectedEPIds);
-    if (st.activePage && (st.activePage === 'configure' || st.activePage === 'monitor')) setActivePage(st.activePage);
-    if (st.autoHealConfig) setAutoHealConfig(st.autoHealConfig);
-    if (st.resumeExistingEnabled != null) setResumeExistingEnabled(Boolean(st.resumeExistingEnabled));
-    if (st.sourceMix) setSourceMix(st.sourceMix);
-    if (st.campaignConfig) setCampaignConfig(st.campaignConfig);
-    if (st.changeEventsEnabled != null) setChangeEventsEnabled(Boolean(st.changeEventsEnabled));
-    if ('activeTemplateId' in st && st.activeTemplateId) setActiveTemplateId(st.activeTemplateId);
-    if ('lastRunTemplateName' in st) setLastRunTemplateName(st.lastRunTemplateName || null);
+    const payload = bootstrapProfiles();
+    setProfiles(payload.profiles);
+    setActiveProfileId(payload.activeProfileId);
+    if (payload.activeProfile) {
+      applyProfileSettings(payload.activeProfile.settings || {});
+      setProfileNameInput(payload.activeProfile.name || "");
+      setProfileDescriptionInput(payload.activeProfile.description || "");
+    }
+    setProfileMigrationBanner(Boolean(payload.migrated));
+    setProfilesReady(true);
   }, []);
+
+  React.useEffect(() => {
+    if (!profilesReady) return;
+    persistProfilesToStorage(profiles, activeProfileId);
+  }, [profiles, activeProfileId, profilesReady, persistProfilesToStorage]);
+
+  const captureProfileSettings = React.useCallback(() => sanitizeProfileSettings({
+    pdSubdomain,
+    apiToken,
+    globalRoutingKey,
+    fromEmail,
+    selectedTeamIds,
+    selectedEPIds,
+    includeMap,
+    universalResponderCfg,
+    ratePerMinute,
+    noteProbability,
+    responderProbabilityMultiplier,
+    autoResolveMinSec,
+    autoResolveMaxSec,
+    severityWeights,
+    autoHealConfig,
+    resumeExistingEnabled,
+    sourceMix,
+    campaignConfig,
+    changeEventsEnabled,
+    activeTemplateId,
+    lastRunTemplateName,
+    activePage,
+    monitorSeverityFilter,
+    monitorAckFilter,
+    monitorMappingFilter,
+    monitorSort,
+    logFilter,
+    logAutoStick,
+  }), [
+    pdSubdomain,
+    apiToken,
+    globalRoutingKey,
+    fromEmail,
+    selectedTeamIds,
+    selectedEPIds,
+    includeMap,
+    universalResponderCfg,
+    ratePerMinute,
+    noteProbability,
+    responderProbabilityMultiplier,
+    autoResolveMinSec,
+    autoResolveMaxSec,
+    severityWeights,
+    autoHealConfig,
+    resumeExistingEnabled,
+    sourceMix,
+    campaignConfig,
+    changeEventsEnabled,
+    activeTemplateId,
+    lastRunTemplateName,
+    activePage,
+    monitorSeverityFilter,
+    monitorAckFilter,
+    monitorMappingFilter,
+    monitorSort,
+    logFilter,
+    logAutoStick,
+  ]);
 
   const captureTemplateSettings = React.useCallback(() => ({
     pdSubdomain,
@@ -264,6 +468,26 @@ function App() {
     changeEventsEnabled,
   ]);
 
+  React.useEffect(() => {
+    if (!profilesReady || !activeProfileId) return;
+    const snapshot = captureProfileSettings();
+    setProfiles((prev) => {
+      const idx = prev.findIndex((profile) => profile.id === activeProfileId);
+      if (idx === -1) return prev;
+      const current = prev[idx];
+      if (areSettingsEqual(current.settings, snapshot)) return prev;
+      const updated = [...prev];
+      updated[idx] = { ...current, settings: snapshot, version: PROFILES_VERSION };
+      return updated;
+    });
+  }, [profilesReady, activeProfileId, captureProfileSettings]);
+
+  React.useEffect(() => {
+    if (!activeProfile) return;
+    setProfileNameInput(activeProfile.name || "");
+    setProfileDescriptionInput(activeProfile.description || "");
+  }, [activeProfile]);
+
   function applyTemplateSettings(incomingSettings = {}) {
     const settings = cloneTemplateValue(incomingSettings) || {};
     if ("pdSubdomain" in settings) setPdSubdomain(settings.pdSubdomain || "");
@@ -277,7 +501,7 @@ function App() {
     if ("responderProbabilityMultiplier" in settings) setResponderProbabilityMultiplier(Number(settings.responderProbabilityMultiplier) || 0);
     if ("autoResolveMinSec" in settings) setAutoResolveMinSec(Number(settings.autoResolveMinSec) || 0);
     if ("autoResolveMaxSec" in settings) setAutoResolveMaxSec(Number(settings.autoResolveMaxSec) || 0);
-    if ("severityWeights" in settings) setSeverityWeights(settings.severityWeights || { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 });
+    if ("severityWeights" in settings) setSeverityWeights(settings.severityWeights || cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS));
     if ("autoHealConfig" in settings) setAutoHealConfig(settings.autoHealConfig || cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
     if ("resumeExistingEnabled" in settings) setResumeExistingEnabled(Boolean(settings.resumeExistingEnabled));
     if ("sourceMix" in settings) setSourceMix(settings.sourceMix || cloneTemplateValue(DEFAULT_SOURCE_MIX));
@@ -285,25 +509,37 @@ function App() {
     if ("changeEventsEnabled" in settings) setChangeEventsEnabled(Boolean(settings.changeEventsEnabled));
   }
 
-  // ---------- Persist settings whenever they change ----------
-  React.useEffect(() => {
-    const st = {
-      pdSubdomain, apiToken, globalRoutingKey, fromEmail,
-      selectedTeamIds, universalResponderCfg,
-      ratePerMinute, noteProbability, responderProbabilityMultiplier,
-      autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap,
-      selectedEPIds,
-      activePage,
-      autoHealConfig,
-      resumeExistingEnabled,
-      sourceMix,
-      campaignConfig,
-      changeEventsEnabled,
-      activeTemplateId,
-      lastRunTemplateName,
-    };
-    saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled, sourceMix, campaignConfig, changeEventsEnabled, activeTemplateId, lastRunTemplateName]);
+  function applyProfileSettings(incomingSettings = {}) {
+    const settings = sanitizeProfileSettings(incomingSettings);
+    setPdSubdomain(settings.pdSubdomain || "");
+    setApiToken(settings.apiToken || "");
+    setGlobalRoutingKey(settings.globalRoutingKey || "");
+    setFromEmail(settings.fromEmail || "");
+    setSelectedTeamIds(Array.isArray(settings.selectedTeamIds) ? settings.selectedTeamIds : []);
+    setSelectedEPIds(Array.isArray(settings.selectedEPIds) ? settings.selectedEPIds : []);
+    setIncludeMap(settings.includeMap || {});
+    setUniversalResponderCfg(settings.universalResponderCfg || cloneTemplateValue(DEFAULT_RESPONDER_CONFIG));
+    setRatePerMinute(Number(settings.ratePerMinute) || 0);
+    setNoteProbability(Number(settings.noteProbability) || 0);
+    setResponderProbabilityMultiplier(Number(settings.responderProbabilityMultiplier) || 0);
+    setAutoResolveMinSec(Number(settings.autoResolveMinSec) || 0);
+    setAutoResolveMaxSec(Number(settings.autoResolveMaxSec) || 0);
+    setSeverityWeights(settings.severityWeights || cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS));
+    setAutoHealConfig(settings.autoHealConfig || cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
+    setResumeExistingEnabled(Boolean(settings.resumeExistingEnabled));
+    setSourceMix(settings.sourceMix || cloneTemplateValue(DEFAULT_SOURCE_MIX));
+    setCampaignConfig(settings.campaignConfig || cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG));
+    setChangeEventsEnabled(Boolean(settings.changeEventsEnabled));
+    if (settings.activeTemplateId !== undefined) setActiveTemplateId(settings.activeTemplateId || null);
+    if ('lastRunTemplateName' in settings) setLastRunTemplateName(settings.lastRunTemplateName || null);
+    setActivePage(settings.activePage === 'monitor' ? 'monitor' : 'configure');
+    setMonitorSeverityFilter(settings.monitorSeverityFilter || 'all');
+    setMonitorAckFilter(settings.monitorAckFilter || 'all');
+    setMonitorMappingFilter(settings.monitorMappingFilter || 'all');
+    setMonitorSort(settings.monitorSort || cloneTemplateValue(DEFAULT_MONITOR_SORT));
+    setLogFilter(settings.logFilter || 'all');
+    setLogAutoStick(settings.logAutoStick === false ? false : true);
+  }
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
@@ -364,7 +600,7 @@ function App() {
     const snapshot = captureTemplateSettings();
     const nowTs = Date.now();
     const template = {
-      id: uid("tpl"),
+      id: generateId("tpl"),
       name: trimmedName,
       description: templateDescriptionInput.trim(),
       version: TEMPLATE_VERSION,
@@ -427,6 +663,106 @@ function App() {
     if (removedName) {
       logMsg(`Deleted template "${removedName}"`, "warn");
     }
+  };
+
+  const handleSelectProfile = (profileId) => {
+    if (!profileId || profileId === activeProfileId) return;
+    const profile = profiles.find((p) => p.id === profileId);
+    if (!profile) return;
+    applyProfileSettings(profile.settings || {});
+    setActiveProfileId(profile.id);
+    setProfileNameInput(profile.name || "");
+    setProfileDescriptionInput(profile.description || "");
+    setProfileError(null);
+    logMsg(`Profile "${profile.name || profile.id}" loaded`, "info");
+  };
+
+  const handleSaveProfile = () => {
+    if (!activeProfileId) return;
+    const trimmedName = profileNameInput.trim();
+    if (!trimmedName) {
+      setProfileError("Profile name is required");
+      return;
+    }
+    const trimmedDesc = profileDescriptionInput.trim();
+    const snapshot = captureProfileSettings();
+    const nowTs = Date.now();
+    setProfiles((prev) => {
+      const idx = prev.findIndex((p) => p.id === activeProfileId);
+      if (idx === -1) return prev;
+      const updated = [...prev];
+      updated[idx] = {
+        ...prev[idx],
+        name: trimmedName,
+        description: trimmedDesc,
+        updatedAt: nowTs,
+        settings: snapshot,
+        version: PROFILES_VERSION,
+      };
+      return sortProfiles(updated);
+    });
+    setProfileError(null);
+    logMsg(`Profile "${trimmedName}" saved`, "info");
+  };
+
+  const handleSaveAsProfile = () => {
+    const trimmedName = profileNameInput.trim();
+    if (!trimmedName) {
+      setProfileError("Profile name is required");
+      return;
+    }
+    const trimmedDesc = profileDescriptionInput.trim();
+    const snapshot = captureProfileSettings();
+    const nowTs = Date.now();
+    const newProfile = {
+      id: generateId('profile'),
+      version: PROFILES_VERSION,
+      name: trimmedName,
+      description: trimmedDesc,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+      settings: snapshot,
+    };
+    setProfiles((prev) => sortProfiles([newProfile, ...prev]));
+    setActiveProfileId(newProfile.id);
+    setProfileError(null);
+    logMsg(`Created new profile "${trimmedName}"`, "info");
+  };
+
+  const handleCreateProfile = () => {
+    const newProfile = createProfile({
+      name: `Profile ${profiles.length + 1}`,
+      description: "",
+      settings: sanitizeProfileSettings({}),
+    });
+    setProfiles((prev) => sortProfiles([newProfile, ...prev]));
+    setActiveProfileId(newProfile.id);
+    applyProfileSettings(newProfile.settings || {});
+    setProfileNameInput(newProfile.name || "");
+    setProfileDescriptionInput(newProfile.description || "");
+    setProfileError(null);
+    logMsg(`Created profile "${newProfile.name}"`, "info");
+  };
+
+  const handleDeleteProfile = () => {
+    if (!activeProfileId) return;
+    if (profiles.length <= 1) {
+      setProfileError("Keep at least one profile");
+      return;
+    }
+    const target = profiles.find((p) => p.id === activeProfileId);
+    const remaining = profiles.filter((p) => p.id !== activeProfileId);
+    const sorted = sortProfiles(remaining);
+    const fallback = sorted[0];
+    setProfiles(sorted);
+    if (fallback) {
+      setActiveProfileId(fallback.id);
+      applyProfileSettings(fallback.settings || {});
+      setProfileNameInput(fallback.name || "");
+      setProfileDescriptionInput(fallback.description || "");
+    }
+    setProfileError(null);
+    logMsg(`Profile "${target?.name || target?.id || 'profile'}" deleted`, "warn");
   };
 
 function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -612,8 +948,6 @@ function randomNote(rec) {
     }
     return null;
   }
-  function uid(prefix = "id") { return `${prefix}_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`; }
-
   // ---------- Load Teams ----------
   async function fetchAllTeams() {
     if (!apiToken) { logMsg("Provide a REST API token to load teams", "warn"); return; }
@@ -956,7 +1290,7 @@ function randomNote(rec) {
     if (!inc) return null;
     const serviceId = inc.service?.id || inc.service_id;
     const serviceName = serviceNameLookup[serviceId] || inc.service?.summary || inc.summary || "Unknown Service";
-    const dedupKey = inc.incident_key || inc.dedup_key || inc.id || uid("pd");
+    const dedupKey = inc.incident_key || inc.dedup_key || inc.id || generateId("pd");
     const startedAt = inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
     const severity = inc.severity || "info";
     const acked = inc.status === "acknowledged";
@@ -1013,7 +1347,7 @@ function randomNote(rec) {
   // ---------- Events/Incidents ----------
   async function triggerIncidentForService(svc, campaignContext = null) {
     if (!globalRoutingKey) { logMsg("Provide the Global Routing Key", "warn"); return null; }
-    const dedupKey = uid("dk");
+    const dedupKey = generateId("dk");
     const severity = randChoiceWeighted(severityWeights);
     const template = selectObservabilityTemplate();
     let failureMeta = campaignContext || null;
@@ -1349,8 +1683,17 @@ function randomNote(rec) {
     }
     setIsRunning(true);
     const templateLabel = activeTemplate?.name || null;
+    const profileLabel = activeProfile?.name || null;
     setLastRunTemplateName(templateLabel);
-    logMsg(templateLabel ? `Simulation started (template: ${templateLabel})` : "Simulation started");
+    if (profileLabel && templateLabel) {
+      logMsg(`Simulation started (profile: ${profileLabel}, template: ${templateLabel})`);
+    } else if (profileLabel) {
+      logMsg(`Simulation started (profile: ${profileLabel})`);
+    } else if (templateLabel) {
+      logMsg(`Simulation started (template: ${templateLabel})`);
+    } else {
+      logMsg("Simulation started");
+    }
   }
   function stop() { setIsRunning(false); clearTimeout(fireTimerRef.current); clearTimeout(evalTimerRef.current); logMsg("Simulation paused"); }
   function clearLog() { setLog([]); }
@@ -1526,7 +1869,7 @@ function randomNote(rec) {
     if (!pendingIds.size) return null;
     const summary = randomFailureSummary(primaryTeam.name);
     const expiresAt = Date.now() + Math.max(30, Number(campaignConfig.windowSec) || 300) * 1000;
-    const campaign = { id: uid("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt };
+    const campaign = { id: generateId("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt };
     campaignRef.current = [...campaignRef.current, campaign];
     const metadata = { id: campaign.id, summary };
     triggerCampaignChangeEvents(primaryTeam, metadata, svc);
@@ -1637,6 +1980,73 @@ function randomNote(rec) {
       <main className="max-w-7xl mx-auto p-4">
         {activePage === 'configure' && (
           <div className="space-y-6">
+        <section className="bg-white shadow rounded p-4">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium mb-1">Active Profile</label>
+                <select
+                  value={activeProfileId || ''}
+                  onChange={(e) => handleSelectProfile(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                >
+                  {profiles.length === 0 && <option value="">No profiles</option>}
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name || 'Untitled profile'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={handleCreateProfile} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded">
+                New Profile
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Profile Name</label>
+                <input
+                  value={profileNameInput}
+                  onChange={(e) => {
+                    setProfileNameInput(e.target.value);
+                    if (profileError) setProfileError(null);
+                  }}
+                  placeholder="Customer Warmup"
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <input
+                  value={profileDescriptionInput}
+                  onChange={(e) => setProfileDescriptionInput(e.target.value)}
+                  placeholder="Short note for presenters"
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+            </div>
+            {profileError && <p className="text-sm text-red-600">{profileError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button onClick={handleSaveProfile} className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded">
+                Save
+              </button>
+              <button onClick={handleSaveAsProfile} className="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded">
+                Save As
+              </button>
+              <button onClick={handleDeleteProfile} disabled={profiles.length <= 1} className={`px-3 py-2 rounded ${profiles.length <= 1 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+                Delete
+              </button>
+            </div>
+            {profileMigrationBanner && (
+              <div className="flex items-center justify-between gap-3 rounded bg-indigo-50 text-indigo-800 px-3 py-2 text-sm">
+                <p>Legacy settings migrated into a Default Profile. Rename or save new profiles as needed.</p>
+                <button onClick={() => setProfileMigrationBanner(false)} className="text-indigo-800 underline">
+                  Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
         <section className="bg-white shadow rounded p-4">
           <h2 className="text-lg font-semibold mb-3">Organization & Credentials</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

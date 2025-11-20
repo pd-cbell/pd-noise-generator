@@ -5,13 +5,14 @@ These notes help future pairing sessions or automation agents quickly orient the
 ## Environment & Setup
 - Node 16+ required. The project ships without a build step; `npm start` runs the Express proxy and serves the React UI.
 - Use `.env` (copy from `.env.example`) to set `PD_FROM_EMAIL`, `PORT`, and optional `PD_API_BASE`.
-- For UI testing, supply valid PagerDuty credentials in the browser (REST API token, Global Routing Key, From Email). The simulator stores data in `localStorage` under `pdns_settings_v7`.
-- LocalStorage now also persists the active view (“configure” vs “monitor”) and monitor filters/sort state so the dashboard re-opens exactly how a user left it.
+- For UI testing, supply valid PagerDuty credentials in the browser (REST API token, Global Routing Key, From Email). Profiles keep these values in `localStorage` under `pdns_profiles_v1`.
+- LocalStorage (via profiles) now also persists the active view (“configure” vs “monitor”), monitor filters/sort state, and template metadata so the dashboard re-opens exactly how a user left it.
 - Docker support: build with `docker compose up --build` (defaults to port 3001 and consumes the same `.env` file). Update `.env` before composing; `.dockerignore` prevents leaking local credentials into the image layers.
 - Auto-heal settings live under `autoHealConfig` in localStorage; defaults are enabled, 20% chance, 30–90s delay. Config UI writes sanitized values (0-100% and non-negative seconds).
 - Resume toggle lives under `resumeExistingEnabled`; when true the simulator calls `/proxy/incidents` for selected services before each run and tags synced incidents in the Monitor table.
 - Services are fetched with `include[]=integrations`; change integrations are detected by type (`events_api_v2_inbound_integration`, `change_event_transform_inbound_integration`) and stored per service so failure campaigns can emit related change events.
 - Template library data lives under the `pdns_template_library_v1` localStorage key; entries include metadata + sanitized settings (no REST API tokens or routing keys). UI/actions live in `App.jsx`.
+- Profiles live under `pdns_profiles_v1` and wrap every Configure setting (credentials, selections, sliders, filters). Legacy `pdns_settings_v7` payloads migrate into a Default Profile automatically on upgrade.
 
 ## Current Workstreams
 - **v1.3** – consolidate the change-event plumbing plus resume workflows already landed in `server.js` and `PD Incident Noise Simulator.jsx`. Expect continued refactors to the change-event toggle and logging.
@@ -23,6 +24,13 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Loading a template hydrates Configure state immediately, logs an info entry, and marks the template as active. The Monitor view surfaces “Last run template” using the name captured at `start()`.
 - Overwrite rewrites the existing entry using the current state snapshot, bumping `updatedAt` so the list remains sorted (newest first).
 - Delete removes the entry locally only; instruct presenters to export separately if they need to share presets (future enhancement may sync via `/proxy/templates`).
+
+## Profiles
+- Configure tab includes a Profiles card with Active Profile dropdown, New Profile button, and form inputs for name/description.
+- Profiles auto-sync settings as users edit; **Save** refreshes the metadata timestamp, while **Save As** clones the current configuration into a new entry.
+- Data is stored per browser under `pdns_profiles_v1` (`{ activeProfileId, profiles: [...] }`). Existing `pdns_settings_v7` data migrates once during first load.
+- Deleting a profile requires at least one remaining entry; selecting another profile hydrates Configure immediately.
+- Migration banner appears after upgrade so presenters know where their legacy settings landed (Default Profile) and can dismiss once acknowledged.
 
 ## Key Endpoints
 - Proxy routes under `/proxy/...` forward to PagerDuty REST APIs using the server-side `From` header.
