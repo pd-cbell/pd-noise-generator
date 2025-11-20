@@ -3,12 +3,65 @@ const NO_TEAM_ID = "__no_team__";
 const NO_TEAM_NAME = "Unassigned (No Team)";
 const TREND_WINDOW_MS = 15 * 60 * 1000;
 const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
+const TEMPLATE_LIBRARY_KEY = "pdns_template_library_v1";
+const TEMPLATE_VERSION = 1;
+const DEFAULT_RESPONDER_CONFIG = {
+  prob: { critical: 0.35, nonCritical: 0.2 },
+  first: {
+    critical: { minSec: 30, maxSec: 120 },
+    nonCritical: { minSec: 60, maxSec: 240 },
+  },
+};
+const DEFAULT_AUTO_HEAL_CONFIG = {
+  enabled: true,
+  warningProbability: 0.2,
+  minDelaySec: 30,
+  maxDelaySec: 90,
+};
+const DEFAULT_SOURCE_MIX = {
+  cloudwatch: 0.25,
+  datadog: 0.25,
+  newrelic: 0.25,
+  splunk: 0.25,
+};
+const DEFAULT_CAMPAIGN_CONFIG = {
+  enabled: true,
+  probability: 0.35,
+  maxRelated: 3,
+  windowSec: 300,
+};
+
+function cloneTemplateValue(value) {
+  if (value === undefined) return undefined;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
+}
 
 function App() {
   // ---------- Local Storage Helpers ----------
   const LS_KEY = 'pdns_settings_v7';
   const loadLS = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } };
   const saveLS = (obj) => { try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); } catch {} };
+  const sortTemplates = (entries = []) => [...entries].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const loadTemplateLibrary = () => {
+    try {
+      const raw = localStorage.getItem(TEMPLATE_LIBRARY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return sortTemplates(parsed.filter((tpl) => tpl?.id && tpl?.settings));
+    } catch {
+      return [];
+    }
+  };
+  const persistTemplateLibrary = (entries) => {
+    try {
+      localStorage.setItem(TEMPLATE_LIBRARY_KEY, JSON.stringify(entries));
+    } catch {}
+  };
 
   // ---------- Org/domain + credentials ----------
   const [pdSubdomain, setPdSubdomain] = React.useState("");
@@ -34,13 +87,7 @@ function App() {
   const [selectedEPIds, setSelectedEPIds] = React.useState([]);
 
   // ---------- Universal responder config (critical vs non-critical) ----------
-  const [universalResponderCfg, setUniversalResponderCfg] = React.useState({
-    prob: { critical: 0.35, nonCritical: 0.2 },
-    first: {
-      critical: { minSec: 30, maxSec: 120 },
-      nonCritical: { minSec: 60, maxSec: 240 },
-    },
-  });
+  const [universalResponderCfg, setUniversalResponderCfg] = React.useState(() => cloneTemplateValue(DEFAULT_RESPONDER_CONFIG));
 
   // ---------- Simulation settings ----------
   const [ratePerMinute, setRatePerMinute] = React.useState(6);
@@ -49,27 +96,18 @@ function App() {
   const [autoResolveMinSec, setAutoResolveMinSec] = React.useState(90);
   const [autoResolveMaxSec, setAutoResolveMaxSec] = React.useState(240);
   const [severityWeights, setSeverityWeights] = React.useState({ info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 });
-  const [autoHealConfig, setAutoHealConfig] = React.useState({
-    enabled: true,
-    warningProbability: 0.2,
-    minDelaySec: 30,
-    maxDelaySec: 90,
-  });
+  const [autoHealConfig, setAutoHealConfig] = React.useState(() => cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
   const [resumeExistingEnabled, setResumeExistingEnabled] = React.useState(true);
-  const [sourceMix, setSourceMix] = React.useState({
-    cloudwatch: 0.25,
-    datadog: 0.25,
-    newrelic: 0.25,
-    splunk: 0.25,
-  });
-  const [campaignConfig, setCampaignConfig] = React.useState({
-    enabled: true,
-    probability: 0.35,
-    maxRelated: 3,
-    windowSec: 300,
-  });
+  const [sourceMix, setSourceMix] = React.useState(() => cloneTemplateValue(DEFAULT_SOURCE_MIX));
+  const [campaignConfig, setCampaignConfig] = React.useState(() => cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG));
   const [changeEventsEnabled, setChangeEventsEnabled] = React.useState(true);
   const [lastChangeEvent, setLastChangeEvent] = React.useState(null);
+  const [templates, setTemplates] = React.useState(() => loadTemplateLibrary());
+  const [activeTemplateId, setActiveTemplateId] = React.useState(null);
+  const [templateNameInput, setTemplateNameInput] = React.useState("");
+  const [templateDescriptionInput, setTemplateDescriptionInput] = React.useState("");
+  const [templateError, setTemplateError] = React.useState(null);
+  const [lastRunTemplateName, setLastRunTemplateName] = React.useState(null);
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -84,6 +122,7 @@ function App() {
   const [monitorTrend, setMonitorTrend] = React.useState([]);
   const [logFilter, setLogFilter] = React.useState('all');
   const [logAutoStick, setLogAutoStick] = React.useState(true);
+  const activeTemplate = React.useMemo(() => templates.find((tpl) => tpl.id === activeTemplateId) || null, [templates, activeTemplateId]);
 
   // Timers/refs for schedulers
   const fireTimerRef = React.useRef(null);
@@ -133,6 +172,14 @@ function App() {
       }
     });
   }, [takeRestToken]);
+  React.useEffect(() => {
+    persistTemplateLibrary(templates);
+  }, [templates]);
+  React.useEffect(() => {
+    if (activeTemplateId && !templates.some((tpl) => tpl.id === activeTemplateId)) {
+      setActiveTemplateId(null);
+    }
+  }, [activeTemplateId, templates]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -174,7 +221,69 @@ function App() {
     if (st.resumeExistingEnabled != null) setResumeExistingEnabled(Boolean(st.resumeExistingEnabled));
     if (st.sourceMix) setSourceMix(st.sourceMix);
     if (st.campaignConfig) setCampaignConfig(st.campaignConfig);
+    if (st.changeEventsEnabled != null) setChangeEventsEnabled(Boolean(st.changeEventsEnabled));
+    if ('activeTemplateId' in st && st.activeTemplateId) setActiveTemplateId(st.activeTemplateId);
+    if ('lastRunTemplateName' in st) setLastRunTemplateName(st.lastRunTemplateName || null);
   }, []);
+
+  const captureTemplateSettings = React.useCallback(() => ({
+    pdSubdomain,
+    fromEmail,
+    selectedTeamIds,
+    selectedEPIds,
+    includeMap,
+    universalResponderCfg,
+    ratePerMinute,
+    noteProbability,
+    responderProbabilityMultiplier,
+    autoResolveMinSec,
+    autoResolveMaxSec,
+    severityWeights,
+    autoHealConfig,
+    resumeExistingEnabled,
+    sourceMix,
+    campaignConfig,
+    changeEventsEnabled,
+  }), [
+    pdSubdomain,
+    fromEmail,
+    selectedTeamIds,
+    selectedEPIds,
+    includeMap,
+    universalResponderCfg,
+    ratePerMinute,
+    noteProbability,
+    responderProbabilityMultiplier,
+    autoResolveMinSec,
+    autoResolveMaxSec,
+    severityWeights,
+    autoHealConfig,
+    resumeExistingEnabled,
+    sourceMix,
+    campaignConfig,
+    changeEventsEnabled,
+  ]);
+
+  function applyTemplateSettings(incomingSettings = {}) {
+    const settings = cloneTemplateValue(incomingSettings) || {};
+    if ("pdSubdomain" in settings) setPdSubdomain(settings.pdSubdomain || "");
+    if ("fromEmail" in settings) setFromEmail(settings.fromEmail || "");
+    if ("selectedTeamIds" in settings) setSelectedTeamIds(Array.isArray(settings.selectedTeamIds) ? settings.selectedTeamIds : []);
+    if ("selectedEPIds" in settings) setSelectedEPIds(Array.isArray(settings.selectedEPIds) ? settings.selectedEPIds : []);
+    if ("includeMap" in settings) setIncludeMap(settings.includeMap || {});
+    if ("universalResponderCfg" in settings) setUniversalResponderCfg(settings.universalResponderCfg || cloneTemplateValue(DEFAULT_RESPONDER_CONFIG));
+    if ("ratePerMinute" in settings) setRatePerMinute(Number(settings.ratePerMinute) || 0);
+    if ("noteProbability" in settings) setNoteProbability(Number(settings.noteProbability) || 0);
+    if ("responderProbabilityMultiplier" in settings) setResponderProbabilityMultiplier(Number(settings.responderProbabilityMultiplier) || 0);
+    if ("autoResolveMinSec" in settings) setAutoResolveMinSec(Number(settings.autoResolveMinSec) || 0);
+    if ("autoResolveMaxSec" in settings) setAutoResolveMaxSec(Number(settings.autoResolveMaxSec) || 0);
+    if ("severityWeights" in settings) setSeverityWeights(settings.severityWeights || { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 });
+    if ("autoHealConfig" in settings) setAutoHealConfig(settings.autoHealConfig || cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
+    if ("resumeExistingEnabled" in settings) setResumeExistingEnabled(Boolean(settings.resumeExistingEnabled));
+    if ("sourceMix" in settings) setSourceMix(settings.sourceMix || cloneTemplateValue(DEFAULT_SOURCE_MIX));
+    if ("campaignConfig" in settings) setCampaignConfig(settings.campaignConfig || cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG));
+    if ("changeEventsEnabled" in settings) setChangeEventsEnabled(Boolean(settings.changeEventsEnabled));
+  }
 
   // ---------- Persist settings whenever they change ----------
   React.useEffect(() => {
@@ -189,9 +298,12 @@ function App() {
       resumeExistingEnabled,
       sourceMix,
       campaignConfig,
+      changeEventsEnabled,
+      activeTemplateId,
+      lastRunTemplateName,
     };
     saveLS(st);
-  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled, sourceMix, campaignConfig]);
+  }, [pdSubdomain, apiToken, globalRoutingKey, fromEmail, selectedTeamIds, universalResponderCfg, ratePerMinute, noteProbability, responderProbabilityMultiplier, autoResolveMinSec, autoResolveMaxSec, severityWeights, includeMap, selectedEPIds, activePage, autoHealConfig, resumeExistingEnabled, sourceMix, campaignConfig, changeEventsEnabled, activeTemplateId, lastRunTemplateName]);
 
   React.useEffect(() => {
     setRequesterUser({ email: null, id: null });
@@ -241,6 +353,80 @@ function App() {
     const ts = new Date().toLocaleTimeString();
     setLog((l) => [{ ts, type, msg }, ...l].slice(0, 800));
     console.log(`[${ts}] ${type.toUpperCase()}: ${msg}`);
+  };
+
+  const handleSaveTemplate = () => {
+    const trimmedName = templateNameInput.trim();
+    if (!trimmedName) {
+      setTemplateError("Template name is required");
+      return;
+    }
+    const snapshot = captureTemplateSettings();
+    const nowTs = Date.now();
+    const template = {
+      id: uid("tpl"),
+      name: trimmedName,
+      description: templateDescriptionInput.trim(),
+      version: TEMPLATE_VERSION,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+      settings: cloneTemplateValue(snapshot) || {},
+    };
+    setTemplates((prev) => sortTemplates([template, ...prev]));
+    setActiveTemplateId(template.id);
+    setTemplateNameInput("");
+    setTemplateDescriptionInput("");
+    setTemplateError(null);
+    logMsg(`Saved template "${trimmedName}"`, "info");
+  };
+
+  const handleApplyTemplate = (templateId) => {
+    const template = templates.find((tpl) => tpl.id === templateId);
+    if (!template) return;
+    applyTemplateSettings(template.settings || {});
+    setActiveTemplateId(template.id);
+    setTemplateNameInput(template.name || "");
+    setTemplateDescriptionInput(template.description || "");
+    setTemplateError(null);
+    logMsg(`Template "${template.name}" loaded into Configure view`, "info");
+  };
+
+  const handleOverwriteTemplate = (templateId) => {
+    const snapshot = captureTemplateSettings();
+    const nowTs = Date.now();
+    let templateName = "";
+    setTemplates((prev) => {
+      const idx = prev.findIndex((tpl) => tpl.id === templateId);
+      if (idx === -1) return prev;
+      templateName = prev[idx].name || "";
+      const updated = [...prev];
+      updated[idx] = {
+        ...prev[idx],
+        settings: cloneTemplateValue(snapshot) || {},
+        updatedAt: nowTs,
+        version: TEMPLATE_VERSION,
+      };
+      return sortTemplates(updated);
+    });
+    if (templateName) {
+      logMsg(`Template "${templateName}" updated`, "info");
+    }
+  };
+
+  const handleDeleteTemplate = (templateId) => {
+    let removedName = "";
+    setTemplates((prev) => {
+      const template = prev.find((tpl) => tpl.id === templateId);
+      if (!template) return prev;
+      removedName = template.name || "";
+      return prev.filter((tpl) => tpl.id !== templateId);
+    });
+    if (activeTemplateId === templateId) {
+      setActiveTemplateId(null);
+    }
+    if (removedName) {
+      logMsg(`Deleted template "${removedName}"`, "warn");
+    }
   };
 
 function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -1162,7 +1348,9 @@ function randomNote(rec) {
       await resumeExistingIncidents(serviceSnapshot);
     }
     setIsRunning(true);
-    logMsg("Simulation started");
+    const templateLabel = activeTemplate?.name || null;
+    setLastRunTemplateName(templateLabel);
+    logMsg(templateLabel ? `Simulation started (template: ${templateLabel})` : "Simulation started");
   }
   function stop() { setIsRunning(false); clearTimeout(fireTimerRef.current); clearTimeout(evalTimerRef.current); logMsg("Simulation paused"); }
   function clearLog() { setLog([]); }
@@ -1480,6 +1668,125 @@ function randomNote(rec) {
             <button disabled={isLoadingServices} onClick={fetchAllServices} className={`px-3 py-1.5 rounded text-white ${isLoadingServices ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
               {isLoadingServices ? 'Loading Services…' : 'Load Services'}
             </button>
+          </div>
+        </section>
+
+        <section className="bg-white shadow rounded p-4">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Template Library</h2>
+              <p className="text-sm text-gray-600">Save and load configuration presets locally (tokens and routing keys are excluded).</p>
+            </div>
+            {activeTemplate ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                Active template: {activeTemplate.name}
+              </span>
+            ) : (
+              <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">No active template</span>
+            )}
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Template Name
+              <input
+                value={templateNameInput}
+                onChange={(e) => {
+                  setTemplateNameInput(e.target.value);
+                  if (templateError) setTemplateError(null);
+                }}
+                placeholder="Customer warm-up run"
+                className="mt-1 w-full rounded border px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Description (optional)
+              <input
+                value={templateDescriptionInput}
+                onChange={(e) => setTemplateDescriptionInput(e.target.value)}
+                placeholder="Notes about teams, services, or goals"
+                className="mt-1 w-full rounded border px-3 py-2 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={handleSaveTemplate} className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700">
+              Save Template
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTemplateNameInput("");
+                setTemplateDescriptionInput("");
+                setTemplateError(null);
+              }}
+              className="rounded border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+            >
+              Clear Form
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-gray-500">Templates are stored in this browser&apos;s localStorage; REST API tokens and routing keys are never persisted.</p>
+          {templateError && <p className="mt-2 text-sm text-rose-600">{templateError}</p>}
+          <div className="mt-4 divide-y divide-gray-200 rounded border border-gray-200">
+            {templates.length === 0 ? (
+              <p className="p-4 text-sm text-gray-500">Save your first template to populate the library.</p>
+            ) : (
+              templates.map((tpl) => {
+                const settings = tpl.settings || {};
+                const autoHealSummary = settings.autoHealConfig?.enabled
+                  ? `${Math.round((settings.autoHealConfig.warningProbability || 0) * 100)}% warnings · ${settings.autoHealConfig.minDelaySec || 0}-${settings.autoHealConfig.maxDelaySec || 0}s`
+                  : "Disabled";
+                const campaignSummary = settings.campaignConfig?.enabled
+                  ? `${Math.round((settings.campaignConfig.probability || 0) * 100)}% chance · max ${settings.campaignConfig.maxRelated || 1}`
+                  : "Disabled";
+                const resumeSummary = settings.resumeExistingEnabled ? "Enabled" : "Disabled";
+                const changeSummary = settings.changeEventsEnabled ? "Enabled" : "Disabled";
+                const updatedLabel = tpl.updatedAt ? new Date(tpl.updatedAt).toLocaleString() : "Unknown";
+                return (
+                  <div key={tpl.id} className={`flex flex-col gap-2 p-3 ${tpl.id === activeTemplateId ? 'bg-indigo-50' : 'bg-white'}`}>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-900">{tpl.name}</p>
+                        {tpl.description && <p className="text-sm text-gray-600">{tpl.description}</p>}
+                        <p className="text-xs text-gray-500">Updated {updatedLabel}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                        <button type="button" onClick={() => handleApplyTemplate(tpl.id)} className="rounded border border-indigo-500 px-3 py-1 text-indigo-600 hover:bg-indigo-50">
+                          Load
+                        </button>
+                        <button type="button" onClick={() => handleOverwriteTemplate(tpl.id)} className="rounded border border-gray-300 px-3 py-1 text-gray-600 hover:bg-gray-50">
+                          Overwrite
+                        </button>
+                        <button type="button" onClick={() => handleDeleteTemplate(tpl.id)} className="rounded border border-rose-200 px-3 py-1 text-rose-600 hover:bg-rose-50">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <dl className="grid grid-cols-1 gap-3 text-xs text-gray-600 sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="font-semibold uppercase tracking-wide text-gray-500">Rate</dt>
+                        <dd>{settings.ratePerMinute != null ? `${settings.ratePerMinute}/min` : '—'}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold uppercase tracking-wide text-gray-500">Auto-Heal</dt>
+                        <dd>{autoHealSummary}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold uppercase tracking-wide text-gray-500">Resume</dt>
+                        <dd>{resumeSummary}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold uppercase tracking-wide text-gray-500">Campaigns</dt>
+                        <dd>{campaignSummary}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold uppercase tracking-wide text-gray-500">Change Events</dt>
+                        <dd>{changeSummary}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
 
@@ -1906,7 +2213,17 @@ function randomNote(rec) {
         {activePage === 'monitor' && (
           <div className="space-y-6">
             <section className="bg-white shadow rounded p-4">
-              <h2 className="text-lg font-semibold mb-4">Current Load</h2>
+              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-semibold">Current Load</h2>
+                <p className="text-sm text-gray-500">
+                  Last run template:&nbsp;
+                  {lastRunTemplateName ? (
+                    <span className="font-semibold text-gray-700">{lastRunTemplateName}</span>
+                  ) : (
+                    <span className="font-semibold text-gray-700">Manual configuration</span>
+                  )}
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Active</p>

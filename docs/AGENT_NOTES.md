@@ -11,6 +11,18 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Auto-heal settings live under `autoHealConfig` in localStorage; defaults are enabled, 20% chance, 30–90s delay. Config UI writes sanitized values (0-100% and non-negative seconds).
 - Resume toggle lives under `resumeExistingEnabled`; when true the simulator calls `/proxy/incidents` for selected services before each run and tags synced incidents in the Monitor table.
 - Services are fetched with `include[]=integrations`; change integrations are detected by type (`events_api_v2_inbound_integration`, `change_event_transform_inbound_integration`) and stored per service so failure campaigns can emit related change events.
+- Template library data lives under the `pdns_template_library_v1` localStorage key; entries include metadata + sanitized settings (no REST API tokens or routing keys). UI/actions live in `App.jsx`.
+
+## Current Workstreams
+- **v1.3** – consolidate the change-event plumbing plus resume workflows already landed in `server.js` and `PD Incident Noise Simulator.jsx`. Expect continued refactors to the change-event toggle and logging.
+- **v1.3.1** – expand the new template library + front-end picker so presenters can store/load configuration presets locally. Upcoming work: evaluate import/export flows, schema versioning, and whether `/proxy/templates` is needed beyond browser storage.
+
+## Template Library
+- Configure tab now includes a Template Library card (see `App.jsx`). Users can name/describe a preset, hit **Save Template**, then Load/Overwrite/Delete entries from the list.
+- Data persists in localStorage (`pdns_template_library_v1`). We intentionally omit REST API tokens and routing keys; only presentation-friendly settings are stored.
+- Loading a template hydrates Configure state immediately, logs an info entry, and marks the template as active. The Monitor view surfaces “Last run template” using the name captured at `start()`.
+- Overwrite rewrites the existing entry using the current state snapshot, bumping `updatedAt` so the list remains sorted (newest first).
+- Delete removes the entry locally only; instruct presenters to export separately if they need to share presets (future enhancement may sync via `/proxy/templates`).
 
 ## Key Endpoints
 - Proxy routes under `/proxy/...` forward to PagerDuty REST APIs using the server-side `From` header.

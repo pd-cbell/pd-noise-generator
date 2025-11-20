@@ -3,13 +3,14 @@
 PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle that lets you generate realistic noise against a PagerDuty account. It is designed for demos, training, and customer simulations where you need to exercise Global Event Orchestration, service routing, responder requests, and notes without relying on real incidents.
 
 ## Highlights
-- Browser UI powered by React (loaded via Babel) with persistent state in `localStorage`.
-- Express-based proxy that wraps the PagerDuty REST & Events APIs so the browser never exposes secrets directly.
-- Dual-view experience: **Configure** for setup, **Monitor** for live incident dashboards with filters, trend chart, and one-click clean-up.
-- Team-aware service selection with collapsible sections and quick “Select Team” actions.
-- Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities.
-- Responder requests resolve the configured “From Email” to a real PagerDuty user ID before making API calls, preventing 404/2100 errors.
-- Failure campaigns can emit related PagerDuty Change Events (types `events_api_v2_inbound_integration` and `change_event_transform_inbound_integration`) for selected services so demos include correlated deployments.
+- Browser UI powered by React (loaded via Babel) with persistent state in `localStorage` (see `App.jsx` for the Configure/Monitor shell).
+- Express-based proxy that wraps the PagerDuty REST & Events APIs so the browser never exposes secrets directly (implemented in `server.js`).
+- Dual-view experience: **Configure** for setup, **Monitor** for live incident dashboards with filters, trend chart, and one-click clean-up (view logic in `App.jsx`).
+- Template library on the Configure tab lets you save/load local presets so presenters can jump between demo scenarios quickly (Template UI in `App.jsx`).
+- Team-aware service selection with collapsible sections and quick “Select Team” actions (UI helpers live in `PD Incident Noise Simulator.jsx`).
+- Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities (scheduler + automation lives in `PD Incident Noise Simulator.jsx`).
+- Responder requests resolve the configured “From Email” to a real PagerDuty user ID before making API calls, preventing 404/2100 errors (front-end caching in `PD Incident Noise Simulator.jsx`, proxy calls in `server.js`).
+- Failure campaigns can emit related PagerDuty Change Events (types `events_api_v2_inbound_integration` and `change_event_transform_inbound_integration`) for selected services so demos include correlated deployments (campaign logic + UI toggles in `PD Incident Noise Simulator.jsx` and change proxies in `server.js`).
 
 ## Requirements
 - Node.js 16+
@@ -106,6 +107,15 @@ The Configure view logs `services=… withChange=…` when it detects these inte
 
 Before starting you can keep the **Resume existing PagerDuty incidents** toggle enabled (default). The simulator will pull any triggered/acknowledged incidents for the services you included so unfinished noise from a previous session shows up immediately with a “Synced” badge in the Monitor tab.
 
+### Template Library
+
+Use the **Template Library** card on the Configure tab (implemented in `App.jsx`) to manage presets for common demos:
+
+1. Configure the run (teams, services, sliders) then provide a name/optional description and click **Save Template**.
+2. Templates are stored locally under the `pdns_template_library_v1` key; REST API tokens and routing keys are never persisted.
+3. Each saved template shows quick stats (rate, auto-heal, resume, change events, failure campaign settings) with **Load**, **Overwrite**, and **Delete** actions.
+4. Loading a template populates the Configure form immediately, and Monitor now surfaces the “Last run template” label plus start-up log entries (e.g., `Simulation started (template: Customer Warmup)`).
+
 ## Key Behaviors
 - **Local storage persistence**: All settings stick between sessions under the `pdns_settings_v7` key.
 - **Team filtering**: Teams starting with `NOC - ` and `SRE - ` are hidden for the simulated customer scenario.
@@ -136,6 +146,10 @@ git push origin main --tags
 ```
 
 Current release: **v1.1.0**
+
+## Active Workstreams
+- `v1.3` stabilizes the change-event pipeline and resume workflows captured in `docs/SESSION_NOTES.md`.
+- `v1.3.1` expands the new template library/UI so presenters can load, overwrite, and delete saved configuration payloads directly from the browser (see `docs/SESSION_NOTES.md` and `docs/AGENT_NOTES.md` for design details).
 
 ## License
 
