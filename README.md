@@ -7,6 +7,7 @@ PagerDuty Incident Noise Simulator is a lightweight front-end + proxy bundle tha
 - Express-based proxy that wraps the PagerDuty REST & Events APIs so the browser never exposes secrets directly (implemented in `server.js`).
 - Dual-view experience: **Configure** for setup, **Monitor** for live incident dashboards with filters, trend chart, and one-click clean-up (view logic in `App.jsx`).
 - Template library on the Configure tab lets you save/load local presets so presenters can jump between demo scenarios quickly (Template UI in `App.jsx`).
+- Plugin-driven payload registry automatically loads built-in CloudWatch/Datadog/New Relic/Splunk templates plus any local imports (drop JSON files into `/templates`, e.g., `payload_import.ms.json`).
 - Profiles card on the Configure tab stores full-run presets under `pdns_profiles_v1`, making it easy to swap between customer-ready configurations.
 - Team-aware service selection with collapsible sections and quick “Select Team” actions (UI helpers live in `PD Incident Noise Simulator.jsx`).
 - Automatic incident scheduling, notes, ack/resolve timing, and responder requests that respect severity probabilities (scheduler + automation lives in `PD Incident Noise Simulator.jsx`).
@@ -77,6 +78,8 @@ This is handy for demonstrating PagerDuty Auto-Pause, as alerts will self-resolv
 
 Use the **Observability Payload Mix** sliders to control how often incidents mimic CloudWatch alarms, Datadog monitors, New Relic APM traces, or Splunk log signatures. Each template has unique `summary`, `source`, and `custom_details` metadata so demos feel closer to real telemetry.
 
+> Behind the scenes the payload registry in `App.jsx` exposes a plugin API (`PayloadFramework.register(adapter)`) so additional adapters can be loaded dynamically. External JSON imports placed under `/templates` (such as `payload_import.ms.json`) are registered automatically at startup.
+
 ### Failure Campaigns
 
 Enable **Failure Campaigns** to simulate correlated incidents across services in the same team. When a campaign triggers, siblings fire within a configurable window and share a `failure_id` / summary so the Monitor view can highlight the common cause.
@@ -103,6 +106,20 @@ jq '.services[]
 ```
 
 The Configure view logs `services=… withChange=…` when it detects these integrations and automatically enables the “Emit related change events” toggle once at least one included service exposes an integration key.
+
+### Campaigns Tab & Payload Templates
+
+The **Campaigns** tab centralizes all failure campaign tooling:
+
+- Tune probability, window, and “max related services” without digging through Configure.
+- Decide whether change events should accompany correlated noise; the UI surfaces current coverage stats per team.
+- Choose which payload adapters fuel campaigns. Use the entire registry or switch to **Select templates manually** and pick from built-in sources plus any imported adapters (for example, the `payload_import.ms.json` Crux sample stored under `/templates`).
+- Failure campaigns let PagerDuty’s Events API assign dedupe keys automatically so related alerts group naturally; the simulator captures the returned keys for tracking/logging.
+- Review the live payload registry table to see which adapters are available, their vendor, and whether they support campaigns.
+- Trigger imported campaigns on demand—each file (e.g., `/templates/payload_import.ms.json`) appears as a single scenario with a **Trigger Now** button that replays the bundled alerts/change events with the timing specified in the JSON.
+- Provide a dedicated change-event routing key for imported bundles so steps flagged with `event_type = change` go through `/proxy/change_events` instead of the standard Events API.
+
+To import custom payloads, drop JSON files into the `/templates` directory (e.g., `/templates/payload_import.ms.json`). Each file registers as a campaign bundle that you can launch manually from the Campaigns tab.
 
 ### Resume Existing Incidents
 

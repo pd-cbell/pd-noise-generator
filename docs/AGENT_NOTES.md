@@ -13,6 +13,7 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Services are fetched with `include[]=integrations`; change integrations are detected by type (`events_api_v2_inbound_integration`, `change_event_transform_inbound_integration`) and stored per service so failure campaigns can emit related change events.
 - Template library data lives under the `pdns_template_library_v1` localStorage key; entries include metadata + sanitized settings (no REST API tokens or routing keys). UI/actions live in `App.jsx`.
 - Profiles live under `pdns_profiles_v1` and wrap every Configure setting (credentials, selections, sliders, filters). Legacy `pdns_settings_v7` payloads migrate into a Default Profile automatically on upgrade.
+- Payload registry auto-registers built-in templates plus any JSON imports dropped into `/templates` (e.g., `payload_import.ms.json`). Adapters can opt into campaigns and supply metadata used by the UI.
 
 ## Current Workstreams
 - **v1.3** – consolidate the change-event plumbing plus resume workflows already landed in `server.js` and `PD Incident Noise Simulator.jsx`. Expect continued refactors to the change-event toggle and logging.
@@ -24,6 +25,14 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Loading a template hydrates Configure state immediately, logs an info entry, and marks the template as active. The Monitor view surfaces “Last run template” using the name captured at `start()`.
 - Overwrite rewrites the existing entry using the current state snapshot, bumping `updatedAt` so the list remains sorted (newest first).
 - Delete removes the entry locally only; instruct presenters to export separately if they need to share presets (future enhancement may sync via `/proxy/templates`).
+
+## Campaigns & Payload Templates
+- Dedicated **Campaigns** tab consolidates failure campaign probability/window controls, template selection, and change-event toggles.
+- Change-event toggle now surfaces coverage stats (team count, included services) so presenters know when /proxy/change_events can fire.
+- Campaign template picker can run in “All adapters” mode or “Select templates manually”. Imported adapters (e.g., Crux payloads) appear alongside CloudWatch/Datadog/NewRelic/Splunk built-ins.
+- The Payload Registry table shows every adapter plus vendor/description metadata; dropping files like `payload_import.ms.json` into the `/templates` folder registers additional adapters automatically on load (and exposes a **Trigger Now** action for the bundled campaign).
+- When campaigns fire, we omit `dedup_key` so PagerDuty’s Events API assigns one (helping alert grouping); the simulator records the key returned in the response.
+- Imported campaign steps marked with `event_type = change` require a user-supplied change routing key (input on the Campaigns tab); those events are routed through `/proxy/change_events`.
 
 ## Profiles
 - Configure tab includes a Profiles card with Active Profile dropdown, New Profile button, and form inputs for name/description.
@@ -45,7 +54,7 @@ These notes help future pairing sessions or automation agents quickly orient the
 - Monitor tab skips INFO incidents on purpose—do not re-add them to the active queue unless you also revisit the performance prize for PD mapping calls.
 - Auto-heal logic runs even when the simulator is paused (dedicated ticker). Make sure `PD_FROM_EMAIL` and routing key remain valid so resolve events succeed.
 - Failure campaigns require services sharing at least one team; they push `failure_id`/`failure_summary` into `custom_details` so UI badges can cluster incidents.
-- Observability templates are defined in `OBS_SOURCE_TEMPLATES`. Adjust `sourceMix` weights (0–1) if you want to bias toward a particular tool.
+- Observability templates now live in the payload registry inside `App.jsx`; adjust `sourceMix` weights (0–1) if you want to bias toward a particular tool.
 - Change events only emit when the Configure toggle is enabled **and** the selected services have change integrations. Lack of coverage automatically disables the toggle.
 
 ## Testing Guidance

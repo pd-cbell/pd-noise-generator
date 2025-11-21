@@ -131,3 +131,46 @@
 - Profiles auto-sync while editing; **Save** simply updates metadata + resort ordering, while **Save As** clones the current snapshot and activates it immediately.
 - **New Profile** seeds sanitized defaults (blank credentials, balanced sliders) so presenters can stage multiple personas within the same browser.
 - **Delete** is disabled when only one profile exists; otherwise it removes the current entry, selects the next-most-recent profile, and hydrates Configure with that snapshot.
+
+## Workstream v1.4 – Payload Framework & Campaigns
+
+### Key Changes
+- Introduced a payload registry / generator layer so adapters can be registered dynamically (built-ins + imports). The registry powers both the observe mix sliders and campaign overrides.
+- Added automatic ingestion of `/templates/payload_import.ms.json` (Crux sample) so external payload definitions become campaign-ready adapters without extra wiring.
+- Failure campaigns now rely on PagerDuty to assign dedupe keys (we omit `dedup_key`), capturing the API’s response so the simulator can still reconcile incidents.
+- Imported bundles support `event_type = change`; users supply a change routing key and those steps are sent via `/proxy/change_events`.
+- Imported campaigns now remain bundled (respecting their timing + change events) and can be triggered on demand via the Campaigns tab.
+- Moved all failure campaign controls into a dedicated **Campaigns** tab, including change-event toggles with coverage summaries.
+- Campaigns can now target a curated template list (or the entire registry). Manual mode surfaces every adapter with checkboxes; defaults use all available templates.
+- New payload registry table exposes adapter metadata (label, vendor, supportsCampaigns) for presenters.
+
+### Verification
+- Confirmed registry initializes built-in adapters immediately and appends Crux imports once the JSON loads.
+- Exercised Campaigns tab toggles to ensure template selection persists per profile and controls flow through to `startCampaignForService`.
+- Triggered runs with and without custom campaign catalogs to validate template overrides take effect during correlated noise.
+- Fired the imported campaign manually to verify the JSON-defined cadence and change events execute in order and that PagerDuty returns usable dedupe keys.
+- Fired the imported campaign manually to verify the JSON-defined cadence and change events execute in order.
+- Verified change-event coverage summary still respects `/proxy/services?include=integrations` data.
+
+### Follow-Ups
+- Consider surfacing adapter descriptions/notes in the Configure view for additional context.
+- Evaluate exporting/importing adapter catalogs as part of future CLI tooling.
+
+## Upcoming Workstream v1.3.4 – API Throughput Optimization
+
+### Goals
+- Bump the incident generator ceiling so presenters can sustain ~500 events/min without starving other flows.
+- Smooth bursty traffic from imported campaigns by routing their steps through a shared queue instead of firing every event immediately.
+- Reduce REST chatter on Configure (cache `/proxy/services`/`/proxy/teams`, debounce responder/note flows) so API tokens aren’t wasted on duplicate calls.
+
+### Proposed Changes
+- Increase the local token bucket (`restLimiterRef`) capacity/refill rate to match the 500 rpm allowance and expose the limit via `.env`.
+- Add a lightweight scheduler for imported bundles that meters both alert and change events, honoring delay/interval metadata while keeping per-second call volume consistent.
+- Cache profile-specific service/team payloads and only refetch when credentials/team filters change; surface a manual “Refresh data” button for presenters.
+- Optional: add a `/proxy/events/bulk` endpoint to absorb browser bursts server-side and centralize retry logic.
+
+### Next Actions
+1. Implement the higher-rate token bucket + configurable limit.
+2. Introduce request caching + debounced responder/note triggers.
+3. Add logging/telemetry so presenters can see when they approach the cap.
+4. Ship in v1.3.4 once validated against a 500 rpm demo run.

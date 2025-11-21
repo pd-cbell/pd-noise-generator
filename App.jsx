@@ -28,12 +28,16 @@ const DEFAULT_SOURCE_MIX = {
   datadog: 0.25,
   newrelic: 0.25,
   splunk: 0.25,
+  crux: 0,
 };
 const DEFAULT_CAMPAIGN_CONFIG = {
   enabled: true,
   probability: 0.35,
   maxRelated: 3,
   windowSec: 300,
+  templateMode: 'all',
+  templateIds: [],
+  importedChangeRoutingKey: "",
 };
 
 function cloneTemplateValue(value) {
@@ -64,6 +68,19 @@ function sanitizeProfileSettings(partial = {}) {
     const direction = sort.direction === 'asc' ? 'asc' : 'desc';
     return { key, direction };
   };
+  const normalizedMix = { ...DEFAULT_SOURCE_MIX, ...(partial.sourceMix || {}) };
+  const normalizedCampaignConfig = {
+    ...DEFAULT_CAMPAIGN_CONFIG,
+    ...(partial.campaignConfig || {}),
+  };
+  normalizedCampaignConfig.templateIds = Array.isArray(normalizedCampaignConfig.templateIds)
+    ? [...normalizedCampaignConfig.templateIds]
+    : [];
+  normalizedCampaignConfig.templateMode = normalizedCampaignConfig.templateMode === 'custom' ? 'custom' : 'all';
+  if (typeof normalizedCampaignConfig.importedChangeRoutingKey !== 'string') {
+    normalizedCampaignConfig.importedChangeRoutingKey = '';
+  }
+  const validPages = ['configure', 'monitor', 'campaigns'];
   return {
     pdSubdomain: partial.pdSubdomain || "",
     apiToken: partial.apiToken || "",
@@ -81,12 +98,12 @@ function sanitizeProfileSettings(partial = {}) {
     severityWeights: partial.severityWeights ? cloneTemplateValue(partial.severityWeights) : cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS),
     autoHealConfig: partial.autoHealConfig ? cloneTemplateValue(partial.autoHealConfig) : cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG),
     resumeExistingEnabled: Boolean(safe(partial.resumeExistingEnabled, true)),
-    sourceMix: partial.sourceMix ? cloneTemplateValue(partial.sourceMix) : cloneTemplateValue(DEFAULT_SOURCE_MIX),
-    campaignConfig: partial.campaignConfig ? cloneTemplateValue(partial.campaignConfig) : cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG),
+    sourceMix: normalizedMix,
+    campaignConfig: normalizedCampaignConfig,
     changeEventsEnabled: Boolean(safe(partial.changeEventsEnabled, true)),
     activeTemplateId: partial.activeTemplateId || null,
     lastRunTemplateName: partial.lastRunTemplateName || null,
-    activePage: partial.activePage === 'monitor' ? 'monitor' : 'configure',
+    activePage: validPages.includes(partial.activePage) ? partial.activePage : 'configure',
     monitorSeverityFilter: partial.monitorSeverityFilter || 'all',
     monitorAckFilter: partial.monitorAckFilter || 'all',
     monitorMappingFilter: partial.monitorMappingFilter || 'all',
@@ -124,9 +141,19 @@ function areSettingsEqual(a, b) {
 function App() {
   // ---------- Local Storage Helpers ----------
   const LS_KEY = 'pdns_settings_v7';
-  const loadLegacySettings = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; } };
+  const loadLegacySettings = () => {
+    try {
+      if (typeof localStorage === 'undefined') return {};
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return {};
+      return JSON.parse(raw) || {};
+    } catch {
+      return {};
+    }
+  };
   const readStoredProfiles = () => {
     try {
+      if (typeof localStorage === 'undefined') return null;
       const raw = localStorage.getItem(PROFILES_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
@@ -151,7 +178,9 @@ function App() {
         : sorted[0].id;
       return {
         profiles: sorted,
+        list: sorted,
         activeProfileId: activeId,
+        activeId,
         activeProfile: sorted.find((p) => p.id === activeId) || sorted[0],
         migrated: false,
       };
@@ -164,15 +193,19 @@ function App() {
     if (stored) return stored;
     const legacy = loadLegacySettings();
     const migrated = legacy && Object.keys(legacy).length > 0;
+    const fallbackSettings = migrated ? legacy : {};
     const fallback = createProfile({
       name: DEFAULT_PROFILE_NAME,
       description: migrated ? 'Migrated from previous settings' : 'Fresh profile',
-      settings: legacy || {},
+      settings: fallbackSettings,
     });
+    const list = fallback ? [fallback] : [];
     return {
-      profiles: [fallback],
-      activeProfileId: fallback.id,
-      activeProfile: fallback,
+      profiles: list,
+      list,
+      activeProfileId: fallback?.id || null,
+      activeId: fallback?.id || null,
+      activeProfile: fallback || null,
       migrated,
     };
   };
@@ -206,6 +239,15 @@ function App() {
       localStorage.setItem(PROFILES_KEY, JSON.stringify(payload));
     } catch {}
   }, []);
+
+  const profileBootstrapRef = React.useRef(null);
+  if (!profileBootstrapRef.current) {
+    const hydrated = bootstrapProfiles() || { list: [], profiles: [], activeId: null, activeProfile: null };
+    profileBootstrapRef.current = hydrated;
+  }
+  const bootstrapPayload = profileBootstrapRef.current || { list: [], profiles: [], activeId: null, activeProfile: null };
+  const initialProfileList = bootstrapPayload.list || bootstrapPayload.profiles || [];
+  const initialProfileId = bootstrapPayload.activeId ?? bootstrapPayload.activeProfileId ?? null;
 
   // ---------- Org/domain + credentials ----------
   const [pdSubdomain, setPdSubdomain] = React.useState("");
@@ -252,13 +294,23 @@ function App() {
   const [templateDescriptionInput, setTemplateDescriptionInput] = React.useState("");
   const [templateError, setTemplateError] = React.useState(null);
   const [lastRunTemplateName, setLastRunTemplateName] = React.useState(null);
-  const [profiles, setProfiles] = React.useState([]);
-  const [activeProfileId, setActiveProfileId] = React.useState(null);
+  const [payloadAdapters, setPayloadAdapters] = React.useState(() => {
+    if (!payloadRegistry || typeof payloadRegistry.list !== 'function') return [];
+    try {
+      return payloadRegistry.list().filter((tpl) => !tpl.hidden);
+    } catch {
+      return [];
+    }
+  });
+  const [profiles, setProfiles] = React.useState(() => initialProfileList);
+  const [activeProfileId, setActiveProfileId] = React.useState(() => initialProfileId);
   const [profileNameInput, setProfileNameInput] = React.useState("");
   const [profileDescriptionInput, setProfileDescriptionInput] = React.useState("");
   const [profileError, setProfileError] = React.useState(null);
   const [profileMigrationBanner, setProfileMigrationBanner] = React.useState(false);
   const [profilesReady, setProfilesReady] = React.useState(false);
+  const [importedCampaigns, setImportedCampaigns] = React.useState([]);
+  const [importedCampaignError, setImportedCampaignError] = React.useState(null);
 
   const [isRunning, setIsRunning] = React.useState(false);
   const [log, setLog] = React.useState([]);
@@ -282,6 +334,7 @@ function App() {
   const logContainerRef = React.useRef(null);
   const latestActiveRef = React.useRef(0);
   const campaignRef = React.useRef([]);
+  const importedCampaignTimersRef = React.useRef(new Set());
   const changeEventsToggleTouchedRef = React.useRef(false);
   const restLimiterRef = React.useRef({
     tokens: 25,
@@ -328,6 +381,43 @@ function App() {
     persistTemplateLibrary(templates);
   }, [templates]);
   React.useEffect(() => {
+    if (!payloadRegistry || typeof payloadRegistry.subscribe !== 'function') return () => {};
+    const unsubscribe = payloadRegistry.subscribe((entries) => {
+      setPayloadAdapters(entries.filter((tpl) => !tpl.hidden));
+    });
+    return unsubscribe;
+  }, []);
+  const campaignReadyAdapters = React.useMemo(
+    () => payloadAdapters.filter((tpl) => tpl.supportsCampaigns !== false),
+    [payloadAdapters]
+  );
+  const campaignTemplatePool = React.useMemo(() => {
+    if (campaignConfig.templateMode === 'custom' && Array.isArray(campaignConfig.templateIds) && campaignConfig.templateIds.length) {
+      const allow = new Set(campaignConfig.templateIds);
+      const filtered = campaignReadyAdapters.filter((tpl) => allow.has(tpl.id));
+      if (filtered.length) return filtered;
+    }
+    return campaignReadyAdapters;
+  }, [campaignReadyAdapters, campaignConfig.templateMode, campaignConfig.templateIds]);
+  const pickCampaignTemplate = React.useCallback(() => {
+    if (!campaignTemplatePool.length) return null;
+    return randomFrom(campaignTemplatePool);
+  }, [campaignTemplatePool]);
+  const toggleCampaignTemplate = React.useCallback((adapterId) => {
+    setCampaignConfig((prev) => {
+      const existing = new Set(prev.templateIds || []);
+      if (existing.has(adapterId)) existing.delete(adapterId);
+      else existing.add(adapterId);
+      return { ...prev, templateMode: 'custom', templateIds: Array.from(existing) };
+    });
+  }, []);
+  const mixTemplates = React.useMemo(() => payloadAdapters.filter((tpl) => tpl.uiMixOption), [payloadAdapters]);
+  const useCustomCampaignCatalog = campaignConfig.templateMode === 'custom';
+  const campaignTemplateSelection = React.useMemo(
+    () => new Set(campaignConfig.templateIds || []),
+    [campaignConfig.templateIds]
+  );
+  React.useEffect(() => {
     if (activeTemplateId && !templates.some((tpl) => tpl.id === activeTemplateId)) {
       setActiveTemplateId(null);
     }
@@ -353,9 +443,9 @@ function App() {
 
   // ---------- Load Profiles on mount ----------
   React.useEffect(() => {
-    const payload = bootstrapProfiles();
-    setProfiles(payload.profiles);
-    setActiveProfileId(payload.activeProfileId);
+    const payload = profileBootstrapRef.current || bootstrapProfiles() || { list: [], profiles: [], activeProfile: null };
+    setProfiles(payload.list || payload.profiles || []);
+    setActiveProfileId(payload.activeId ?? payload.activeProfileId ?? null);
     if (payload.activeProfile) {
       applyProfileSettings(payload.activeProfile.settings || {});
       setProfileNameInput(payload.activeProfile.name || "");
@@ -369,6 +459,32 @@ function App() {
     if (!profilesReady) return;
     persistProfilesToStorage(profiles, activeProfileId);
   }, [profiles, activeProfileId, profilesReady, persistProfilesToStorage]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function hydrateImports() {
+      try {
+        const bundles = await loadImportedCampaignBundles();
+        if (!cancelled) {
+          setImportedCampaigns(bundles);
+          setImportedCampaignError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setImportedCampaignError(err?.message || 'Failed to load imported campaigns');
+        }
+      }
+    }
+    hydrateImports();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => () => {
+    importedCampaignTimersRef.current.forEach((handle) => clearTimeout(handle));
+    importedCampaignTimersRef.current.clear();
+  }, []);
 
   const captureProfileSettings = React.useCallback(() => sanitizeProfileSettings({
     pdSubdomain,
@@ -504,8 +620,19 @@ function App() {
     if ("severityWeights" in settings) setSeverityWeights(settings.severityWeights || cloneTemplateValue(DEFAULT_SEVERITY_WEIGHTS));
     if ("autoHealConfig" in settings) setAutoHealConfig(settings.autoHealConfig || cloneTemplateValue(DEFAULT_AUTO_HEAL_CONFIG));
     if ("resumeExistingEnabled" in settings) setResumeExistingEnabled(Boolean(settings.resumeExistingEnabled));
-    if ("sourceMix" in settings) setSourceMix(settings.sourceMix || cloneTemplateValue(DEFAULT_SOURCE_MIX));
-    if ("campaignConfig" in settings) setCampaignConfig(settings.campaignConfig || cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG));
+    if ("sourceMix" in settings) {
+      setSourceMix({ ...cloneTemplateValue(DEFAULT_SOURCE_MIX), ...(settings.sourceMix || {}) });
+    }
+    if ("campaignConfig" in settings) {
+      const cfg = settings.campaignConfig || {};
+      setCampaignConfig({
+        ...cloneTemplateValue(DEFAULT_CAMPAIGN_CONFIG),
+        ...cfg,
+        templateIds: Array.isArray(cfg.templateIds) ? cfg.templateIds : [],
+        templateMode: cfg.templateMode === 'custom' ? 'custom' : 'all',
+        importedChangeRoutingKey: typeof cfg.importedChangeRoutingKey === 'string' ? cfg.importedChangeRoutingKey : '',
+      });
+    }
     if ("changeEventsEnabled" in settings) setChangeEventsEnabled(Boolean(settings.changeEventsEnabled));
   }
 
@@ -532,7 +659,10 @@ function App() {
     setChangeEventsEnabled(Boolean(settings.changeEventsEnabled));
     if (settings.activeTemplateId !== undefined) setActiveTemplateId(settings.activeTemplateId || null);
     if ('lastRunTemplateName' in settings) setLastRunTemplateName(settings.lastRunTemplateName || null);
-    setActivePage(settings.activePage === 'monitor' ? 'monitor' : 'configure');
+    if ('activePage' in settings) {
+      const allowedPages = ['configure', 'monitor', 'campaigns'];
+      setActivePage(allowedPages.includes(settings.activePage) ? settings.activePage : 'configure');
+    }
     setMonitorSeverityFilter(settings.monitorSeverityFilter || 'all');
     setMonitorAckFilter(settings.monitorAckFilter || 'all');
     setMonitorMappingFilter(settings.monitorMappingFilter || 'all');
@@ -806,10 +936,176 @@ function randomFailureSummary(teamName) {
   const base = randomFrom(FAILURE_NARRATIVES);
   return teamName ? `${base} (${teamName})` : base;
 }
-const OBS_SOURCE_TEMPLATES = [
+
+function createPayloadRegistry() {
+  const adapters = [];
+  const map = new Map();
+  const listeners = new Set();
+  const notify = () => {
+    const snapshot = adapters.slice();
+    listeners.forEach((listener) => {
+      try {
+        listener(snapshot);
+      } catch (err) {
+        console.error("Payload registry listener failed", err);
+      }
+    });
+  };
+  return {
+    register(definition) {
+      if (!definition?.id) throw new Error("Payload adapter id required");
+      const mixKey = definition.mixKey || definition.id;
+      const adapter = { ...definition, mixKey };
+      const idx = adapters.findIndex((tpl) => tpl.id === adapter.id);
+      if (idx >= 0) {
+        adapters[idx] = adapter;
+      } else {
+        adapters.push(adapter);
+      }
+      map.set(adapter.id, adapter);
+      notify();
+      return adapter;
+    },
+    list(filterFn) {
+      const snapshot = adapters.slice();
+      return typeof filterFn === "function" ? snapshot.filter(filterFn) : snapshot;
+    },
+    get(id) {
+      return map.get(id) || null;
+    },
+    pickByMix(mix = {}) {
+      const candidates = adapters.filter((adapter) => adapter.group === 'observability' && typeof adapter.build === 'function' && !adapter.hidden);
+      if (!candidates.length) return null;
+      let total = 0;
+      const weighted = candidates.map((adapter) => {
+        const key = adapter.mixKey || adapter.id;
+        const weight = Number(mix?.[key]) || adapter.defaultWeight || 0;
+        total += weight;
+        return { adapter, weight };
+      });
+      if (total <= 0) {
+        return randomFrom(candidates);
+      }
+      let roll = Math.random() * total;
+      for (const entry of weighted) {
+        roll -= entry.weight;
+        if (roll <= 0) return entry.adapter;
+      }
+      return candidates[candidates.length - 1];
+    },
+    subscribe(listener) {
+      if (typeof listener !== 'function') return () => {};
+      listeners.add(listener);
+      listener(adapters.slice());
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
+function createPayloadGenerator(registry) {
+  const fallbackTemplate = {
+    id: "fallback",
+    label: "Synthetic Telemetry",
+    group: "observability",
+    mixKey: "fallback",
+    hidden: true,
+    supportsCampaigns: true,
+    build(service, failureMeta) {
+      return {
+        summary: randomSummary(service?.name || "Unknown service"),
+        source: randomSource(),
+        component: service?.name,
+        custom_details: {
+          service_name: service?.name,
+          failure_id: failureMeta?.id,
+          failure_summary: failureMeta?.summary,
+        },
+        noteTemplates: NOTE_LIBRARY.general,
+      };
+    },
+  };
+  registry.register(fallbackTemplate);
+  return {
+    selectTemplate(sourceMix, preferredId) {
+      if (preferredId) {
+        const adapter = registry.get(preferredId);
+        if (adapter) return adapter;
+      }
+      return registry.pickByMix(sourceMix) || fallbackTemplate;
+    },
+    buildEvent({ service, failure, sourceMix, preferredTemplateId }) {
+      const template = this.selectTemplate(sourceMix, preferredTemplateId);
+      const payload = template?.build?.(service, failure) || fallbackTemplate.build(service, failure);
+      return { template, payload };
+    },
+  };
+}
+
+async function loadImportedCampaignBundles(manifestUrl = '/templates/index.json') {
+  if (typeof fetch !== 'function') return [];
+  let templateUrls = [];
+  try {
+    const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
+    if (manifestRes.ok) {
+      const manifest = await manifestRes.json().catch(() => ({}));
+      if (Array.isArray(manifest?.files)) {
+        templateUrls = manifest.files.filter((file) => typeof file === 'string');
+      }
+    }
+  } catch (err) {
+    console.warn('Imported campaign manifest unavailable:', err?.message || err);
+  }
+  if (!templateUrls.length) {
+    templateUrls = ['/templates/payload_import.ms.json'];
+  }
+
+  const bundles = [];
+  for (const url of templateUrls) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
+      const parsed = await res.json();
+      const groups = Array.isArray(parsed) ? parsed : [];
+      groups.forEach((entry, groupIdx) => {
+        const group = entry.event_group || entry;
+        const items = Array.isArray(group?.event_group_items) ? group.event_group_items : [];
+        if (!items.length) return;
+        const id = `import_${group.hash_id || `${groupIdx}_${bundles.length}`}`;
+        bundles.push({
+          id,
+          name: group?.name || `Imported Campaign ${bundles.length + 1}`,
+          description: group?.description || entry?.name || 'Imported payload campaign',
+          source: url,
+          items: items.map((item, itemIdx) => ({
+            id: `${id}_step_${itemIdx}`,
+            payloadString: item.payload,
+            eventAction: item.event_action || 'trigger',
+            eventType: item.event_type || 'alert',
+            dedupKey: item.dedup_key || null,
+            delaySeconds: Number(item.delay_seconds) || 0,
+            times: Number(item.times) || 1,
+            intervalSeconds: Number(item.interval_seconds) || 0,
+          })),
+        });
+      });
+    } catch (err) {
+      console.warn('Imported campaign load failed:', err?.message || err);
+    }
+  }
+  return bundles;
+}
+
+const payloadRegistry = createPayloadRegistry();
+const payloadGenerator = payloadRegistry ? createPayloadGenerator(payloadRegistry) : null;
+const BUILTIN_PAYLOAD_ADAPTERS = [
   {
     id: "cloudwatch",
     label: "AWS CloudWatch Alarm",
+    group: "observability",
+    mixKey: "cloudwatch",
+    uiMixOption: true,
+    supportsCampaigns: true,
+    defaultWeight: 0.25,
     metrics: ["CPUUtilization", "RequestLatency", "Throttles", "HTTP5xx", "HealthyHostCount"],
     regions: ["us-east-1", "us-west-2", "eu-west-1"],
     build(svc, failureMeta) {
@@ -838,6 +1134,11 @@ const OBS_SOURCE_TEMPLATES = [
   {
     id: "datadog",
     label: "Datadog Monitor",
+    group: "observability",
+    mixKey: "datadog",
+    uiMixOption: true,
+    supportsCampaigns: true,
+    defaultWeight: 0.25,
     build(svc, failureMeta) {
       const monitor = randomFrom(["request.error_rate", "latency.p95", "kafka.lag", "db.connections"]);
       return {
@@ -861,6 +1162,11 @@ const OBS_SOURCE_TEMPLATES = [
   {
     id: "newrelic",
     label: "New Relic APM",
+    group: "observability",
+    mixKey: "newrelic",
+    uiMixOption: true,
+    supportsCampaigns: true,
+    defaultWeight: 0.25,
     build(svc, failureMeta) {
       const transaction = randomFrom(["/api/login", "/jobs/process", "/graphql/query", "/internal/reconcile"]);
       return {
@@ -882,7 +1188,12 @@ const OBS_SOURCE_TEMPLATES = [
   },
   {
     id: "splunk",
-    label: "Splunk On-Call",
+    label: "Splunk Log Search",
+    group: "observability",
+    mixKey: "splunk",
+    uiMixOption: true,
+    supportsCampaigns: true,
+    defaultWeight: 0.25,
     build(svc, failureMeta) {
       const signature = randomFrom(["NullPointerException", "TimeoutError", "ConnectionReset", "CircuitBreakerOpen"]);
       return {
@@ -903,6 +1214,14 @@ const OBS_SOURCE_TEMPLATES = [
     },
   },
 ];
+
+BUILTIN_PAYLOAD_ADAPTERS.forEach((adapter) => payloadRegistry.register(adapter));
+if (typeof window !== 'undefined') {
+  window.PayloadFramework = {
+    registry: payloadRegistry,
+    generator: payloadGenerator,
+  };
+}
 function randomNote(rec) {
   const pool = rec?.noteContext?.length ? rec.noteContext : NOTE_LIBRARY.general;
   let note = randomFrom(pool);
@@ -1347,21 +1666,23 @@ function randomNote(rec) {
   // ---------- Events/Incidents ----------
   async function triggerIncidentForService(svc, campaignContext = null) {
     if (!globalRoutingKey) { logMsg("Provide the Global Routing Key", "warn"); return null; }
-    const dedupKey = generateId("dk");
+    const allowPdDedupe = Boolean(campaignContext);
+    const manualDedupKey = allowPdDedupe ? null : generateId("dk");
     const severity = randChoiceWeighted(severityWeights);
-    const template = selectObservabilityTemplate();
+    const template = selectObservabilityTemplate(campaignContext?.templateId);
+    const templateLabel = campaignContext?.templateLabel || template?.label || 'Synthetic Telemetry';
     let failureMeta = campaignContext || null;
     try {
       if (!failureMeta) {
         failureMeta = startCampaignForService(svc);
       }
-      const templatePayload = template.build(svc, failureMeta);
+      const templatePayload = template?.build ? template.build(svc, failureMeta) : {};
       const customDetails = {
         service_name: svc.name,
         simulator: "PagerDuty Noise Simulator",
-        seed: dedupKey,
+        seed: manualDedupKey || undefined,
         severity,
-        observability_source: template.label,
+        observability_source: templateLabel,
         failure_id: failureMeta?.id || templatePayload?.custom_details?.failure_id,
         failure_summary: failureMeta?.summary || templatePayload?.custom_details?.failure_summary,
         ...(templatePayload?.custom_details || {}),
@@ -1369,7 +1690,6 @@ function randomNote(rec) {
       const body = {
         routing_key: globalRoutingKey.trim(),
         event_action: "trigger",
-        dedup_key: dedupKey,
         payload: {
           summary: templatePayload.summary || randomSummary(svc.name),
           source: templatePayload.source || randomSource(),
@@ -1382,9 +1702,17 @@ function randomNote(rec) {
         client: "PD Noise Simulator",
         client_url: "https://example.local/simulator",
       };
+      if (!allowPdDedupe) {
+        body.dedup_key = manualDedupKey;
+      }
       const res = await fetch("/proxy/events", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(`Events API error: ${res.status} ${data?.message || res.statusText}`);
+      const pdAssignedDedup = data?.dedup_key;
+      const resolvedDedupKey = allowPdDedupe ? (pdAssignedDedup || generateId("dk")) : manualDedupKey;
+      if (allowPdDedupe && !pdAssignedDedup) {
+        logMsg("Events API did not return a dedup_key for campaign incident; generated fallback locally", "warn");
+      }
       const cfg = universalResponderCfg;
       const now = Date.now();
       const isCrit = severity === 'critical';
@@ -1392,9 +1720,9 @@ function randomNote(rec) {
       const firstResponderDelay = (win.minSec + Math.random() * Math.max(0, win.maxSec - win.minSec)) * 1000;
       const ackDelay = (30 + Math.random() * (300 - 30)) * 1000;
       const resolveDelay = (Math.min(autoResolveMinSec, autoResolveMaxSec) + Math.random() * Math.abs(autoResolveMaxSec - autoResolveMinSec)) * 1000;
-      logMsg(`Triggered incident for ${svc.name} (severity=${severity}) dk=${dedupKey} via ${template.label}`);
+      logMsg(`Triggered incident for ${svc.name} (severity=${severity}) dk=${resolvedDedupKey} via ${templateLabel}`);
       if (severity === 'info') {
-        logMsg(`Info severity suppressed; not tracking incident ${dedupKey}`, "info");
+        logMsg(`Info severity suppressed; not tracking incident ${resolvedDedupKey}`, "info");
         return null;
       }
       const shouldAutoHeal = severity === 'warning' && autoHealConfig?.enabled && Math.random() < Number(autoHealConfig.warningProbability || 0);
@@ -1402,7 +1730,7 @@ function randomNote(rec) {
         ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000
         : null;
       const record = {
-        dedupKey,
+        dedupKey: resolvedDedupKey,
         serviceId: svc.id,
         serviceName: svc.name,
         startedAt: now,
@@ -1417,7 +1745,7 @@ function randomNote(rec) {
         resolveAt: now + resolveDelay,
         autoHealAt: autoHealDelay ? now + autoHealDelay : null,
         autoHealScheduled: shouldAutoHeal,
-        observabilitySource: template.label,
+        observabilitySource: templateLabel,
         noteContext: templatePayload.noteTemplates || [],
         failureId: customDetails.failure_id || null,
         failureSummary: customDetails.failure_summary || null,
@@ -1431,6 +1759,70 @@ function randomNote(rec) {
       return null;
     }
   }
+
+  const sendImportedCampaignEvent = React.useCallback(async (item, campaign) => {
+    if (!globalRoutingKey) {
+      logMsg("Provide the Global Routing Key to launch imported campaigns", "warn");
+      return;
+    }
+    if (!item?.payloadString) {
+      logMsg("Imported campaign payload missing payloadString", "error");
+      return;
+    }
+    try {
+      const parsed = typeof item.payloadString === 'string' ? JSON.parse(item.payloadString) : item.payloadString;
+      const body = { ...parsed };
+      const eventType = (item.eventType || parsed?.event_type || '').toLowerCase();
+      const isChangeEvent = eventType === 'change' || eventType === 'deployment';
+      let endpoint = '/proxy/events';
+      if (isChangeEvent) {
+        const changeKey = (campaignConfig.importedChangeRoutingKey || '').trim();
+        if (!changeKey) {
+          logMsg('Imported change event requires a change routing key (Campaigns tab)', 'warn');
+          return;
+        }
+        body.routing_key = changeKey;
+        endpoint = '/proxy/change_events';
+      } else {
+        body.routing_key = globalRoutingKey.trim();
+      }
+      body.event_action = item.eventAction || parsed?.event_action || (isChangeEvent ? 'change' : 'trigger');
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || res.statusText);
+      const label = campaign?.name || campaign?.id || 'Imported campaign';
+      logMsg(`Imported campaign "${label}" step sent (${isChangeEvent ? 'change' : item.eventType || 'alert'})`, "info");
+    } catch (err) {
+      logMsg(`Imported campaign dispatch failed: ${err?.message || err}`, "error");
+    }
+  }, [campaignConfig.importedChangeRoutingKey, globalRoutingKey, logMsg]);
+
+  const triggerImportedCampaign = React.useCallback((campaign) => {
+    if (!campaign) return;
+    if (!globalRoutingKey) {
+      logMsg("Provide the Global Routing Key to launch imported campaigns", "warn");
+      return;
+    }
+    const steps = Array.isArray(campaign.items) ? campaign.items : [];
+    if (!steps.length) {
+      logMsg(`Imported campaign "${campaign.name || campaign.id}" has no steps to run`, "warn");
+      return;
+    }
+    logMsg(`Launching imported campaign "${campaign.name || campaign.id}" (${steps.length} steps)`, "info");
+    steps.forEach((item) => {
+      const times = Math.max(1, Number(item.times) || 1);
+      const delayMs = Math.max(0, Number(item.delaySeconds) || 0) * 1000;
+      const intervalMs = Math.max(0, Number(item.intervalSeconds) || 0) * 1000;
+      for (let iteration = 0; iteration < times; iteration += 1) {
+        const scheduleMs = delayMs + iteration * intervalMs;
+        const handle = setTimeout(() => {
+          importedCampaignTimersRef.current.delete(handle);
+          sendImportedCampaignEvent(item, campaign);
+        }, scheduleMs);
+        importedCampaignTimersRef.current.add(handle);
+      }
+    });
+  }, [globalRoutingKey, logMsg, sendImportedCampaignEvent]);
 
   // ---------- Scheduler: Poisson process for triggering incidents ----------
   const scheduleNextFire = React.useCallback(() => {
@@ -1813,23 +2205,12 @@ function randomNote(rec) {
     warning: 'bg-amber-300 text-gray-900',
     info: 'bg-sky-500 text-white',
   }), []);
-  const selectObservabilityTemplate = React.useCallback(() => {
-    const entries = OBS_SOURCE_TEMPLATES.map((tpl) => ({
-      tpl,
-      weight: Math.max(0, Number(sourceMix[tpl.id]) || 0),
-    }));
-    let total = entries.reduce((sum, entry) => sum + entry.weight, 0);
-    if (total <= 0) {
-      entries.forEach((entry) => { entry.weight = 1; });
-      total = entries.length;
+  const selectObservabilityTemplate = React.useCallback((preferredTemplateId = null) => {
+    if (!payloadGenerator) {
+      return payloadAdapters[0] || payloadRegistry.get('fallback');
     }
-    let roll = Math.random() * total;
-    for (const entry of entries) {
-      roll -= entry.weight;
-      if (roll <= 0) return entry.tpl;
-    }
-    return entries[entries.length - 1].tpl;
-  }, [sourceMix]);
+    return payloadGenerator.selectTemplate(sourceMix, preferredTemplateId);
+  }, [sourceMix, payloadAdapters]);
   const popCampaignService = React.useCallback(() => {
     const now = Date.now();
     const remaining = [];
@@ -1845,7 +2226,15 @@ function randomNote(rec) {
           const svc = services.find((s) => s.id === targetId && s.include);
           if (svc) {
             campaign.pending.delete(targetId);
-            selection = { svc, metadata: { id: campaign.id, summary: campaign.summary } };
+            selection = {
+              svc,
+              metadata: {
+                id: campaign.id,
+                summary: campaign.summary,
+                templateId: campaign.templateId,
+                templateLabel: campaign.templateLabel,
+              },
+            };
           }
         }
       }
@@ -1869,12 +2258,15 @@ function randomNote(rec) {
     if (!pendingIds.size) return null;
     const summary = randomFailureSummary(primaryTeam.name);
     const expiresAt = Date.now() + Math.max(30, Number(campaignConfig.windowSec) || 300) * 1000;
-    const campaign = { id: generateId("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt };
+    const templateOverride = pickCampaignTemplate();
+    const templateId = templateOverride?.id || null;
+    const templateLabel = templateOverride?.label || null;
+    const campaign = { id: generateId("cmp"), teamId: primaryTeam.id, summary, pending: pendingIds, expiresAt, templateId, templateLabel };
     campaignRef.current = [...campaignRef.current, campaign];
-    const metadata = { id: campaign.id, summary };
+    const metadata = { id: campaign.id, summary, templateId, templateLabel };
     triggerCampaignChangeEvents(primaryTeam, metadata, svc);
     return metadata;
-  }, [campaignConfig, services, randomFailureSummary, triggerCampaignChangeEvents]);
+  }, [campaignConfig, services, pickCampaignTemplate, randomFailureSummary, triggerCampaignChangeEvents]);
   const toggleSort = React.useCallback((key) => {
     setMonitorSort((prev) => {
       if (prev.key === key) {
@@ -1954,6 +2346,16 @@ function randomNote(rec) {
                 }`}
               >
                 Monitor
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePage('campaigns')}
+                aria-current={activePage === 'campaigns' ? 'page' : undefined}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600 ${
+                  activePage === 'campaigns' ? 'bg-white/20 text-white' : 'text-indigo-100 hover:bg-indigo-500/40'
+                }`}
+              >
+                Campaigns
               </button>
             </nav>
             <div className="flex items-center gap-2 sm:ml-auto">
@@ -2436,109 +2838,33 @@ function randomNote(rec) {
             Tune how frequently incidents resemble each observability source. Values are normalized automatically.
           </p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {OBS_SOURCE_TEMPLATES.map((tpl) => {
-              const pct = Math.round((Number(sourceMix[tpl.id]) || 0) * 100);
-              return (
-                <label key={tpl.id} className="text-sm font-semibold">
-                  {tpl.label}
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={pct}
-                    onChange={(e) => {
-                      const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                      setSourceMix((prev) => ({ ...prev, [tpl.id]: val / 100 }));
-                    }}
-                    className="mt-1 w-full border rounded px-2 py-1"
-                  />
-                </label>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-xs text-gray-500">Examples: CloudWatch Alarms, Datadog Monitors, New Relic APM, Splunk log searches.</p>
-        </section>
-
-        <section className="bg-white shadow rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Failure Campaigns</h2>
-          <p className="text-sm text-gray-600 mb-3">
-            Simulate cascading failures across services in the same team by sharing a failure ID/summary.
-          </p>
-          <div className="flex flex-col gap-3">
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input
-                type="checkbox"
-                checked={!!campaignConfig.enabled}
-                onChange={(e) => setCampaignConfig((prev) => ({ ...prev, enabled: e.target.checked }))}
-              />
-              Enable correlated incident campaigns
-            </label>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label className="text-sm">
-                Trigger chance (%)
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={Math.round((Number(campaignConfig.probability) || 0) * 100)}
-                  onChange={(e) => {
-                    const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-                    setCampaignConfig((prev) => ({ ...prev, probability: pct / 100 }));
-                  }}
-                  className="mt-1 w-full border rounded px-2 py-1"
-                />
-              </label>
-              <label className="text-sm">
-                Max related services
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={campaignConfig.maxRelated}
-                  onChange={(e) => setCampaignConfig((prev) => ({ ...prev, maxRelated: Math.max(1, Number(e.target.value) || 1) }))}
-                  className="mt-1 w-full border rounded px-2 py-1"
-                />
-              </label>
-              <label className="text-sm">
-                Window (sec)
-                <input
-                  type="number"
-                  min={30}
-                  value={campaignConfig.windowSec}
-                  onChange={(e) => setCampaignConfig((prev) => ({ ...prev, windowSec: Math.max(30, Number(e.target.value) || 30) }))}
-                  className="mt-1 w-full border rounded px-2 py-1"
-                />
-              </label>
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-gray-500">Correlated incidents show a badge in Monitor with the shared failure summary.</p>
-          <div className="mt-3 border-t pt-3 space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input
-                type="checkbox"
-                checked={changeEventsEnabled}
-                onChange={(e) => {
-                  changeEventsToggleTouchedRef.current = true;
-                  setChangeEventsEnabled(e.target.checked);
-                }}
-                disabled={!hasChangeCoverage}
-              />
-              Emit related change events
-            </label>
-            <p className="text-xs text-gray-500">
-              {hasChangeCoverage
-                ? `${changeCoverage.includedWithChange}/${changeCoverage.included || 0} included services have change integrations (${changeIntegrationStats.withChange} total)`
-                : "No selected services have change integrations; load services to refresh coverage."}
-            </p>
-            {changeCoverageSummary && (
-              <p className="text-xs text-gray-500">Teams with coverage: {changeCoverageSummary}</p>
-            )}
-            {lastChangeEvent && (
-              <p className="text-xs text-green-700">
-                Last change event ({new Date(lastChangeEvent.ts).toLocaleTimeString()}): {lastChangeEvent.serviceName} — {lastChangeEvent.failureSummary}
-              </p>
+            {mixTemplates.length === 0 ? (
+              <p className="text-sm text-gray-500">No payload adapters available yet.</p>
+            ) : (
+              mixTemplates.map((tpl) => {
+                const key = tpl.mixKey || tpl.id;
+                const rawValue = sourceMix[key] ?? tpl.defaultWeight ?? 0;
+                const pct = Math.round(Number(rawValue) * 100);
+                return (
+                  <label key={tpl.id} className="text-sm font-semibold">
+                    {tpl.label}
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={pct}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                        setSourceMix((prev) => ({ ...prev, [key]: val / 100 }));
+                      }}
+                      className="mt-1 w-full border rounded px-2 py-1"
+                    />
+                  </label>
+                );
+              })
             )}
           </div>
+          <p className="mt-2 text-xs text-gray-500">Examples: CloudWatch Alarms, Datadog Monitors, New Relic APM, Splunk log searches, plus imported adapters.</p>
         </section>
 
         <section className="bg-white shadow rounded p-4">
@@ -2617,6 +2943,221 @@ function randomNote(rec) {
           </ul>
         </section>
 
+          </div>
+        )}
+        {activePage === 'campaigns' && (
+          <div className="space-y-6">
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Failure Campaign Settings</h2>
+              <p className="text-sm text-gray-600 mb-3">Simulate cascading failures by sharing failure IDs and summaries across services in the same team.</p>
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input type="checkbox" checked={!!campaignConfig.enabled} onChange={(e) => setCampaignConfig((prev) => ({ ...prev, enabled: e.target.checked }))} />
+                  Enable correlated incident campaigns
+                </label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label className="text-sm">
+                    Trigger chance (%)
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={Math.round((Number(campaignConfig.probability) || 0) * 100)}
+                      onChange={(e) => {
+                        const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                        setCampaignConfig((prev) => ({ ...prev, probability: pct / 100 }));
+                      }}
+                      className="mt-1 w-full border rounded px-2 py-1"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Max related services
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={campaignConfig.maxRelated}
+                      onChange={(e) => setCampaignConfig((prev) => ({ ...prev, maxRelated: Math.max(1, Number(e.target.value) || 1) }))}
+                      className="mt-1 w-full border rounded px-2 py-1"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Window (sec)
+                    <input
+                      type="number"
+                      min={30}
+                      value={campaignConfig.windowSec}
+                      onChange={(e) => setCampaignConfig((prev) => ({ ...prev, windowSec: Math.max(30, Number(e.target.value) || 30) }))}
+                      className="mt-1 w-full border rounded px-2 py-1"
+                    />
+                  </label>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">Correlated incidents show a badge in Monitor with the shared failure summary.</p>
+              <div className="mt-3 border-t pt-3 space-y-2">
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    type="checkbox"
+                    checked={changeEventsEnabled}
+                    onChange={(e) => {
+                      changeEventsToggleTouchedRef.current = true;
+                      setChangeEventsEnabled(e.target.checked);
+                    }}
+                    disabled={!hasChangeCoverage}
+                  />
+                  Emit related change events
+                </label>
+                <p className="text-xs text-gray-500">
+                  {hasChangeCoverage
+                    ? `${changeCoverage.includedWithChange}/${changeCoverage.included || 0} included services have change integrations (${changeIntegrationStats.withChange} total)`
+                    : 'No selected services have change integrations; load services to refresh coverage.'}
+                </p>
+                {changeCoverageSummary && (
+                  <p className="text-xs text-gray-500">Teams with coverage: {changeCoverageSummary}</p>
+                )}
+                {lastChangeEvent && (
+                  <p className="text-xs text-green-700">
+                    Last change event ({new Date(lastChangeEvent.ts).toLocaleTimeString()}): {lastChangeEvent.serviceName} — {lastChangeEvent.failureSummary}
+                  </p>
+                )}
+              </div>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Campaign Templates</h2>
+              <p className="text-sm text-gray-600 mb-3">Choose which payload adapters fuel campaign traffic. Default mode uses the entire registry.</p>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="campaignTemplateMode"
+                    checked={!useCustomCampaignCatalog}
+                    onChange={() => setCampaignConfig((prev) => ({ ...prev, templateMode: 'all', templateIds: [] }))}
+                  />
+                  Use entire payload catalog
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="campaignTemplateMode"
+                    checked={useCustomCampaignCatalog}
+                    onChange={() => setCampaignConfig((prev) => ({ ...prev, templateMode: 'custom' }))}
+                  />
+                  Select templates manually
+                </label>
+              </div>
+              {useCustomCampaignCatalog && (
+                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {campaignReadyAdapters.length === 0 ? (
+                    <p className="text-sm text-gray-500">No payload adapters available.</p>
+                  ) : (
+                    campaignReadyAdapters.map((adapter) => (
+                      <label key={adapter.id} className="flex items-start gap-3 rounded border border-gray-200 p-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={campaignTemplateSelection.has(adapter.id)}
+                          onChange={() => toggleCampaignTemplate(adapter.id)}
+                        />
+                        <div>
+                          <p className="font-semibold text-gray-900">{adapter.label}</p>
+                          <p className="text-xs text-gray-500">{adapter.vendor || adapter.group || 'Adapter'}</p>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+              {!useCustomCampaignCatalog && (
+                <p className="mt-3 text-xs text-gray-500">All {campaignReadyAdapters.length} registered templates participate when campaigns fire.</p>
+              )}
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Imported Campaigns</h2>
+              <p className="text-sm text-gray-600 mb-3">Trigger scripted scenarios (e.g., Crux payload imports) on demand.</p>
+              {importedCampaignError && (
+                <p className="text-sm text-rose-600">{importedCampaignError}</p>
+              )}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Change event routing key</label>
+                <input
+                  type="text"
+                  value={campaignConfig.importedChangeRoutingKey || ''}
+                  onChange={(e) => setCampaignConfig((prev) => ({ ...prev, importedChangeRoutingKey: e.target.value }))}
+                  placeholder="Enter change integration key"
+                  className="w-full border rounded px-3 py-2"
+                />
+                <p className="text-xs text-gray-500 mt-1">Used when an imported step declares <code>event_type = change</code>.</p>
+              </div>
+              {importedCampaigns.length === 0 ? (
+                <p className="text-sm text-gray-500">No imported campaigns detected. Drop JSON files into the <code>/templates</code> folder to register additional scenarios.</p>
+              ) : (
+                <div className="space-y-3">
+                  {importedCampaigns.map((campaign) => {
+                    const steps = campaign.items?.length || 0;
+                    const longestDelay = (campaign.items || []).reduce((max, item) => {
+                      const times = Math.max(1, Number(item.times) || 1);
+                      const span = (Number(item.delaySeconds) || 0) + Math.max(0, times - 1) * (Number(item.intervalSeconds) || 0);
+                      return Math.max(max, span);
+                    }, 0);
+                    return (
+                      <div key={campaign.id} className="rounded border border-gray-200 p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-900">{campaign.name || campaign.id}</p>
+                            {campaign.description && <p className="text-sm text-gray-600">{campaign.description}</p>}
+                            <p className="text-xs text-gray-500">{steps} step(s), approx. {Math.round(longestDelay)}s span</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => triggerImportedCampaign(campaign)}
+                            className="self-start rounded bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                          >
+                            Trigger Now
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-3">Campaign files include timing, repeat counts, and change events when provided. Triggering them ignores the stochastic scheduler and uses the imported payloads directly.</p>
+            </section>
+
+            <section className="bg-white shadow rounded p-4">
+              <h2 className="text-lg font-semibold mb-3">Payload Registry</h2>
+              <p className="text-sm text-gray-600 mb-3">Built-in adapters plus external imports (e.g., <code>payload_import.ms.json</code>) register here.</p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Name</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Vendor</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-700">Supports Campaigns</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {payloadAdapters.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-3 py-3 text-gray-500">No adapters registered.</td>
+                      </tr>
+                    ) : (
+                      payloadAdapters.map((adapter) => (
+                        <tr key={adapter.id}>
+                          <td className="px-3 py-2">
+                            <p className="font-semibold">{adapter.label}</p>
+                            {adapter.description && <p className="text-xs text-gray-500">{adapter.description}</p>}
+                          </td>
+                          <td className="px-3 py-2 text-gray-600">{adapter.vendor || 'Built-in'}</td>
+                          <td className="px-3 py-2 text-gray-600">{adapter.supportsCampaigns === false ? 'No' : 'Yes'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">Import additional payloads by adding JSON files to the <code>/templates</code> directory; they are auto-loaded at startup.</p>
+            </section>
           </div>
         )}
 

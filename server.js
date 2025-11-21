@@ -2,12 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
+const TEMPLATES_DIR = path.join(__dirname, 'templates');
 
 const {
   PORT = 3001,
@@ -145,6 +147,21 @@ app.get('/proxy/incidents', (req, res) => handleRest('GET', req, res));
 app.get('/proxy/users', (req, res) => handleRest('GET', req, res));
 app.post('/proxy/incidents/:id/notes', (req, res) => handleRest('POST', req, res));
 app.post('/proxy/incidents/:id/responder_requests', (req, res) => handleRest('POST', req, res));
+
+app.get('/templates/index.json', async (req, res) => {
+  try {
+    const files = await fs.promises.readdir(TEMPLATES_DIR);
+    const jsonFiles = files.filter((file) => file.toLowerCase().endsWith('.json'));
+    res.json({ files: jsonFiles.map((file) => `/templates/${file}`) });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.json({ files: [] });
+    } else {
+      console.error('Failed to read templates directory:', err);
+      res.status(500).json({ error: 'Failed to read templates directory' });
+    }
+  }
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
