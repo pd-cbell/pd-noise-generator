@@ -194,6 +194,9 @@ export interface ConfigurationState {
   autoHealConfig: AutoHealConfig;
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
+  enableEventBursts: boolean; // New: Enable sending multiple events for one incident
+  burstCount: number;         // New: Number of events to send in a burst
+  burstIntervalSec: number;   // New: Interval between burst events
 
   // Per-Severity Simulation Settings
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
@@ -255,6 +258,9 @@ export const useStore = create<AppState>()(
       autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
       resumeExistingEnabled: true,
       sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
+      enableEventBursts: false,
+      burstCount: 5,
+      burstIntervalSec: 10,
 
       // Per-Severity Simulation Defaults
       severityConfigs: DEFAULT_SEVERITY_CONFIGS,
@@ -642,7 +648,7 @@ export const useStore = create<AppState>()(
       },
 
       triggerIncident: async (service: Service, failureContext: any = null) => {
-        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs } = get();
+        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs, enableEventBursts, burstCount, burstIntervalSec } = get();
         
         if (!globalRoutingKey) {
           get().addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
@@ -676,12 +682,11 @@ export const useStore = create<AppState>()(
 
         if (severity === 'info') {
             // Suppress info alerts from active tracking, but send them to PD
-            // (Implementation decision based on legacy behavior)
         }
 
         const dedupKey = failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
 
-        const eventBody = {
+        const baseEventBody = {
           routing_key: globalRoutingKey,
           event_action: 'trigger',
           dedup_key: dedupKey,
@@ -698,12 +703,14 @@ export const useStore = create<AppState>()(
         };
 
         try {
-          const response = await api.triggerEvent(eventBody);
+          // --- Send initial event ---
+          const response = await api.triggerEvent(baseEventBody);
+          let incidentDedupKey = response.dedup_key || dedupKey || 'unknown';
           
           if (severity !== 'info') {
              // Calculate timings based on severity config
              const now = Date.now();
-             const config = severityConfigs[severity]; // Get severity-specific config
+             const config = severityConfigs[severity];
              
              const ackDelay = (Math.min(config.minAckSec, config.maxAckSec) + Math.random() * Math.abs(config.maxAckSec - config.minAckSec)) * 1000;
              const resolveDelay = (Math.min(config.minResolveSec, config.maxResolveSec) + Math.random() * Math.abs(config.maxResolveSec - config.minResolveSec)) * 1000;
@@ -714,15 +721,15 @@ export const useStore = create<AppState>()(
                 : null;
 
              const newIncident: Incident = {
-               dedupKey: response.dedup_key || dedupKey || 'unknown',
+               dedupKey: incidentDedupKey,
                serviceId: service.id,
                serviceName: service.name,
                startedAt: now,
-               incidentId: null, // Would need another API call or webhook to get the real ID
+               incidentId: null,
                mapAttempts: 0,
-               nextEvalAt: now + 10000, // Re-evaluate every 10s for now
+               nextEvalAt: now + 10000,
                ackAt: null,
-               autoAckAt: now + ackDelay, // Schedule auto-ack
+               autoAckAt: now + ackDelay,
                acked: false,
                firstResponderAt: null,
                responderRequested: false,
@@ -742,6 +749,28 @@ export const useStore = create<AppState>()(
              set((state) => ({ totalEvents: state.totalEvents + 1 }));
              get().addLog(`Triggered ${severity} incident for ${service.name}`, 'info');
           }
+
+          // --- Event Burst Logic ---
+          if (enableEventBursts && burstCount > 1 && severity !== 'info') {
+            for (let i = 1; i < burstCount; i++) {
+              await new Promise(r => setTimeout(r, burstIntervalSec * 1000)); // Delay between bursts
+              const burstEventBody = {
+                ...baseEventBody,
+                dedup_key: incidentDedupKey, // Use the same dedup_key
+                payload: {
+                    ...baseEventBody.payload,
+                    custom_details: {
+                        ...baseEventBody.payload.custom_details,
+                        burst_event_num: i + 1, // Add burst counter to custom details
+                    }
+                }
+              };
+              await api.triggerEvent(burstEventBody);
+              set((state) => ({ totalEvents: state.totalEvents + 1 }));
+              get().addLog(`Sent burst event ${i + 1}/${burstCount} for incident ${incidentDedupKey.substring(0, 8)}...`, 'info');
+            }
+          }
+
         } catch (error: any) {
           get().addLog(`Failed to trigger incident: ${error.message}`, 'error');
         }
@@ -900,6 +929,9 @@ export const useStore = create<AppState>()(
         autoHealConfig: state.autoHealConfig,
         resumeExistingEnabled: state.resumeExistingEnabled,
         sourceMix: state.sourceMix,
+        enableEventBursts: state.enableEventBursts,
+        burstCount: state.burstCount,
+        burstIntervalSec: state.burstIntervalSec,
 
         // Persist Per-Severity Simulation Settings
         severityConfigs: state.severityConfigs,

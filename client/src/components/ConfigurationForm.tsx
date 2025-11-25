@@ -187,6 +187,47 @@ export const ConfigurationForm: React.FC = () => {
             </div>
           </div>
 
+          {/* Event Bursting Settings */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Event Bursting</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 flex items-center gap-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                <div className="flex items-center">
+                  <input
+                    id="enableEventBursts"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    checked={useStore(state => state.enableEventBursts)}
+                    onChange={(e) => useStore.getState().setSettings({ enableEventBursts: e.target.checked })}
+                  />
+                  <label htmlFor="enableEventBursts" className="ml-2 text-sm font-medium text-gray-700">Enable Event Bursts</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="burstCount" className="text-sm text-gray-600">Count:</label>
+                  <input
+                    id="burstCount"
+                    type="number"
+                    min="1"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.burstCount)}
+                    onChange={(e) => useStore.getState().setSettings({ burstCount: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="burstIntervalSec" className="text-sm text-gray-600">Interval (sec):</label>
+                  <input
+                    id="burstIntervalSec"
+                    type="number"
+                    min="0"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.burstIntervalSec)}
+                    onChange={(e) => useStore.getState().setSettings({ burstIntervalSec: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Severity Distribution */}
           <div>
             <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Severity Weights (Must sum to ~1.0)</h3>
