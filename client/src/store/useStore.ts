@@ -105,6 +105,7 @@ export interface SimulationState {
   clearActiveIncidents: () => void;
   addMonitorTrendData: (count: number) => void;
   evalTick: () => void; // Periodic evaluation for incidents
+  triggerIncident: (service: Service, failureContext?: any) => Promise<void>;
 }
 
 export interface AutoHealConfig {
@@ -424,10 +425,118 @@ export const useStore = create<AppState>()(
       }),
 
       evalTick: () => {
-        // This is where periodic evaluation logic (e.g., auto-ack, auto-resolve) will live.
-        // It will iterate through activeIncidents and trigger actions based on their nextEvalAt.
-        // For now, it just adds a log entry to show it's working.
-        get().addLog('Simulation evaluation tick.', 'info');
+        // Periodic lifecycle updates (auto-resolve, etc.)
+        const { activeIncidents, updateIncident, removeIncident, addLog } = get();
+        const now = Date.now();
+
+        activeIncidents.forEach(inc => {
+          // Auto-Resolve Check
+          if (inc.resolveAt && now >= inc.resolveAt) {
+            // In a real implementation, this would call the PD API to resolve
+            // For now, we just remove it from the active list to simulate resolution
+            removeIncident(inc.dedupKey);
+            addLog(`Auto-resolved incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
+          }
+          
+          // Auto-Heal Check (Warning only)
+          if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
+             // Send OK event logic would go here
+             removeIncident(inc.dedupKey);
+             addLog(`Auto-healed warning incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
+          }
+        });
+      },
+
+      triggerIncident: async (service: Service, failureContext: any = null) => {
+        const { sourceMix, globalRoutingKey, severityWeights, autoResolveMinSec, autoResolveMaxSec, autoHealConfig } = get();
+        
+        if (!globalRoutingKey) {
+          get().addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
+          return;
+        }
+
+        // Generate Payload
+        const { payload } = payloadGenerator.buildEvent({
+          service,
+          failure: failureContext,
+          sourceMix,
+        });
+
+        // Determine Severity
+        const severity = (() => {
+            const rand = Math.random();
+            let cumulative = 0;
+            for (const [sev, weight] of Object.entries(severityWeights)) {
+                cumulative += weight;
+                if (rand < cumulative) return sev as IncidentSeverity;
+            }
+            return 'info';
+        })();
+
+        if (severity === 'info') {
+            // Suppress info alerts from active tracking, but send them to PD
+            // (Implementation decision based on legacy behavior)
+        }
+
+        const dedupKey = failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
+
+        const eventBody = {
+          routing_key: globalRoutingKey,
+          event_action: 'trigger',
+          dedup_key: dedupKey,
+          payload: {
+            ...payload,
+            severity,
+            source: payload.source || 'pd-noise-simulator',
+            component: payload.component || service.name,
+            custom_details: {
+              ...payload.custom_details,
+              generator: 'pd-noise-simulator'
+            }
+          }
+        };
+
+        try {
+          const response = await api.triggerEvent(eventBody);
+          
+          if (severity !== 'info') {
+             // Calculate timings
+             const now = Date.now();
+             const resolveDelay = (Math.min(autoResolveMinSec, autoResolveMaxSec) + Math.random() * Math.abs(autoResolveMaxSec - autoResolveMinSec)) * 1000;
+             const shouldAutoHeal = severity === 'warning' && autoHealConfig.enabled && Math.random() < autoHealConfig.warningProbability;
+             const autoHealDelay = shouldAutoHeal 
+                ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000 
+                : null;
+
+             const newIncident: Incident = {
+               dedupKey: response.dedup_key || dedupKey || 'unknown',
+               serviceId: service.id,
+               serviceName: service.name,
+               startedAt: now,
+               incidentId: null, // Would need another API call or webhook to get the real ID
+               mapAttempts: 0,
+               nextEvalAt: now + 10000,
+               ackAt: null,
+               acked: false,
+               firstResponderAt: null,
+               responderRequested: false,
+               severity,
+               resolveAt: now + resolveDelay,
+               autoHealAt: autoHealDelay ? now + autoHealDelay : null,
+               autoHealScheduled: shouldAutoHeal,
+               observabilitySource: payload.source || 'unknown',
+               failureId: failureContext?.id || null,
+               failureSummary: failureContext?.summary || null,
+               noteContext: payload.noteTemplates || [],
+               syncedFromPd: false
+             };
+             
+             get().addIncident(newIncident);
+             get().addLog(`Triggered ${severity} incident for ${service.name}`, 'info');
+          }
+        } catch (error: any) {
+          get().addLog(`Failed to trigger incident: ${error.message}`, 'error');
+        }
       },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),
