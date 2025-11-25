@@ -41,14 +41,45 @@ export interface EscalationPolicy {
   teams: { id: string; name: string }[];
 }
 
+export type IncidentSeverity = 'info' | 'warning' | 'error' | 'critical';
+
+export interface Incident {
+  dedupKey: string;
+  serviceId: string;
+  serviceName: string;
+  startedAt: number;
+  incidentId: string | null;
+  mapAttempts: number;
+  nextEvalAt: number;
+  ackAt: number | null;
+  acked: boolean;
+  firstResponderAt: number | null;
+  responderRequested: boolean;
+  severity: IncidentSeverity;
+  resolveAt: number | null;
+  autoHealAt: number | null;
+  autoHealScheduled: boolean;
+  observabilitySource: string;
+  failureId: string | null;
+  failureSummary: string | null;
+  noteContext: string[];
+  syncedFromPd: boolean;
+}
+
 export interface SimulationState {
   isRunning: boolean;
-  activeIncidents: any[]; // To be typed
-  log: any[];
+  activeIncidents: Incident[];
+  log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[];
+  monitorTrend: { ts: number; count: number }[];
   startSimulation: () => void;
   stopSimulation: () => void;
   addLog: (msg: string, type?: 'info' | 'warn' | 'error') => void;
-  // ... other runtime actions
+  addIncident: (incident: Incident) => void;
+  updateIncident: (dedupKey: string, updates: Partial<Incident>) => void;
+  removeIncident: (dedupKey: string) => void;
+  clearActiveIncidents: () => void;
+  addMonitorTrendData: (count: number) => void;
+  evalTick: () => void; // Periodic evaluation for incidents
 }
 
 export interface ConfigurationState {
@@ -57,7 +88,6 @@ export interface ConfigurationState {
   fromEmail: string;
   globalRoutingKey: string;
   selectedTeamIds: string[];
-  selectedServiceIds: string[]; // Mapped from includeMap
   
   teams: Team[];
   services: Service[];
@@ -83,6 +113,8 @@ interface AppState extends SimulationState, ConfigurationState {
   saveProfile: (profile: Profile) => void;
 }
 
+const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -92,7 +124,7 @@ export const useStore = create<AppState>()(
       fromEmail: '',
       globalRoutingKey: '',
       selectedTeamIds: [],
-      selectedServiceIds: [],
+      
       teams: [],
       services: [],
       escalationPolicies: [],
@@ -104,6 +136,7 @@ export const useStore = create<AppState>()(
       isRunning: false,
       activeIncidents: [],
       log: [],
+      monitorTrend: [],
       
       // --- Profile Slice Defaults ---
       profiles: [],
@@ -137,6 +170,12 @@ export const useStore = create<AppState>()(
         set({ isLoadingServices: true });
         try {
           const { selectedTeamIds, services: currentServices } = get();
+          // Ensure apiToken and pdSubdomain are set before making the call
+          if (!get().apiToken || !get().pdSubdomain) {
+            get().addLog('API Token and PagerDuty Subdomain are missing, cannot fetch services.', 'warn');
+            set({ isLoadingServices: false });
+            return;
+          }
           const data = await api.getServices(selectedTeamIds);
           const servicesWithInclude = data.services.map((svc: Service) => ({
             ...svc,
@@ -154,6 +193,12 @@ export const useStore = create<AppState>()(
         set({ isLoadingEscalationPolicies: true });
         try {
           const { selectedTeamIds } = get();
+          // Ensure apiToken and pdSubdomain are set before making the call
+          if (!get().apiToken || !get().pdSubdomain) {
+            get().addLog('API Token and PagerDuty Subdomain are missing, cannot fetch escalation policies.', 'warn');
+            set({ isLoadingEscalationPolicies: false });
+            return;
+          }
           const data = await api.getEscalationPolicies(selectedTeamIds);
           set({ escalationPolicies: data.escalation_policies, isLoadingEscalationPolicies: false });
           get().addLog(`Loaded ${data.escalation_policies.length} escalation policies.`);
@@ -169,6 +214,36 @@ export const useStore = create<AppState>()(
       addLog: (msg, type = 'info') => set((state) => ({
         log: [{ ts: new Date().toLocaleTimeString(), type, msg }, ...state.log].slice(0, 800)
       })),
+
+      addIncident: (incident) => set((state) => ({
+        activeIncidents: [incident, ...state.activeIncidents],
+      })),
+
+      updateIncident: (dedupKey, updates) => set((state) => ({
+        activeIncidents: state.activeIncidents.map(inc => 
+          inc.dedupKey === dedupKey ? { ...inc, ...updates } : inc
+        ),
+      })),
+
+      removeIncident: (dedupKey) => set((state) => ({
+        activeIncidents: state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey),
+      })),
+      
+      clearActiveIncidents: () => set({ activeIncidents: [] }),
+
+      addMonitorTrendData: (count) => set((state) => {
+        const nowTs = Date.now();
+        const windowStart = nowTs - TREND_WINDOW_MS;
+        const trimmed = state.monitorTrend.filter((point) => point.ts >= windowStart);
+        return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
+      }),
+
+      evalTick: () => {
+        // This is where periodic evaluation logic (e.g., auto-ack, auto-resolve) will live.
+        // It will iterate through activeIncidents and trigger actions based on their nextEvalAt.
+        // For now, it just adds a log entry to show it's working.
+        get().addLog('Simulation evaluation tick.', 'info');
+      },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),
       
@@ -192,7 +267,7 @@ export const useStore = create<AppState>()(
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
         selectedTeamIds: state.selectedTeamIds,
-        // selectedServiceIds will be derived or managed differently, not directly persisted here.
+        // services will be refetched, but include status needs to be mapped back
       }),
     }
   )
