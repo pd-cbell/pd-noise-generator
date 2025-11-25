@@ -303,11 +303,29 @@ export const useStore = create<AppState>()(
 
       loadImportedCampaigns: async () => {
         try {
-          const bundles = await loadImportedCampaignBundles();
-          set({ importedCampaigns: bundles });
-          get().addLog(`Loaded ${bundles.length} imported campaign bundles.`, 'info');
+          // Fetch from API instead of local file parsing
+          const data = await api.getCampaigns();
+          const campaigns = (data.campaigns || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+            source: c.source,
+            items: c.items.map((i: any) => ({
+              id: i.id,
+              payloadString: JSON.stringify(i.payload), // Convert back to string for compatibility
+              eventAction: i.eventAction,
+              eventType: i.eventType,
+              dedupKey: i.dedupKey,
+              delaySeconds: i.delaySeconds,
+              times: i.repeatCount, // Map DB 'repeatCount' to frontend 'times'
+              intervalSeconds: i.intervalSeconds,
+            }))
+          }));
+          
+          set({ importedCampaigns: campaigns });
+          get().addLog(`Loaded ${campaigns.length} campaigns from database.`, 'info');
         } catch (error: any) {
-          get().addLog(`Failed to load imported campaigns: ${error.message}`, 'error');
+          get().addLog(`Failed to load campaigns: ${error.message}`, 'error');
         }
       },
 

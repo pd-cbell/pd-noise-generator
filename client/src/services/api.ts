@@ -119,4 +119,19 @@ export const api = {
     fetchFromProxy(`/api/profiles/${id}`, {
       method: 'DELETE',
     }),
+
+  // --- Campaigns ---
+  getCampaigns: () => fetchFromProxy('/api/campaigns'),
+
+  createCampaign: (campaign: any) =>
+    fetchFromProxy('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campaign),
+    }),
+
+  deleteCampaign: (id: string) =>
+    fetchFromProxy(`/api/campaigns/${id}`, {
+      method: 'DELETE',
+    }),
 };

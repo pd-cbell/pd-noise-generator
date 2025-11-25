@@ -18,3 +18,29 @@ model Profile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model Campaign {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  source      String?        // Optional: to track origin (e.g., filename)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  items       CampaignItem[]
+}
+
+model CampaignItem {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  order           Int      // To maintain execution sequence
+  
+  payload         Json     // Raw event payload
+  eventAction     String   @default("trigger")
+  eventType       String   @default("alert") // "alert" or "change"
+  dedupKey        String?
+  
+  delaySeconds    Int      @default(0)
+  repeatCount     Int      @default(1) // Renamed from 'times' for clarity
+  intervalSeconds Int      @default(0)
+}
