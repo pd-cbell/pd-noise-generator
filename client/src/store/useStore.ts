@@ -97,6 +97,14 @@ export interface SimulationState {
   activeIncidents: Incident[];
   log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[];
   monitorTrend: { ts: number; count: number }[];
+  totalEvents: number;
+  avgMtta: number; // milliseconds
+  avgMttr: number; // milliseconds
+  _mttaSum: number;
+  _mttaCount: number;
+  _mttrSum: number;
+  _mttrCount: number;
+  
   startSimulation: () => void;
   stopSimulation: () => void;
   addLog: (msg: string, type?: 'info' | 'warn' | 'error') => void;
@@ -223,6 +231,13 @@ export const useStore = create<AppState>()(
       activeIncidents: [],
       log: [],
       monitorTrend: [],
+      totalEvents: 0,
+      avgMtta: 0,
+      avgMttr: 0,
+      _mttaSum: 0,
+      _mttaCount: 0,
+      _mttrSum: 0,
+      _mttrCount: 0,
       
       // --- Profile Slice Defaults ---
       profiles: [],
@@ -461,26 +476,45 @@ export const useStore = create<AppState>()(
 
           // Auto-Resolve Check
           if (inc.resolveAt && now >= inc.resolveAt) {
+            // Update MTTR
+            const timeToResolve = now - inc.startedAt;
+            set((state) => {
+                const newCount = state._mttrCount + 1;
+                const newSum = state._mttrSum + timeToResolve;
+                return { _mttrCount: newCount, _mttrSum: newSum, avgMttr: newSum / newCount };
+            });
+
             removeIncident(inc.dedupKey);
             addLog(`Auto-resolved incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
-            // We should technically call API resolve here too if we want full simulation, 
-            // but removeIncident just clears local. `resolveIncident` action does both.
-            // Let's use resolveIncident if we want to close it on PD side.
-            // However, existing logic just removed it. Let's stick to local clear for auto-resolve to avoid resolving real incidents unwantedly? 
-            // No, "Auto-Resolve" usually means resolving on PD.
-            // I'll call the API resolve.
+            
             try {
-                await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+                if (apiToken) {
+                    // Add resolution note
+                    await api.addNote(inc.incidentId, `Auto-resolved by simulator (Duration: ${((now - inc.startedAt)/1000).toFixed(0)}s)`, { token: apiToken, fromEmail });
+                    // Resolve
+                    await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+                }
             } catch (e) { /* ignore */ }
             continue; // Done with this one
           }
           
           // Auto-Heal Check (Warning only)
           if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
+             // Update MTTR
+             const timeToResolve = now - inc.startedAt;
+             set((state) => {
+                const newCount = state._mttrCount + 1;
+                const newSum = state._mttrSum + timeToResolve;
+                return { _mttrCount: newCount, _mttrSum: newSum, avgMttr: newSum / newCount };
+             });
+
              removeIncident(inc.dedupKey);
              addLog(`Auto-healed warning incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
              try {
-                await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+                if (apiToken) {
+                    await api.addNote(inc.incidentId, "Auto-healed by simulator (Warning suppression)", { token: apiToken, fromEmail });
+                    await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+                }
              } catch (e) { /* ignore */ }
              continue;
           }
@@ -601,6 +635,7 @@ export const useStore = create<AppState>()(
              };
              
              get().addIncident(newIncident);
+             set((state) => ({ totalEvents: state.totalEvents + 1 }));
              get().addLog(`Triggered ${severity} incident for ${service.name}`, 'info');
           }
         } catch (error: any) {
@@ -615,7 +650,21 @@ export const useStore = create<AppState>()(
 
         try {
           await api.manageIncident(incident.incidentId, fromEmail, 'acknowledge', apiToken);
-          updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
+          
+          // Update MTTA
+          const now = Date.now();
+          const timeToAck = now - incident.startedAt;
+          set((state) => {
+            const newCount = state._mttaCount + 1;
+            const newSum = state._mttaSum + timeToAck;
+            return {
+              _mttaCount: newCount,
+              _mttaSum: newSum,
+              avgMtta: newSum / newCount
+            };
+          });
+
+          updateIncident(dedupKey, { acked: true, ackAt: now });
           addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
         } catch (e: any) {
           addLog(`Failed to ack incident: ${e.message}`, 'error');
@@ -629,6 +678,20 @@ export const useStore = create<AppState>()(
 
         try {
           await api.manageIncident(incident.incidentId, fromEmail, 'resolve', apiToken);
+          
+          // Update MTTR
+          const now = Date.now();
+          const timeToResolve = now - incident.startedAt;
+          set((state) => {
+            const newCount = state._mttrCount + 1;
+            const newSum = state._mttrSum + timeToResolve;
+            return {
+              _mttrCount: newCount,
+              _mttrSum: newSum,
+              avgMttr: newSum / newCount
+            };
+          });
+
           removeIncident(dedupKey);
           addLog(`Resolved incident ${incident.incidentId}`, 'info');
         } catch (e: any) {

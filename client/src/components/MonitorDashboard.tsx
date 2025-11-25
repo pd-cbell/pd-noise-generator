@@ -4,7 +4,7 @@ import { Incident } from '../store/useStore';
 import { TrendChart } from './TrendChart';
 
 export const MonitorDashboard: React.FC = () => {
-  const { activeIncidents, log, monitorTrend, clearActiveIncidents, addLog } = useStore();
+  const { activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, avgMtta, avgMttr, totalEvents } = useStore();
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll for log viewer
@@ -16,6 +16,15 @@ export const MonitorDashboard: React.FC = () => {
 
   const activeIncidentCount = activeIncidents.length;
 
+  const formatDuration = (ms: number) => {
+    if (!ms) return '--';
+    const s = Math.round(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rs = s % 60;
+    return `${m}m ${rs}s`;
+  };
+
   return (
     <div className="p-6 h-full flex flex-col gap-6">
       {/* KPI Cards */}
@@ -24,12 +33,18 @@ export const MonitorDashboard: React.FC = () => {
           <p className="text-sm text-gray-500 font-medium">Active Incidents</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{activeIncidentCount}</p>
         </div>
-        {['Avg. MTTA', 'Avg. MTTR', 'Total Events'].map(label => (
-           <div key={label} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-              <p className="text-sm text-gray-500 font-medium">{label}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">--</p>
-           </div>
-        ))}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <p className="text-sm text-gray-500 font-medium">Avg. MTTA</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDuration(avgMtta)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <p className="text-sm text-gray-500 font-medium">Avg. MTTR</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDuration(avgMttr)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <p className="text-sm text-gray-500 font-medium">Total Events</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{totalEvents}</p>
+        </div>
       </div>
 
       {/* Main Content Area */}
