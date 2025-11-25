@@ -127,6 +127,7 @@ export interface ConfigurationState {
   fromEmail: string;
   globalRoutingKey: string;
   selectedTeamIds: string[];
+  selectedEPIds: string[]; // Added for Escalation Policy selection
   
   // Simulation Settings
   ratePerMinute: number;
@@ -154,6 +155,7 @@ export interface ConfigurationState {
   setCredentials: (creds: Partial<ConfigurationState>) => void;
   setSettings: (settings: Partial<ConfigurationState>) => void;
   setSelectedTeamIds: (ids: string[]) => void;
+  setSelectedEPIds: (ids: string[]) => void; // Added for Escalation Policy selection
   setServiceInclude: (serviceId: string, include: boolean) => void;
   fetchTeams: () => Promise<void>;
   fetchServices: () => Promise<void>;
@@ -186,6 +188,7 @@ export const useStore = create<AppState>()(
       fromEmail: '',
       globalRoutingKey: '',
       selectedTeamIds: [],
+      selectedEPIds: [], // Initialized
       
       // Simulation Defaults
       ratePerMinute: 6,
@@ -224,7 +227,7 @@ export const useStore = create<AppState>()(
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
       setSettings: (settings) => set((state) => ({ ...state, ...settings })),
       setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
-      setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
+      setSelectedEPIds: (ids) => set({ selectedEPIds: ids }), // Implemented
       setServiceInclude: (serviceId, include) => set((state) => ({
         services: state.services.map(svc => 
           svc.id === serviceId ? { ...svc, include } : svc

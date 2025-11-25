@@ -382,7 +382,23 @@ export const ConfigurationForm: React.FC = () => {
 
       {/* --- Escalation Policies Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Escalation Policies ({escalationPolicies.length})</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Escalation Policies ({escalationPolicies.length})</h2>
+          {escalationPolicies.length > 0 && (
+            <button 
+              onClick={() => {
+                if (selectedEPIds.length === escalationPolicies.length) {
+                  setSelectedEPIds([]);
+                } else {
+                  setSelectedEPIds(escalationPolicies.map(ep => ep.id));
+                }
+              }}
+              className="text-sm text-green-600 hover:text-green-800 font-medium"
+            >
+              {selectedEPIds.length === escalationPolicies.length ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+        </div>
         {isServicesLoading && (
           <div className="flex items-center justify-center py-4">
             <Loader2 className="animate-spin h-6 w-6 text-green-500" />
@@ -399,8 +415,13 @@ export const ConfigurationForm: React.FC = () => {
                 <input
                   type="checkbox"
                   className="form-checkbox h-4 w-4 text-green-600 rounded"
-                  // No specific 'include' state for EPs in original, so just display for now
-                  readOnly // Make it read-only for now if no interaction is defined
+                  checked={selectedEPIds.includes(ep.id)}
+                  onChange={(e) => {
+                    const newSelectedEPIds = e.target.checked
+                      ? [...selectedEPIds, ep.id]
+                      : selectedEPIds.filter((id) => id !== ep.id);
+                    setSelectedEPIds(newSelectedEPIds);
+                  }}
                 />
                 <span className="ml-2 text-gray-700">{ep.name}</span>
               </label>
