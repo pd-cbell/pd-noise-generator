@@ -13,18 +13,38 @@ export const ConfigurationForm: React.FC = () => {
     selectedTeamIds, setSelectedTeamIds, setServiceInclude
   } = useStore();
 
-  const handleLoadPagerDutyData = async () => {
+  const handleLoadTeams = async () => {
     if (!apiToken || !pdSubdomain) {
-      addLog('API Token and PagerDuty Subdomain are required to load data.', 'warn');
+      addLog('API Token and PagerDuty Subdomain are required to load teams.', 'warn');
       return;
     }
-    // Fetching sequentially to ensure teams are available for services/EPs filtering
     await fetchTeams();
+  };
+
+  const handleLoadServicesAndEPs = async () => {
+    if (selectedTeamIds.length === 0) {
+      addLog('Please select at least one team to load services.', 'warn');
+      return;
+    }
     await fetchServices();
     await fetchEscalationPolicies();
   };
 
-  const isDataLoading = isLoadingTeams || isLoadingServices || isLoadingEscalationPolicies;
+  const handleToggleAllTeams = () => {
+    if (selectedTeamIds.length === teams.length) {
+      setSelectedTeamIds([]);
+    } else {
+      setSelectedTeamIds(teams.map(t => t.id));
+    }
+  };
+
+  const handleToggleAllServices = () => {
+    const allSelected = services.every(s => s.include);
+    services.forEach(s => setServiceInclude(s.id, !allSelected));
+  };
+
+  const isTeamsLoading = isLoadingTeams;
+  const isServicesLoading = isLoadingServices || isLoadingEscalationPolicies;
 
   return (
     <div className="p-6 max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -77,8 +97,8 @@ export const ConfigurationForm: React.FC = () => {
           </div>
           <div className="pt-2">
             <button
-              onClick={handleLoadPagerDutyData}
-              disabled={!apiToken || !pdSubdomain || isDataLoading}
+              onClick={handleLoadTeams}
+              disabled={!apiToken || !pdSubdomain || isTeamsLoading}
               className={`
                 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold text-white transition-colors
                 ${(!apiToken || !pdSubdomain)
@@ -86,8 +106,8 @@ export const ConfigurationForm: React.FC = () => {
                   : 'bg-green-600 hover:bg-green-700'}
               `}
             >
-              {isDataLoading && <Loader2 className="animate-spin h-5 w-5" />}
-              {isDataLoading ? 'Loading Data...' : 'Load PagerDuty Data'}
+              {isTeamsLoading && <Loader2 className="animate-spin h-5 w-5" />}
+              {isTeamsLoading ? 'Loading Teams...' : 'Load Teams'}
             </button>
           </div>
         </div>
@@ -102,18 +122,29 @@ export const ConfigurationForm: React.FC = () => {
 
       {/* --- Teams Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Teams ({teams.length})</h2>
-        {isLoadingTeams && (
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Teams ({teams.length})</h2>
+          {teams.length > 0 && (
+            <button 
+              onClick={handleToggleAllTeams}
+              className="text-sm text-green-600 hover:text-green-800 font-medium"
+            >
+              {selectedTeamIds.length === teams.length ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+        </div>
+        
+        {isTeamsLoading && (
           <div className="flex items-center justify-center py-4">
             <Loader2 className="animate-spin h-6 w-6 text-green-500" />
             <span className="ml-2 text-gray-600">Loading Teams...</span>
           </div>
         )}
-        {!isLoadingTeams && teams.length === 0 && (apiToken && pdSubdomain) && (
-          <p className="text-gray-500">No teams found or loaded. Click "Load PagerDuty Data".</p>
+        {!isTeamsLoading && teams.length === 0 && (apiToken && pdSubdomain) && (
+          <p className="text-gray-500">No teams found or loaded. Click "Load Teams".</p>
         )}
-        {!isLoadingTeams && teams.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2">
+        {!isTeamsLoading && teams.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2 mb-4">
             {teams.map((team) => (
               <label key={team.id} className="inline-flex items-center">
                 <input
@@ -132,21 +163,53 @@ export const ConfigurationForm: React.FC = () => {
             ))}
           </div>
         )}
+        
+        {teams.length > 0 && (
+          <div className="pt-4 border-t border-gray-100">
+             <button
+              onClick={handleLoadServicesAndEPs}
+              disabled={selectedTeamIds.length === 0 || isServicesLoading}
+              className={`
+                flex items-center justify-center gap-2 px-6 py-2 rounded-md font-semibold text-white transition-colors
+                ${(selectedTeamIds.length === 0)
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-indigo-600 hover:bg-indigo-700'}
+              `}
+            >
+              {isServicesLoading && <Loader2 className="animate-spin h-5 w-5" />}
+              {isServicesLoading ? 'Loading Services & Policies...' : 'Load Services & Policies'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* --- Services Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Services ({services.length})</h2>
-        {isLoadingServices && (
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">Services ({services.length})</h2>
+          {services.length > 0 && (
+            <button 
+              onClick={handleToggleAllServices}
+              className="text-sm text-green-600 hover:text-green-800 font-medium"
+            >
+              {services.every(s => s.include) ? 'Deselect All' : 'Select All'}
+            </button>
+          )}
+        </div>
+
+        {isServicesLoading && (
           <div className="flex items-center justify-center py-4">
             <Loader2 className="animate-spin h-6 w-6 text-green-500" />
             <span className="ml-2 text-gray-600">Loading Services...</span>
           </div>
         )}
-        {!isLoadingServices && services.length === 0 && (apiToken && pdSubdomain) && (
-          <p className="text-gray-500">No services found or loaded. Select teams and click "Load PagerDuty Data".</p>
+        {!isServicesLoading && services.length === 0 && selectedTeamIds.length > 0 && (
+          <p className="text-gray-500">No services found. Click "Load Services & Policies".</p>
         )}
-        {!isLoadingServices && services.length > 0 && (
+        {!isServicesLoading && services.length === 0 && selectedTeamIds.length === 0 && (
+          <p className="text-gray-500">Select teams above to load services.</p>
+        )}
+        {!isServicesLoading && services.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2">
             {services.map((service) => (
               <label key={service.id} className="inline-flex items-center">
@@ -166,16 +229,16 @@ export const ConfigurationForm: React.FC = () => {
       {/* --- Escalation Policies Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Escalation Policies ({escalationPolicies.length})</h2>
-        {isLoadingEscalationPolicies && (
+        {isServicesLoading && (
           <div className="flex items-center justify-center py-4">
             <Loader2 className="animate-spin h-6 w-6 text-green-500" />
             <span className="ml-2 text-gray-600">Loading Escalation Policies...</span>
           </div>
         )}
-        {!isLoadingEscalationPolicies && escalationPolicies.length === 0 && (apiToken && pdSubdomain) && (
-          <p className="text-gray-500">No escalation policies found or loaded. Click "Load PagerDuty Data".</p>
+        {!isServicesLoading && escalationPolicies.length === 0 && selectedTeamIds.length > 0 && (
+          <p className="text-gray-500">No escalation policies found. Click "Load Services & Policies".</p>
         )}
-        {!isLoadingEscalationPolicies && escalationPolicies.length > 0 && (
+        {!isServicesLoading && escalationPolicies.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2">
             {escalationPolicies.map((ep) => (
               <label key={ep.id} className="inline-flex items-center">
