@@ -118,9 +118,9 @@ export const ConfigurationForm: React.FC = () => {
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Simulation Settings</h2>
         
         <div className="space-y-6">
-          {/* Throughput & Timing */}
+          {/* Global Throughput & Timing */}
           <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Throughput & Timing</h3>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Throughput</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="ratePerMinute" className="block text-sm font-medium text-gray-700 mb-1">Incident Rate (per minute)</label>
@@ -133,62 +133,19 @@ export const ConfigurationForm: React.FC = () => {
                   onChange={(e) => useStore.getState().setSettings({ ratePerMinute: Number(e.target.value) })}
                 />
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label htmlFor="autoResolveMin" className="block text-sm font-medium text-gray-700 mb-1">Min Resolve (sec)</label>
-                  <input
-                    id="autoResolveMin"
-                    type="number"
-                    min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-                    value={useStore(state => state.autoResolveMinSec)}
-                    onChange={(e) => useStore.getState().setSettings({ autoResolveMinSec: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor="autoResolveMax" className="block text-sm font-medium text-gray-700 mb-1">Max Resolve (sec)</label>
-                  <input
-                    id="autoResolveMax"
-                    type="number"
-                    min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-                    value={useStore(state => state.autoResolveMaxSec)}
-                    onChange={(e) => useStore.getState().setSettings({ autoResolveMaxSec: Number(e.target.value) })}
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Auto-Action & Healing */}
+          {/* Per-Severity Settings Tabs */}
+          <div className="md:col-span-2">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Per-Severity Behavior</h3>
+            <SeverityTabs />
+          </div>
+
+          {/* Auto-Action & Healing (Global) */}
           <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Auto-Action & Healing</h3>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Auto-Action & Healing</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="noteProbability" className="block text-sm font-medium text-gray-700 mb-1">Note Probability (0-1)</label>
-                <input
-                  id="noteProbability"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-                  value={useStore(state => state.noteProbability)}
-                  onChange={(e) => useStore.getState().setSettings({ noteProbability: Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <label htmlFor="responderProb" className="block text-sm font-medium text-gray-700 mb-1">Responder Prob. Multiplier</label>
-                <input
-                  id="responderProb"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-                  value={useStore(state => state.responderProbabilityMultiplier)}
-                  onChange={(e) => useStore.getState().setSettings({ responderProbabilityMultiplier: Number(e.target.value) })}
-                />
-              </div>
               <div className="md:col-span-2 flex items-center gap-4 p-3 bg-gray-50 rounded-md border border-gray-200">
                 <div className="flex items-center">
                   <input
@@ -274,6 +231,124 @@ export const ConfigurationForm: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+
+// Severity-specific configuration tabs
+const SeverityTabs: React.FC = () => {
+  const [activeTab, setActiveTab] = React.useState<IncidentSeverity>('warning');
+  const { severityConfigs, setSeverityConfig } = useStore();
+
+  const severities: IncidentSeverity[] = ['warning', 'error', 'critical']; // Info is suppressed
+
+  const currentConfig = severityConfigs[activeTab];
+
+  const handleSliderChange = (setting: keyof SeverityConfig, value: number) => {
+    setSeverityConfig(activeTab, { [setting]: value });
+  };
+
+  const handleMinMaxChange = (minOrMax: 'minAckSec' | 'maxAckSec' | 'minResolveSec' | 'maxResolveSec', value: number) => {
+    setSeverityConfig(activeTab, { [minOrMax]: value });
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="flex border-b border-gray-200">
+        {severities.map(sev => (
+          <button
+            key={sev}
+            onClick={() => setActiveTab(sev)}
+            className={`
+              py-2 px-4 text-sm font-medium capitalize -mb-px border-b-2
+              ${activeTab === sev
+                ? 'border-green-600 text-green-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+            `}
+          >
+            {sev}
+          </button>
+        ))}
+      </div>
+
+      <div className="pt-4 space-y-4">
+        {/* Time to Ack */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Time to Acknowledge (seconds)</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={currentConfig.minAckSec}
+              onChange={(e) => handleMinMaxChange('minAckSec', Number(e.target.value))}
+            />
+            <span className="self-center text-gray-500">-</span>
+            <input
+              type="number"
+              min="0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={currentConfig.maxAckSec}
+              onChange={(e) => handleMinMaxChange('maxAckSec', Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        {/* Time to Resolve */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Time to Resolve (seconds)</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min="0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={currentConfig.minResolveSec}
+              onChange={(e) => handleMinMaxChange('minResolveSec', Number(e.target.value))}
+            />
+            <span className="self-center text-gray-500">-</span>
+            <input
+              type="number"
+              min="0"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              value={currentConfig.maxResolveSec}
+              onChange={(e) => handleMinMaxChange('maxResolveSec', Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        {/* Note Probability */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Note Probability (0-1)</label>
+          <input
+            type="number"
+            step="0.05"
+            min="0"
+            max="1"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            value={currentConfig.noteProbability}
+            onChange={(e) => handleSliderChange('noteProbability', Number(e.target.value))}
+          />
+        </div>
+
+        {/* Responder Probability */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Responder Probability (0-1)</label>
+          <input
+            type="number"
+            step="0.05"
+            min="0"
+            max="1"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            value={currentConfig.responderProbability}
+            onChange={(e) => handleSliderChange('responderProbability', Number(e.target.value))}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
       {/* --- Teams Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">

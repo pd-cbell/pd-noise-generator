@@ -56,10 +56,11 @@ export interface Incident {
   mapAttempts: number;
   nextEvalAt: number;
   ackAt: number | null;
+  autoAckAt: number | null; // New: For time-based auto-ack
   acked: boolean;
   firstResponderAt: number | null;
   responderRequested: boolean;
-  lastNoteAt: number | null; // Added
+  lastNoteAt: number | null;
   severity: IncidentSeverity;
   resolveAt: number | null;
   autoHealAt: number | null;
@@ -134,24 +135,56 @@ export const DEFAULT_AUTO_HEAL_CONFIG: AutoHealConfig = {
   maxDelaySec: 90,
 };
 
+export interface SeverityConfig {
+  minAckSec: number;
+  maxAckSec: number;
+  minResolveSec: number;
+  maxResolveSec: number;
+  noteProbability: number;
+  responderProbability: number;
+}
+
+export const DEFAULT_SEVERITY_CONFIGS: Record<IncidentSeverity, SeverityConfig> = {
+  info: { // Info is suppressed, but included for completeness
+    minAckSec: 0, maxAckSec: 0,
+    minResolveSec: 0, maxResolveSec: 0,
+    noteProbability: 0, responderProbability: 0,
+  },
+  warning: {
+    minAckSec: 30, maxAckSec: 120,
+    minResolveSec: 90, maxResolveSec: 240,
+    noteProbability: 0.2, responderProbability: 0.1,
+  },
+  error: {
+    minAckSec: 15, maxAckSec: 90,
+    minResolveSec: 60, maxResolveSec: 180,
+    noteProbability: 0.3, responderProbability: 0.2,
+  },
+  critical: {
+    minAckSec: 5, maxAckSec: 60,
+    minResolveSec: 30, maxResolveSec: 120,
+    noteProbability: 0.4, responderProbability: 0.3,
+  },
+};
+
+
 export interface ConfigurationState {
   apiToken: string;
   pdSubdomain: string;
   fromEmail: string;
   globalRoutingKey: string;
   selectedTeamIds: string[];
-  selectedEPIds: string[]; // Added for Escalation Policy selection
+  selectedEPIds: string[];
   
-  // Simulation Settings
+  // Global Simulation Settings
   ratePerMinute: number;
-  noteProbability: number;
-  responderProbabilityMultiplier: number;
-  autoResolveMinSec: number;
-  autoResolveMaxSec: number;
   severityWeights: { info: number; warning: number; error: number; critical: number };
   autoHealConfig: AutoHealConfig;
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
+
+  // Per-Severity Simulation Settings
+  severityConfigs: Record<IncidentSeverity, SeverityConfig>;
 
   teams: Team[];
   services: Service[];
@@ -167,8 +200,9 @@ export interface ConfigurationState {
 
   setCredentials: (creds: Partial<ConfigurationState>) => void;
   setSettings: (settings: Partial<ConfigurationState>) => void;
+  setSeverityConfig: (severity: IncidentSeverity, config: Partial<SeverityConfig>) => void; // New action
   setSelectedTeamIds: (ids: string[]) => void;
-  setSelectedEPIds: (ids: string[]) => void; // Added for Escalation Policy selection
+  setSelectedEPIds: (ids: string[]) => void;
   setServiceInclude: (serviceId: string, include: boolean) => void;
   fetchTeams: () => Promise<void>;
   fetchServices: () => Promise<void>;
@@ -177,7 +211,7 @@ export interface ConfigurationState {
   setCampaignConfig: (config: Partial<CampaignConfig>) => void;
   loadPayloadAdapters: () => void;
   loadImportedCampaigns: () => Promise<void>;
-  triggerImportedCampaign: (campaign: ImportedCampaign) => Promise<void>; // Will be async
+  triggerImportedCampaign: (campaign: ImportedCampaign) => Promise<void>;
   setLastChangeEvent: (event: { ts: number; serviceName: string; failureSummary: string } | null) => void;
 }
 
@@ -201,18 +235,17 @@ export const useStore = create<AppState>()(
       fromEmail: '',
       globalRoutingKey: '',
       selectedTeamIds: [],
-      selectedEPIds: [], // Initialized
+      selectedEPIds: [],
       
-      // Simulation Defaults
+      // Global Simulation Defaults
       ratePerMinute: 6,
-      noteProbability: 0.5,
-      responderProbabilityMultiplier: 1.0,
-      autoResolveMinSec: 90,
-      autoResolveMaxSec: 240,
       severityWeights: { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 },
       autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
       resumeExistingEnabled: true,
       sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
+
+      // Per-Severity Simulation Defaults
+      severityConfigs: DEFAULT_SEVERITY_CONFIGS,
 
       teams: [],
       services: [],
@@ -242,10 +275,17 @@ export const useStore = create<AppState>()(
       // --- Profile Slice Defaults ---
       profiles: [],
       activeProfileId: null,
+      isLoadingProfiles: false,
 
       // --- Actions ---
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
       setSettings: (settings) => set((state) => ({ ...state, ...settings })),
+      setSeverityConfig: (severity, config) => set((state) => ({
+        severityConfigs: {
+          ...state.severityConfigs,
+          [severity]: { ...state.severityConfigs[severity], ...config }
+        }
+      })),
       setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
       setSelectedEPIds: (ids) => set({ selectedEPIds: ids }),
       setServiceInclude: (serviceId, include) => set((state) => ({
@@ -445,7 +485,7 @@ export const useStore = create<AppState>()(
 
       evalTick: async () => {
         // Periodic lifecycle updates (auto-resolve, etc.)
-        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, noteProbability, responderProbabilityMultiplier, ackIncident } = get();
+        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident } = get();
         const now = Date.now();
 
         // Iterate sequentially or parallel - parallel is fine for resolution checks
@@ -473,6 +513,9 @@ export const useStore = create<AppState>()(
         for (const inc of activeIncidents) {
           // Skip if no ID yet
           if (!inc.incidentId) continue;
+          
+          const config = severityConfigs[inc.severity];
+          if (!config) continue; // Should not happen
 
           // Auto-Resolve Check
           if (inc.resolveAt && now >= inc.resolveAt) {
@@ -522,17 +565,13 @@ export const useStore = create<AppState>()(
           // --- Stochastic Noise ---
           
           // Auto-Ack
-          // If not acked and time > nextEval, small chance to ack
-          if (!inc.acked && now > inc.nextEvalAt) {
-             // 5% chance per tick to ack if "overdue"
-             if (Math.random() < 0.05) {
-                 ackIncident(inc.dedupKey);
-             }
+          if (!inc.acked && inc.autoAckAt && now >= inc.autoAckAt) {
+            ackIncident(inc.dedupKey); // Uses the action that handles metrics/API
           }
 
           // Add Notes
           // Check if enough time passed since last note (e.g. 30s)
-          if ((!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < (0.05 * noteProbability)) {
+          if ((!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < config.noteProbability) {
              const note = inc.noteContext[Math.floor(Math.random() * inc.noteContext.length)] || "Investigating...";
              try {
                  await api.addNote(inc.incidentId, note, { token: apiToken, fromEmail });
@@ -540,11 +579,20 @@ export const useStore = create<AppState>()(
                  addLog(`Added note to ${inc.incidentId}: "${note}"`, 'info');
              } catch (e) { /* ignore */ }
           }
+          
+          // Request Responder (if not yet requested)
+          if (!inc.responderRequested && Math.random() < config.responderProbability) {
+            // Need to get a valid user ID from `fromEmail` to request a responder.
+            // This is a more complex flow, requiring `api.resolveUser` and then `api.requestResponder`.
+            // For now, mark as requested and log. Full implementation later.
+            updateIncident(inc.dedupKey, { responderRequested: true });
+            addLog(`Simulating responder request for ${inc.incidentId}`, 'info');
+          }
         }
       },
 
       triggerIncident: async (service: Service, failureContext: any = null) => {
-        const { sourceMix, globalRoutingKey, severityWeights, autoResolveMinSec, autoResolveMaxSec, autoHealConfig } = get();
+        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs } = get();
         
         if (!globalRoutingKey) {
           get().addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
@@ -603,9 +651,13 @@ export const useStore = create<AppState>()(
           const response = await api.triggerEvent(eventBody);
           
           if (severity !== 'info') {
-             // Calculate timings
+             // Calculate timings based on severity config
              const now = Date.now();
-             const resolveDelay = (Math.min(autoResolveMinSec, autoResolveMaxSec) + Math.random() * Math.abs(autoResolveMaxSec - autoResolveMinSec)) * 1000;
+             const config = severityConfigs[severity]; // Get severity-specific config
+             
+             const ackDelay = (Math.min(config.minAckSec, config.maxAckSec) + Math.random() * Math.abs(config.maxAckSec - config.minAckSec)) * 1000;
+             const resolveDelay = (Math.min(config.minResolveSec, config.maxResolveSec) + Math.random() * Math.abs(config.maxResolveSec - config.minResolveSec)) * 1000;
+             
              const shouldAutoHeal = severity === 'warning' && autoHealConfig.enabled && Math.random() < autoHealConfig.warningProbability;
              const autoHealDelay = shouldAutoHeal 
                 ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000 
@@ -618,11 +670,13 @@ export const useStore = create<AppState>()(
                startedAt: now,
                incidentId: null, // Would need another API call or webhook to get the real ID
                mapAttempts: 0,
-               nextEvalAt: now + 10000,
+               nextEvalAt: now + 10000, // Re-evaluate every 10s for now
                ackAt: null,
+               autoAckAt: now + ackDelay, // Schedule auto-ack
                acked: false,
                firstResponderAt: null,
                responderRequested: false,
+               lastNoteAt: null,
                severity,
                resolveAt: now + resolveDelay,
                autoHealAt: autoHealDelay ? now + autoHealDelay : null,
@@ -766,14 +820,13 @@ export const useStore = create<AppState>()(
         
         // Persist Simulation Settings
         ratePerMinute: state.ratePerMinute,
-        noteProbability: state.noteProbability,
-        responderProbabilityMultiplier: state.responderProbabilityMultiplier,
-        autoResolveMinSec: state.autoResolveMinSec,
-        autoResolveMaxSec: state.autoResolveMaxSec,
         severityWeights: state.severityWeights,
         autoHealConfig: state.autoHealConfig,
         resumeExistingEnabled: state.resumeExistingEnabled,
         sourceMix: state.sourceMix,
+
+        // Persist Per-Severity Simulation Settings
+        severityConfigs: state.severityConfigs,
       }),
     }
   )
