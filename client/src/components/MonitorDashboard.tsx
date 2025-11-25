@@ -7,7 +7,7 @@ import { Activity, PauseCircle, PlayCircle, StopCircle, Zap } from 'lucide-react
 export const MonitorDashboard: React.FC = () => {
   const { 
     activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, 
-    avgMtta, avgMttr, totalEvents, apiRpm,
+    avgMtta, avgMttr, totalEvents, apiRpm, apiCallsLast60s,
     isGenerating, isManaging
   } = useStore();
   
