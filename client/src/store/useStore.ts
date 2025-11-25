@@ -194,9 +194,7 @@ export interface ConfigurationState {
   autoHealConfig: AutoHealConfig;
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
-  enableEventBursts: boolean; // New: Enable sending multiple events for one incident
-  burstCount: number;         // New: Number of events to send in a burst
-  burstIntervalSec: number;   // New: Interval between burst events
+  burstProbability: number; // New: Probability (0-1) that an incident will have bursts
 
   // Per-Severity Simulation Settings
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
@@ -261,9 +259,7 @@ export const useStore = create<AppState>()(
       autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
       resumeExistingEnabled: true,
       sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
-      enableEventBursts: false,
-      burstCount: 5,
-      burstIntervalSec: 10,
+      burstProbability: 0.5,
 
       // Per-Severity Simulation Defaults
       severityConfigs: DEFAULT_SEVERITY_CONFIGS,
@@ -708,7 +704,7 @@ export const useStore = create<AppState>()(
       },
 
       triggerIncident: async (service: Service, failureContext: any = null) => {
-        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs, enableEventBursts, burstCount, burstIntervalSec } = get();
+        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs, burstProbability } = get();
         
         if (!globalRoutingKey) {
           get().addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
@@ -810,25 +806,42 @@ export const useStore = create<AppState>()(
              get().addLog(`Triggered ${severity} incident for ${service.name}`, 'info');
           }
 
-          // --- Event Burst Logic ---
-          if (enableEventBursts && burstCount > 1 && severity !== 'info') {
-            for (let i = 1; i < burstCount; i++) {
-              await new Promise(r => setTimeout(r, burstIntervalSec * 1000)); // Delay between bursts
-              const burstEventBody = {
-                ...baseEventBody,
-                dedup_key: incidentDedupKey, // Use the same dedup_key
-                payload: {
-                    ...baseEventBody.payload,
-                    custom_details: {
-                        ...baseEventBody.payload.custom_details,
-                        burst_event_num: i + 1, // Add burst counter to custom details
-                    }
-                }
-              };
-              await api.triggerEvent(burstEventBody);
-              set((state) => ({ totalEvents: state.totalEvents + 1 }));
-              get().addLog(`Sent burst event ${i + 1}/${burstCount} for incident ${incidentDedupKey.substring(0, 8)}...`, 'info');
-            }
+          // --- Event Burst Logic (Async & Random) ---
+          if (severity !== 'info' && Math.random() < burstProbability) {
+             // Randomize burst count (2 to 7)
+             const burstCount = Math.floor(Math.random() * (7 - 2 + 1)) + 2;
+             
+             // Non-blocking loop
+             (async () => {
+                 for (let i = 1; i < burstCount; i++) {
+                     // Randomize interval (10s to 40s)
+                     const intervalMs = (Math.floor(Math.random() * (40 - 10 + 1)) + 10) * 1000;
+                     await new Promise(r => setTimeout(r, intervalMs));
+                     
+                     // Check liveness: if resolved/removed, stop bursting
+                     const currentIncidents = get().activeIncidents;
+                     if (!currentIncidents.some(inc => inc.dedupKey === incidentDedupKey)) {
+                         return;
+                     }
+
+                     const burstEventBody = {
+                        ...baseEventBody,
+                        dedup_key: incidentDedupKey,
+                        payload: {
+                            ...baseEventBody.payload,
+                            custom_details: {
+                                ...baseEventBody.payload.custom_details,
+                                burst_event_num: i + 1,
+                            }
+                        }
+                      };
+                      
+                      // Fire burst event
+                      await api.triggerEvent(burstEventBody).catch(e => console.error("Burst event failed", e));
+                      set((state) => ({ totalEvents: state.totalEvents + 1 }));
+                      get().addLog(`Sent burst event ${i + 1}/${burstCount} for ${incidentDedupKey.substring(0, 8)}`, 'info');
+                 }
+             })();
           }
 
         } catch (error: any) {
@@ -1024,9 +1037,7 @@ export const useStore = create<AppState>()(
         autoHealConfig: state.autoHealConfig,
         resumeExistingEnabled: state.resumeExistingEnabled,
         sourceMix: state.sourceMix,
-        enableEventBursts: state.enableEventBursts,
-        burstCount: state.burstCount,
-        burstIntervalSec: state.burstIntervalSec,
+        burstProbability: state.burstProbability,
 
         // Persist Per-Severity Simulation Settings
         severityConfigs: state.severityConfigs,
