@@ -322,28 +322,60 @@ export const useStore = create<AppState>()(
 
       setActiveProfile: (id) => set({ activeProfileId: id }),
       
-      saveProfile: (profile) => set((state) => {
-        const exists = state.profiles.find(p => p.id === profile.id);
-        const newProfiles = exists 
-          ? state.profiles.map(p => p.id === profile.id ? profile : p)
-          : [...state.profiles, profile];
-        return { profiles: newProfiles, activeProfileId: profile.id };
-      }),
+      saveProfile: async (profileData) => {
+        const { profiles } = get();
+        const existing = profileData.id ? profiles.find(p => p.id === profileData.id) : null;
+        
+        try {
+          let savedProfile;
+          // Pass only the data the API expects (name, description, settings)
+          const apiPayload = {
+            name: profileData.name,
+            description: profileData.description,
+            settings: profileData.settings,
+          };
+
+          if (existing) {
+            savedProfile = await api.updateProfile(existing.id, apiPayload);
+            get().addLog(`Profile "${savedProfile.name}" updated.`, 'info');
+          } else {
+            savedProfile = await api.createProfile(apiPayload);
+            get().addLog(`Profile "${savedProfile.name}" created.`, 'info');
+          }
+          
+          // Refresh list
+          await get().fetchProfiles();
+          set({ activeProfileId: savedProfile.id });
+        } catch (error: any) {
+          get().addLog(`Failed to save profile: ${error.message}`, 'error');
+        }
+      },
+
+      deleteProfile: async (id) => {
+        try {
+          await api.deleteProfile(id);
+          get().addLog('Profile deleted.', 'info');
+          await get().fetchProfiles();
+          if (get().activeProfileId === id) {
+            set({ activeProfileId: null });
+          }
+        } catch (error: any) {
+          get().addLog(`Failed to delete profile: ${error.message}`, 'error');
+        }
+      },
     }),
     {
       name: 'pdns-storage', // Unique name for localStorage key
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Persist only configuration and profiles, not runtime state like logs or activeIncidents
-        profiles: state.profiles,
-        activeProfileId: state.activeProfileId,
+        // Persist only configuration that isn't stored in the DB profile
         apiToken: state.apiToken,
         pdSubdomain: state.pdSubdomain,
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
         selectedTeamIds: state.selectedTeamIds,
-        campaignConfig: state.campaignConfig, // Persist campaign config
-        // services will be refetched, but include status needs to be mapped back
+        activeProfileId: state.activeProfileId, // Keep track of which profile is active locally
+        campaignConfig: state.campaignConfig,
       }),
     }
   )

@@ -73,4 +73,26 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ note: { content } }),
     }),
+
+  // --- Profiles ---
+  getProfiles: () => fetchFromProxy('/api/profiles'),
+
+  createProfile: (profile: { name: string; description?: string; settings: any }) =>
+    fetchFromProxy('/api/profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    }),
+
+  updateProfile: (id: string, profile: { name?: string; description?: string; settings?: any }) =>
+    fetchFromProxy(`/api/profiles/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    }),
+
+  deleteProfile: (id: string) =>
+    fetchFromProxy(`/api/profiles/${id}`, {
+      method: 'DELETE',
+    }),
 };
