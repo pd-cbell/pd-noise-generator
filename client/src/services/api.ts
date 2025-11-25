@@ -129,6 +129,19 @@ export const api = {
       method: 'DELETE',
     }),
 
+  // --- Incidents ---
+  manageIncident: (incidentId: string, fromEmail: string, action: 'acknowledge' | 'resolve', token: string) => 
+    fetchFromProxy(`/proxy/incidents/${incidentId}`, {
+      method: 'PUT',
+      headers: getHeaders({ token, fromEmail }),
+      body: JSON.stringify({
+        incident: {
+          type: 'incident',
+          status: action === 'acknowledge' ? 'acknowledged' : 'resolved'
+        }
+      })
+    }),
+
   // --- Campaigns ---
   getCampaigns: () => fetchFromProxy('/api/campaigns'),
 

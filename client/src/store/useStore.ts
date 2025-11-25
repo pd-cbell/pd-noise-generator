@@ -59,6 +59,7 @@ export interface Incident {
   acked: boolean;
   firstResponderAt: number | null;
   responderRequested: boolean;
+  lastNoteAt: number | null; // Added
   severity: IncidentSeverity;
   resolveAt: number | null;
   autoHealAt: number | null;
@@ -106,6 +107,9 @@ export interface SimulationState {
   addMonitorTrendData: (count: number) => void;
   evalTick: () => void; // Periodic evaluation for incidents
   triggerIncident: (service: Service, failureContext?: any) => Promise<void>;
+  ackIncident: (dedupKey: string) => Promise<void>;
+  resolveIncident: (dedupKey: string) => Promise<void>;
+  resolveAllIncidents: () => Promise<void>;
 }
 
 export interface AutoHealConfig {
@@ -426,7 +430,7 @@ export const useStore = create<AppState>()(
 
       evalTick: async () => {
         // Periodic lifecycle updates (auto-resolve, etc.)
-        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail } = get();
+        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, noteProbability, responderProbabilityMultiplier, ackIncident } = get();
         const now = Date.now();
 
         // Iterate sequentially or parallel - parallel is fine for resolution checks
@@ -450,23 +454,59 @@ export const useStore = create<AppState>()(
            }
         }
 
-        // Sync checks for auto-resolve/heal
-        activeIncidents.forEach(inc => {
+        // Sync checks for auto-resolve/heal and noise generation
+        for (const inc of activeIncidents) {
+          // Skip if no ID yet
+          if (!inc.incidentId) continue;
+
           // Auto-Resolve Check
           if (inc.resolveAt && now >= inc.resolveAt) {
-            // In a real implementation, this would call the PD API to resolve
-            // For now, we just remove it from the active list to simulate resolution
             removeIncident(inc.dedupKey);
             addLog(`Auto-resolved incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
+            // We should technically call API resolve here too if we want full simulation, 
+            // but removeIncident just clears local. `resolveIncident` action does both.
+            // Let's use resolveIncident if we want to close it on PD side.
+            // However, existing logic just removed it. Let's stick to local clear for auto-resolve to avoid resolving real incidents unwantedly? 
+            // No, "Auto-Resolve" usually means resolving on PD.
+            // I'll call the API resolve.
+            try {
+                await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+            } catch (e) { /* ignore */ }
+            continue; // Done with this one
           }
           
           // Auto-Heal Check (Warning only)
           if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
-             // Send OK event logic would go here
              removeIncident(inc.dedupKey);
              addLog(`Auto-healed warning incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
+             try {
+                await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
+             } catch (e) { /* ignore */ }
+             continue;
           }
-        });
+
+          // --- Stochastic Noise ---
+          
+          // Auto-Ack
+          // If not acked and time > nextEval, small chance to ack
+          if (!inc.acked && now > inc.nextEvalAt) {
+             // 5% chance per tick to ack if "overdue"
+             if (Math.random() < 0.05) {
+                 ackIncident(inc.dedupKey);
+             }
+          }
+
+          // Add Notes
+          // Check if enough time passed since last note (e.g. 30s)
+          if ((!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < (0.05 * noteProbability)) {
+             const note = inc.noteContext[Math.floor(Math.random() * inc.noteContext.length)] || "Investigating...";
+             try {
+                 await api.addNote(inc.incidentId, note, { token: apiToken, fromEmail });
+                 updateIncident(inc.dedupKey, { lastNoteAt: now });
+                 addLog(`Added note to ${inc.incidentId}: "${note}"`, 'info');
+             } catch (e) { /* ignore */ }
+          }
+        }
       },
 
       triggerIncident: async (service: Service, failureContext: any = null) => {
@@ -566,6 +606,41 @@ export const useStore = create<AppState>()(
         } catch (error: any) {
           get().addLog(`Failed to trigger incident: ${error.message}`, 'error');
         }
+      },
+
+      ackIncident: async (dedupKey: string) => {
+        const { activeIncidents, apiToken, fromEmail, updateIncident, addLog } = get();
+        const incident = activeIncidents.find(i => i.dedupKey === dedupKey);
+        if (!incident || !incident.incidentId || !apiToken) return;
+
+        try {
+          await api.manageIncident(incident.incidentId, fromEmail, 'acknowledge', apiToken);
+          updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
+          addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
+        } catch (e: any) {
+          addLog(`Failed to ack incident: ${e.message}`, 'error');
+        }
+      },
+
+      resolveIncident: async (dedupKey: string) => {
+        const { activeIncidents, apiToken, fromEmail, removeIncident, addLog } = get();
+        const incident = activeIncidents.find(i => i.dedupKey === dedupKey);
+        if (!incident || !incident.incidentId || !apiToken) return;
+
+        try {
+          await api.manageIncident(incident.incidentId, fromEmail, 'resolve', apiToken);
+          removeIncident(dedupKey);
+          addLog(`Resolved incident ${incident.incidentId}`, 'info');
+        } catch (e: any) {
+          addLog(`Failed to resolve incident: ${e.message}`, 'error');
+        }
+      },
+
+      resolveAllIncidents: async () => {
+        const { activeIncidents, resolveIncident, addLog } = get();
+        addLog(`Resolving all ${activeIncidents.length} active incidents...`, 'info');
+        // Resolve in parallel
+        await Promise.all(activeIncidents.map(inc => resolveIncident(inc.dedupKey)));
       },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),

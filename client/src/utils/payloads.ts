@@ -171,7 +171,7 @@ export function createPayloadGenerator(registry: ReturnType<typeof createPayload
   };
 }
 
-// --- Built-in Payload Adapters (from App.jsx) ---
+// --- Built-in Payload Adapters (Enhanced) ---
 const BUILTIN_PAYLOAD_ADAPTERS: PayloadAdapter[] = [
   {
     id: "cloudwatch",
@@ -188,17 +188,31 @@ const BUILTIN_PAYLOAD_ADAPTERS: PayloadAdapter[] = [
       const region = randomFrom(this.regions as string[]);
       const threshold = (50 + Math.random() * 40).toFixed(0);
       const value = (Number(threshold) + Math.random() * 30).toFixed(1);
+      const accountId = Math.floor(100000000000 + Math.random() * 900000000000);
+      
       return {
         summary: `[CloudWatch] ${metric} breaching on ${svc.name}`,
         source: `cw.${region}.amazonaws.com`,
         component: svc.name,
+        severity: 'critical',
         custom_details: {
-          metric, region,
+          metric,
+          region,
           threshold,
           observed_value: value,
+          aws_account: accountId,
+          namespace: "AWS/EC2",
+          period: 300,
+          statistic: "Average",
           failure_id: failureMeta?.id,
           failure_summary: failureMeta?.summary,
         },
+        links: [
+          {
+            href: `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#alarmsV2:`,
+            text: "View Alarm in Console"
+          }
+        ],
         noteTemplates: [
           `CloudWatch alarm ${metric} breached ${value}/${threshold} in ${region}`,
           `Auto-remediation evaluating ASG scaling for ${svc.name}`,
@@ -216,17 +230,40 @@ const BUILTIN_PAYLOAD_ADAPTERS: PayloadAdapter[] = [
     defaultWeight: 0.25,
     build(svc, failureMeta) {
       const monitor = randomFrom(["request.error_rate", "latency.p95", "kafka.lag", "db.connections"]);
+      const monitorId = Math.floor(Math.random() * 9000000);
+      
       return {
         summary: `[Datadog] ${monitor} abnormal for ${svc.name}`,
-        source: `datadoghq.com/monitors/${Math.floor(Math.random() * 90000)}`,
+        source: `datadoghq.com`,
         component: svc.name,
+        severity: 'error',
         custom_details: {
-          monitor,
+          monitor_name: monitor,
+          monitor_id: monitorId,
           status: randomFrom(["Alert", "Warn"]),
-          tags: ["team:sre", `service:${svc.name}`],
+          tags: ["team:sre", `service:${svc.name}`, "env:production"],
+          evaluation_window: "last_5m",
+          value: (Math.random() * 10).toFixed(2),
           failure_id: failureMeta?.id,
           failure_summary: failureMeta?.summary,
         },
+        links: [
+          {
+            href: `https://app.datadoghq.com/monitors/${monitorId}`,
+            text: "View Monitor"
+          },
+          {
+            href: `https://app.datadoghq.com/dashboard/lists`,
+            text: "Related Dashboard"
+          }
+        ],
+        images: [
+          {
+            src: "https://chart.googleapis.com/chart?chs=400x250&cht=lc&chd=t:10,20,30,25,40,50,45,60,70&chco=FF0000&chls=2,4,0&chxt=x,y&chg=20,20&chtt=Metric+Trend",
+            href: `https://app.datadoghq.com/monitors/${monitorId}`,
+            alt: "Snapshot"
+          }
+        ],
         noteTemplates: [
           `Datadog monitor ${monitor} firing with correlated tags`,
           "Reviewing APM traces for shared dependency impact",
@@ -244,16 +281,29 @@ const BUILTIN_PAYLOAD_ADAPTERS: PayloadAdapter[] = [
     defaultWeight: 0.25,
     build(svc, failureMeta) {
       const transaction = randomFrom(["/api/login", "/jobs/process", "/graphql/query", "/internal/reconcile"]);
+      const violationId = Math.floor(Math.random() * 500000);
+      
       return {
         summary: `[NewRelic] Slow transaction ${transaction} on ${svc.name}`,
-        source: "newrelic.com/apm",
+        source: "newrelic.com",
         component: transaction,
+        severity: 'warning',
         custom_details: {
           transaction,
-          apdex: (0.3 + Math.random() * 0.3).toFixed(2),
+          apdex_score: (0.3 + Math.random() * 0.3).toFixed(2),
+          throughput_rpm: Math.floor(Math.random() * 5000),
+          violation_id: violationId,
+          policy_name: "Golden Signals Policy",
+          condition_name: "Response Time > 500ms",
           failure_id: failureMeta?.id,
           failure_summary: failureMeta?.summary,
         },
+        links: [
+          {
+            href: `https://one.newrelic.com/launcher/nrai.launcher?pane=eyJuZXJkbGV0SWQiOiJhbGVydGluZy11aS1jbGFzc2ljLmluY2lkZW50cyJ9&sidebars=eyJuZXJkbGV0SWQiOiJhbGVydGluZy11aS1jbGFzc2ljLmluY2lkZW50LWRldGFpbHMiLCJpbmNpZGVudElkIjoi${violationId}In0=`,
+            text: "Open in New Relic"
+          }
+        ],
         noteTemplates: [
           `NR traces show ${transaction} allocating extra memory`,
           "Comparing golden signals against previous deploy",
@@ -271,16 +321,29 @@ const BUILTIN_PAYLOAD_ADAPTERS: PayloadAdapter[] = [
     defaultWeight: 0.25,
     build(svc, failureMeta) {
       const signature = randomFrom(["NullPointerException", "TimeoutError", "ConnectionReset", "CircuitBreakerOpen"]);
+      const searchId = `sid_${Math.random().toString(36).substr(2, 8)}`;
+      
       return {
         summary: `[Splunk] ${signature} pattern detected in ${svc.name}`,
         source: "splunkcloud.com",
         component: svc.name,
+        severity: 'error',
         custom_details: {
           signature,
-          sample_log: `${signature}: ${svc.name} failing to reach upstream`,
+          search_name: "Production Error Patterns",
+          search_id: searchId,
+          log_level: "ERROR",
+          sample_log: `[${new Date().toISOString()}] [thread-main] ERROR com.example.${svc.name.replace(/\s+/g, '')}: ${signature}: ${svc.name} failing to reach upstream`,
+          host: randomSource(),
           failure_id: failureMeta?.id,
           failure_summary: failureMeta?.summary,
         },
+        links: [
+          {
+            href: `https://splunk.example.com/en-US/app/search/search?q=search%20index%3Dprod%20service%3D${encodeURIComponent(svc.name)}%20${signature}`,
+            text: "View Search Results"
+          }
+        ],
         noteTemplates: [
           `Splunk saved search matched ${signature}`,
           "Investigating correlated log spikes across services",

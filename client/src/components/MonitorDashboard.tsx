@@ -38,20 +38,30 @@ export const MonitorDashboard: React.FC = () => {
          <div className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-semibold text-gray-800">Live Incident Feed</h3>
-              <button
-                onClick={() => {
-                  clearActiveIncidents();
-                  addLog('Cleared all active incidents locally.', 'info');
-                }}
-                disabled={!activeIncidentCount}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  !activeIncidentCount
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    : 'bg-red-500 text-white hover:bg-red-600'
-                }`}
-              >
-                Clear List
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={clearActiveIncidents}
+                  disabled={!activeIncidentCount}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    !activeIncidentCount
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  Clear List (Local)
+                </button>
+                <button
+                  onClick={() => useStore.getState().resolveAllIncidents()}
+                  disabled={!activeIncidentCount}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                    !activeIncidentCount
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  Resolve All (API)
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-auto">
               {activeIncidents.length === 0 ? (
@@ -73,12 +83,21 @@ export const MonitorDashboard: React.FC = () => {
                     {activeIncidents.map((incident: Incident) => (
                       <tr key={incident.dedupKey}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{incident.serviceName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{incident.severity}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            incident.severity === 'critical' ? 'bg-red-100 text-red-800' :
+                            incident.severity === 'error' ? 'bg-orange-100 text-orange-800' :
+                            incident.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {incident.severity}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {incident.incidentId ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <a href={`https://${useStore.getState().pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                               {incident.incidentId}
-                            </span>
+                            </a>
                           ) : (
                             <span className="text-gray-400 italic">Pending...</span>
                           )}
@@ -86,14 +105,16 @@ export const MonitorDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(incident.startedAt).toLocaleTimeString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                            <button 
-                             disabled={!incident.incidentId}
-                             className="text-indigo-600 hover:text-indigo-900 mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                             onClick={() => useStore.getState().ackIncident(incident.dedupKey)}
+                             disabled={!incident.incidentId || incident.acked}
+                             className={`mr-3 font-medium ${!incident.incidentId || incident.acked ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-900'}`}
                            >
-                             Ack
+                             {incident.acked ? 'Acked' : 'Ack'}
                            </button>
                            <button 
+                             onClick={() => useStore.getState().resolveIncident(incident.dedupKey)}
                              disabled={!incident.incidentId}
-                             className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                             className={`font-medium ${!incident.incidentId ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
                            >
                              Resolve
                            </button>
