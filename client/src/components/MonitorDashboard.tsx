@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { Incident } from '../store/useStore'; 
+import { TrendChart } from './TrendChart';
 
 export const MonitorDashboard: React.FC = () => {
   const { activeIncidents, log, monitorTrend, clearActiveIncidents, addLog } = useStore();
@@ -119,12 +120,10 @@ export const MonitorDashboard: React.FC = () => {
                  </p>
                ))}
             </div>
-             {/* Trend Chart Placeholder */}
-             <div className="p-3 bg-gray-800 border-t border-gray-700">
-                 <h3 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider mt-2">Active Incidents Trend (last 15m)</h3>
-                 <pre className="text-[10px] text-gray-600 overflow-x-auto">
-                   {JSON.stringify(monitorTrend.map(d => ({t: new Date(d.ts).toLocaleTimeString(), c: d.count})), null, 2)}
-                 </pre>
+             {/* Trend Chart */}
+             <div className="p-3 bg-gray-800 border-t border-gray-700 h-32">
+                 <h3 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider mb-2">Active Incidents Trend (last 15m)</h3>
+                 <TrendChart data={monitorTrend} height={80} />
              </div>
          </div>
       </div>
