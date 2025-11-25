@@ -465,17 +465,74 @@ export const useStore = create<AppState>()(
       },
 
       triggerImportedCampaign: async (campaign: ImportedCampaign) => {
-        get().addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps).`, 'info');
-        // This is a complex async operation involving timers and API calls.
-        // For now, we'll just log and let the CampaignManager handle the actual dispatch.
-        // Detailed implementation to follow when integrating with CampaignManager.
-        for (const item of campaign.items) {
-          // Simulate delays
-          await new Promise(resolve => setTimeout(resolve, item.delaySeconds * 1000));
-          get().addLog(`  -> Dispatching step ${item.id} (type: ${item.eventType}).`, 'info');
-          // In real implementation, this would call api.triggerEvent or api.triggerChangeEvent
+        const { addLog, apiToken, globalRoutingKey, campaignConfig, setLastChangeEvent } = get();
+        addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps).`, 'info');
+
+        if (!apiToken) {
+          addLog('API Token is missing. Cannot trigger campaign.', 'error');
+          return;
         }
-        get().addLog(`Campaign "${campaign.name}" dispatched.`, 'info');
+        if (!globalRoutingKey && campaign.items.some(item => item.eventType === 'incident')) {
+          addLog('Global Routing Key is missing. Cannot trigger incident events in campaign.', 'error');
+          return;
+        }
+        if (!campaignConfig.importedChangeRoutingKey && campaign.items.some(item => item.eventType === 'change')) {
+          addLog('Imported Change Routing Key is missing. Cannot trigger change events in campaign.', 'error');
+          return;
+        }
+
+        for (const item of campaign.items) {
+          await new Promise(resolve => setTimeout(resolve, item.delaySeconds * 1000)); // Delay between campaign items
+
+          const fireEvent = async () => {
+            try {
+              const payload = JSON.parse(item.payloadString);
+              let response;
+
+              if (item.eventType === 'incident') {
+                const eventBody = {
+                  routing_key: globalRoutingKey,
+                  event_action: item.eventAction || 'trigger',
+                  dedup_key: item.dedupKey || crypto.randomUUID(),
+                  payload: {
+                    ...payload,
+                    source: payload.source || 'pd-noise-simulator-campaign',
+                  }
+                };
+                response = await api.triggerEvent(eventBody);
+                addLog(`  -> Fired incident event for "${item.id}" (dedup: ${eventBody.dedup_key.substring(0,8)}).`, 'info');
+              } else if (item.eventType === 'change') {
+                const changeEventBody = {
+                  routing_key: campaignConfig.importedChangeRoutingKey,
+                  payload: {
+                    ...payload,
+                    source: payload.source || 'pd-noise-simulator-campaign',
+                  }
+                };
+                response = await api.triggerChangeEvent(changeEventBody);
+                addLog(`  -> Fired change event for "${item.id}".`, 'info');
+                // Store last change event for potential display on monitor
+                setLastChangeEvent({ 
+                  ts: Date.now(), 
+                  serviceName: payload.custom_details?.service_name || "Unknown", 
+                  failureSummary: payload.summary || payload.custom_details?.summary || "Campaign Change" 
+                });
+              }
+              set((state) => ({ totalEvents: state.totalEvents + 1 }));
+            } catch (error: any) {
+              addLog(`  -> Failed to fire event for "${item.id}": ${error.message}`, 'error');
+            }
+          };
+
+          // Fire the event/change event 'times' number of times with 'intervalSeconds' delay
+          for (let i = 0; i < (item.times || 1); i++) {
+            if (i > 0) {
+              await new Promise(resolve => setTimeout(resolve, item.intervalSeconds * 1000));
+            }
+            await fireEvent();
+          }
+        }
+        addLog(`Campaign "${campaign.name}" dispatched.`, 'info');
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
       

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useStore, Service } from '../store/useStore';
 import { Loader2 } from 'lucide-react'; // For loading indicators
 
-export const CampaignManager: React.FC = () => {
+export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | 'new') => void }> = ({ onEditCampaign }) => {
   const {
     campaignConfig, setCampaignConfig,
     payloadAdapters, loadPayloadAdapters,
@@ -165,7 +165,15 @@ export const CampaignManager: React.FC = () => {
 
       {/* Imported Campaigns */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Imported Campaign Bundles ({importedCampaigns.length})</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">Imported Campaign Bundles ({importedCampaigns.length})</h3>
+          <button
+            onClick={() => onEditCampaign('new')}
+            className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
+          >
+            Create New Campaign
+          </button>
+        </div>
         {importedCampaigns.length === 0 ? (
           <p className="text-gray-500">No imported campaigns found in /templates folder.</p>
         ) : (
@@ -176,12 +184,20 @@ export const CampaignManager: React.FC = () => {
                   <p className="font-medium text-gray-900">{campaign.name}</p>
                   <p className="text-xs text-gray-600">{campaign.description} (from {campaign.source})</p>
                 </div>
-                <button
-                  onClick={() => triggerImportedCampaign(campaign)}
-                  className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition-colors"
-                >
-                  Trigger Now
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onEditCampaign(campaign.id)}
+                    className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => triggerImportedCampaign(campaign)}
+                    className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition-colors"
+                  >
+                    Trigger Now
+                  </button>
+                </div>
               </div>
             ))}
           </div>
