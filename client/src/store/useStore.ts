@@ -686,7 +686,7 @@ export const useStore = create<AppState>()(
           }
 
           // Add Notes
-          if ((!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < config.noteProbability) {
+          if (inc.acked && (!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < config.noteProbability) {
              const note = inc.noteContext[Math.floor(Math.random() * inc.noteContext.length)] || "Investigating...";
              try {
                  await api.addNote(inc.incidentId, note, { token: apiToken, fromEmail });
@@ -696,7 +696,7 @@ export const useStore = create<AppState>()(
           }
           
           // Request Responder
-          if (!inc.responderRequested && Math.random() < config.responderProbability) {
+          if (inc.acked && !inc.responderRequested && Math.random() < config.responderProbability) {
             updateIncident(inc.dedupKey, { responderRequested: true });
             addLog(`Simulating responder request for ${inc.incidentId}`, 'info');
           }
