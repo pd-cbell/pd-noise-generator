@@ -1,3 +1,37 @@
+# Session Notes (v1.5 Migration)
+
+**Date:** 2025-11-25
+**Facilitator:** Gemini Agent
+
+## Workstream v1.5 – Modernization & Monitor Enhancements
+
+### Goals
+- Resolve React/JSX stability issues in the Configuration form.
+- Enhance the Monitor Dashboard to provide deeper insights (Severity breakdown, API usage).
+- Improve simulation control with a true "Pause" state.
+
+### Completed Tasks
+- **ConfigurationForm Fix:** Completely rewrote `ConfigurationForm.tsx` to resolve "Adjacent JSX elements" errors and correctly integrate the `SeverityTabs` component.
+- **Simulation Control:** 
+    - Refactored `useStore` state to split `isRunning` into `isGenerating` (creates new incidents) and `isManaging` (handles lifecycle).
+    - Implemented **Pause** functionality: stops generation but continues auto-ack/resolve logic.
+    - Updated `Header.tsx` with a contextual button group (Start / Pause / Resume / Stop) and status indicators.
+    - Updated `SimulationEngine.ts` and `useSimulation.ts` to respect the new control flags.
+- **Metric Enhancements:**
+    - Refactored `avgMtta` and `avgMttr` in `useStore` to be maps (`Record<IncidentSeverity | 'global', number>`).
+    - Updated `ackIncident` and `resolveIncident` actions to calculate and store these granular metrics.
+    - Added **API RPM** tracking: `api.ts` hooks into `useStore` to count requests; `evalTick` calculates rolling rate.
+- **Dashboard UI:**
+    - Redesigned `MonitorDashboard.tsx` KPI section.
+    - Now displays: Active Incidents/Total Events, API RPM/Status, MTTA Breakdown (Global/Warn/Err/Crit), and MTTR Breakdown.
+
+### Next Steps
+- **Campaigns:** Fully integrate the `CampaignManager` UI with the new PostgreSQL-backed `importedCampaigns` state.
+- **Testing:** Add unit tests for `useStore` logic, particularly the metric calculations and simulation state machine.
+- **Cleanup:** Remove legacy `App.jsx` and root-level `server.js` once fully confirmed stable.
+
+---
+
 # Session Notes (v1.3 / v1.3.1 Work In Progress)
 
 **Date:** 2025-11-07  
