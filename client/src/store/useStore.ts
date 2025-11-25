@@ -424,11 +424,33 @@ export const useStore = create<AppState>()(
         return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
       }),
 
-      evalTick: () => {
+      evalTick: async () => {
         // Periodic lifecycle updates (auto-resolve, etc.)
-        const { activeIncidents, updateIncident, removeIncident, addLog } = get();
+        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail } = get();
         const now = Date.now();
 
+        // Iterate sequentially or parallel - parallel is fine for resolution checks
+        // We need to be careful not to modify state inside the loop in a way that breaks iteration if we were removing,
+        // but we are using `forEach` on a snapshot or `map`. 
+        // Since `evalTick` is called frequently, we should limit how many API calls we make.
+        // Let's resolve only one incident per tick to avoid rate limits if many are pending.
+        
+        const pendingResolution = activeIncidents.find(inc => !inc.incidentId && (now - inc.startedAt > 4000) && (now - inc.startedAt < 60000)); // Check only recent ones, stop checking after 1m
+        
+        if (pendingResolution && apiToken) {
+           try {
+             const response = await api.getIncidentByDedupKey(pendingResolution.dedupKey, { token: apiToken, fromEmail });
+             const match = response.incidents?.[0];
+             if (match) {
+               updateIncident(pendingResolution.dedupKey, { incidentId: match.id });
+               // Optional: log success? "Mapped dedupKey to ID..."
+             }
+           } catch (e) {
+             // Ignore
+           }
+        }
+
+        // Sync checks for auto-resolve/heal
         activeIncidents.forEach(inc => {
           // Auto-Resolve Check
           if (inc.resolveAt && now >= inc.resolveAt) {
@@ -461,6 +483,13 @@ export const useStore = create<AppState>()(
           failure: failureContext,
           sourceMix,
         });
+
+        // Force service name match for routing
+        if (payload.custom_details) {
+          payload.custom_details.service_name = service.name;
+        } else {
+          payload.custom_details = { service_name: service.name };
+        }
 
         // Determine Severity
         const severity = (() => {

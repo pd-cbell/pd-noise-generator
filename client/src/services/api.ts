@@ -65,6 +65,15 @@ export const api = {
     });
   },
 
+  getIncidentByDedupKey: (dedupKey: string, config?: ApiConfig) => {
+    const params = new URLSearchParams({
+      incident_key: dedupKey,
+    });
+    return fetchFromProxy(`/proxy/incidents?${params.toString()}`, {
+      headers: getHeaders(config)
+    });
+  },
+
   triggerEvent: (body: any) => 
     fetchFromProxy('/proxy/events', {
       method: 'POST',

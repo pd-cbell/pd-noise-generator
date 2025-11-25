@@ -1,9 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { Incident } from '../store/useStore'; // Import Incident type for better typing
+import { Incident } from '../store/useStore'; 
 
 export const MonitorDashboard: React.FC = () => {
-  const { activeIncidents, log, monitorTrend, clearActiveIncidents, isRunning, addLog } = useStore();
+  const { activeIncidents, log, monitorTrend, clearActiveIncidents, addLog } = useStore();
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll for log viewer
@@ -23,7 +23,6 @@ export const MonitorDashboard: React.FC = () => {
           <p className="text-sm text-gray-500 font-medium">Active Incidents</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{activeIncidentCount}</p>
         </div>
-        {/* Other KPIs will be populated as logic is migrated */}
         {['Avg. MTTA', 'Avg. MTTR', 'Total Events'].map(label => (
            <div key={label} className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
               <p className="text-sm text-gray-500 font-medium">{label}</p>
@@ -41,7 +40,7 @@ export const MonitorDashboard: React.FC = () => {
               <button
                 onClick={() => {
                   clearActiveIncidents();
-                  addLog('Cleared all active incidents.', 'info');
+                  addLog('Cleared all active incidents locally.', 'info');
                 }}
                 disabled={!activeIncidentCount}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -50,7 +49,7 @@ export const MonitorDashboard: React.FC = () => {
                     : 'bg-red-500 text-white hover:bg-red-600'
                 }`}
               >
-                Resolve All
+                Clear List
               </button>
             </div>
             <div className="flex-1 overflow-auto">
@@ -64,8 +63,9 @@ export const MonitorDashboard: React.FC = () => {
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dedupe Key</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Incident ID</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started At</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -73,8 +73,30 @@ export const MonitorDashboard: React.FC = () => {
                       <tr key={incident.dedupKey}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{incident.serviceName}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">{incident.severity}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{incident.dedupKey.substring(0, 8)}...</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {incident.incidentId ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {incident.incidentId}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic">Pending...</span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(incident.startedAt).toLocaleTimeString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                           <button 
+                             disabled={!incident.incidentId}
+                             className="text-indigo-600 hover:text-indigo-900 mr-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
+                             Ack
+                           </button>
+                           <button 
+                             disabled={!incident.incidentId}
+                             className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                           >
+                             Resolve
+                           </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -109,3 +131,4 @@ export const MonitorDashboard: React.FC = () => {
     </div>
   );
 };
+
