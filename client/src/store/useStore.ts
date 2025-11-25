@@ -1,6 +1,10 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; // Import the API service
+import { 
+  PayloadAdapter, ImportedCampaign, CampaignItem,
+  payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
+} from '../utils/payloads';
 
 // --- Types ---
 export interface Profile {
@@ -66,6 +70,27 @@ export interface Incident {
   syncedFromPd: boolean;
 }
 
+export interface CampaignConfig {
+  enabled: boolean;
+  probability: number;
+  maxRelated: number;
+  windowSec: number;
+  templateMode: 'all' | 'custom';
+  templateIds: string[];
+  importedChangeRoutingKey: string;
+}
+
+const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
+  enabled: true,
+  probability: 0.35,
+  maxRelated: 3,
+  windowSec: 300,
+  templateMode: 'all',
+  templateIds: [],
+  importedChangeRoutingKey: "",
+};
+
+
 export interface SimulationState {
   isRunning: boolean;
   activeIncidents: Incident[];
@@ -96,12 +121,23 @@ export interface ConfigurationState {
   isLoadingServices: boolean;
   isLoadingEscalationPolicies: boolean;
 
+  campaignConfig: CampaignConfig;
+  payloadAdapters: PayloadAdapter[];
+  importedCampaigns: ImportedCampaign[];
+  lastChangeEvent: { ts: number; serviceName: string; failureSummary: string } | null;
+
   setCredentials: (creds: Partial<ConfigurationState>) => void;
   setSelectedTeamIds: (ids: string[]) => void;
   setServiceInclude: (serviceId: string, include: boolean) => void;
   fetchTeams: () => Promise<void>;
   fetchServices: () => Promise<void>;
   fetchEscalationPolicies: () => Promise<void>;
+
+  setCampaignConfig: (config: Partial<CampaignConfig>) => void;
+  loadPayloadAdapters: () => void;
+  loadImportedCampaigns: () => Promise<void>;
+  triggerImportedCampaign: (campaign: ImportedCampaign) => Promise<void>; // Will be async
+  setLastChangeEvent: (event: { ts: number; serviceName: string; failureSummary: string } | null) => void;
 }
 
 // --- Store Definition ---
@@ -131,6 +167,11 @@ export const useStore = create<AppState>()(
       isLoadingTeams: false,
       isLoadingServices: false,
       isLoadingEscalationPolicies: false,
+
+      campaignConfig: DEFAULT_CAMPAIGN_CONFIG,
+      payloadAdapters: [],
+      importedCampaigns: [],
+      lastChangeEvent: null,
       
       // --- Simulation Slice Defaults ---
       isRunning: false,
@@ -207,6 +248,40 @@ export const useStore = create<AppState>()(
           set({ isLoadingEscalationPolicies: false });
         }
       },
+
+      setCampaignConfig: (config) => set((state) => ({ 
+        campaignConfig: { ...state.campaignConfig, ...config } 
+      })),
+
+      loadPayloadAdapters: () => {
+        set({ payloadAdapters: payloadRegistry.list() });
+        get().addLog(`Loaded ${payloadRegistry.list().length} payload adapters.`, 'info');
+      },
+
+      loadImportedCampaigns: async () => {
+        try {
+          const bundles = await loadImportedCampaignBundles();
+          set({ importedCampaigns: bundles });
+          get().addLog(`Loaded ${bundles.length} imported campaign bundles.`, 'info');
+        } catch (error: any) {
+          get().addLog(`Failed to load imported campaigns: ${error.message}`, 'error');
+        }
+      },
+
+      triggerImportedCampaign: async (campaign: ImportedCampaign) => {
+        get().addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps).`, 'info');
+        // This is a complex async operation involving timers and API calls.
+        // For now, we'll just log and let the CampaignManager handle the actual dispatch.
+        // Detailed implementation to follow when integrating with CampaignManager.
+        for (const item of campaign.items) {
+          // Simulate delays
+          await new Promise(resolve => setTimeout(resolve, item.delaySeconds * 1000));
+          get().addLog(`  -> Dispatching step ${item.id} (type: ${item.eventType}).`, 'info');
+          // In real implementation, this would call api.triggerEvent or api.triggerChangeEvent
+        }
+        get().addLog(`Campaign "${campaign.name}" dispatched.`, 'info');
+      },
+      setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
       
       startSimulation: () => set({ isRunning: true }),
       stopSimulation: () => set({ isRunning: false }),
@@ -267,6 +342,7 @@ export const useStore = create<AppState>()(
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
         selectedTeamIds: state.selectedTeamIds,
+        campaignConfig: state.campaignConfig, // Persist campaign config
         // services will be refetched, but include status needs to be mapped back
       }),
     }
