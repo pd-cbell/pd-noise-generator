@@ -305,6 +305,8 @@ export const useStore = create<AppState>()(
         try {
           // Fetch from API instead of local file parsing
           const data = await api.getCampaigns();
+          console.log('[Store] Raw campaign data from API:', data); // Debug log
+
           const campaigns = (data.campaigns || []).map((c: any) => ({
             id: c.id,
             name: c.name,
@@ -322,9 +324,11 @@ export const useStore = create<AppState>()(
             }))
           }));
           
+          console.log('[Store] Mapped campaigns:', campaigns); // Debug log
           set({ importedCampaigns: campaigns });
           get().addLog(`Loaded ${campaigns.length} campaigns from database.`, 'info');
         } catch (error: any) {
+          console.error('[Store] Failed to load campaigns:', error); // Debug log
           get().addLog(`Failed to load campaigns: ${error.message}`, 'error');
         }
       },

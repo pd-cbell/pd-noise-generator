@@ -10,8 +10,10 @@ router.get('/', async (req, res) => {
       include: { items: { orderBy: { order: 'asc' } } },
       orderBy: { createdAt: 'desc' },
     });
+    console.log(`[API] Fetched ${campaigns.length} campaigns from DB.`);
     res.json({ campaigns });
   } catch (error: any) {
+    console.error('[API] Failed to fetch campaigns:', error);
     res.status(500).json({ error: 'Failed to fetch campaigns', details: error.message });
   }
 });
