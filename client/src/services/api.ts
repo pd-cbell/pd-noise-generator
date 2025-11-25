@@ -2,45 +2,67 @@ export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   const res = await fetch(url, options);
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.message || `API Error: ${res.statusText}`);
+    throw new Error(errorData.error || errorData.message || `API Error: ${res.statusText}`);
   }
   return res.json();
 }
 
+export interface ApiConfig {
+  token?: string;
+  fromEmail?: string;
+}
+
+function getHeaders(config?: ApiConfig) {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (config?.token) {
+    headers['Authorization'] = `Token token=${config.token}`;
+  }
+  if (config?.fromEmail) {
+    headers['From'] = config.fromEmail;
+  }
+  return headers;
+}
+
 export const api = {
-  getTeams: (limit = 100, offset = 0) => 
-    fetchFromProxy(`/proxy/teams?limit=${limit}&offset=${offset}`),
+  getTeams: (config?: ApiConfig, limit = 100, offset = 0) => 
+    fetchFromProxy(`/proxy/teams?limit=${limit}&offset=${offset}`, {
+      headers: getHeaders(config)
+    }),
     
-  getServices: (teamIds: string[] = [], limit = 100, offset = 0) => {
+  getServices: (teamIds: string[] = [], config?: ApiConfig, limit = 100, offset = 0) => {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
       'include[]': 'integrations',
     });
     teamIds.forEach(id => params.append('team_ids[]', id));
-    // Manually appending 'include[]' again if needed, or trusting URLSearchParams
-    // Note: 'include[]' key multiple times is standard for Rails/PD APIs
-    return fetchFromProxy(`/proxy/services?${params.toString()}&include[]=teams`);
+    return fetchFromProxy(`/proxy/services?${params.toString()}&include[]=teams`, {
+      headers: getHeaders(config)
+    });
   },
 
-  getEscalationPolicies: (teamIds: string[] = [], limit = 100, offset = 0) => {
+  getEscalationPolicies: (teamIds: string[] = [], config?: ApiConfig, limit = 100, offset = 0) => {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
       'include[]': 'teams',
     });
     teamIds.forEach(id => params.append('team_ids[]', id));
-    return fetchFromProxy(`/proxy/escalation_policies?${params.toString()}`);
+    return fetchFromProxy(`/proxy/escalation_policies?${params.toString()}`, {
+      headers: getHeaders(config)
+    });
   },
 
-  getIncidents: (serviceIds: string[], statuses = ['triggered', 'acknowledged'], limit = 100, offset = 0) => {
+  getIncidents: (serviceIds: string[], config?: ApiConfig, statuses = ['triggered', 'acknowledged'], limit = 100, offset = 0) => {
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
     serviceIds.forEach(id => params.append('service_ids[]', id));
     statuses.forEach(s => params.append('statuses[]', s));
-    return fetchFromProxy(`/proxy/incidents?${params.toString()}`);
+    return fetchFromProxy(`/proxy/incidents?${params.toString()}`, {
+      headers: getHeaders(config)
+    });
   },
 
   triggerEvent: (body: any) => 
@@ -57,20 +79,22 @@ export const api = {
       body: JSON.stringify(body),
     }),
     
-  resolveUser: (email: string) => 
-    fetchFromProxy(`/proxy/users?query=${encodeURIComponent(email)}&limit=25`),
+  resolveUser: (email: string, config?: ApiConfig) => 
+    fetchFromProxy(`/proxy/users?query=${encodeURIComponent(email)}&limit=25`, {
+      headers: getHeaders(config)
+    }),
 
-  requestResponder: (incidentId: string, body: any) =>
+  requestResponder: (incidentId: string, body: any, config?: ApiConfig) =>
     fetchFromProxy(`/proxy/incidents/${incidentId}/responder_requests`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(config),
       body: JSON.stringify(body),
     }),
 
-  addNote: (incidentId: string, content: string) =>
+  addNote: (incidentId: string, content: string, config?: ApiConfig) =>
     fetchFromProxy(`/proxy/incidents/${incidentId}/notes`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(config),
       body: JSON.stringify({ note: { content } }),
     }),
 

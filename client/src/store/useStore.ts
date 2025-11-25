@@ -195,7 +195,8 @@ export const useStore = create<AppState>()(
       fetchTeams: async () => {
         set({ isLoadingTeams: true });
         try {
-          const data = await api.getTeams();
+          const { apiToken, fromEmail } = get();
+          const data = await api.getTeams({ token: apiToken, fromEmail });
           // Filter out hidden teams from original App.jsx logic
           const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
           const visibleTeams = data.teams.filter((team: Team) => !HIDDEN_TEAM_PREFIXES.some((prefix) => team.name?.startsWith(prefix)));
@@ -210,14 +211,14 @@ export const useStore = create<AppState>()(
       fetchServices: async () => {
         set({ isLoadingServices: true });
         try {
-          const { selectedTeamIds, services: currentServices } = get();
-          // Ensure apiToken and pdSubdomain are set before making the call
-          if (!get().apiToken || !get().pdSubdomain) {
-            get().addLog('API Token and PagerDuty Subdomain are missing, cannot fetch services.', 'warn');
+          const { selectedTeamIds, services: currentServices, apiToken, fromEmail } = get();
+          // Ensure apiToken is set before making the call
+          if (!apiToken) {
+            get().addLog('API Token is missing, cannot fetch services.', 'warn');
             set({ isLoadingServices: false });
             return;
           }
-          const data = await api.getServices(selectedTeamIds);
+          const data = await api.getServices(selectedTeamIds, { token: apiToken, fromEmail });
           const servicesWithInclude = data.services.map((svc: Service) => ({
             ...svc,
             include: currentServices.find(s => s.id === svc.id)?.include || false, // Preserve existing 'include' status
@@ -233,14 +234,14 @@ export const useStore = create<AppState>()(
       fetchEscalationPolicies: async () => {
         set({ isLoadingEscalationPolicies: true });
         try {
-          const { selectedTeamIds } = get();
-          // Ensure apiToken and pdSubdomain are set before making the call
-          if (!get().apiToken || !get().pdSubdomain) {
-            get().addLog('API Token and PagerDuty Subdomain are missing, cannot fetch escalation policies.', 'warn');
+          const { selectedTeamIds, apiToken, fromEmail } = get();
+          // Ensure apiToken is set before making the call
+          if (!apiToken) {
+            get().addLog('API Token is missing, cannot fetch escalation policies.', 'warn');
             set({ isLoadingEscalationPolicies: false });
             return;
           }
-          const data = await api.getEscalationPolicies(selectedTeamIds);
+          const data = await api.getEscalationPolicies(selectedTeamIds, { token: apiToken, fromEmail });
           set({ escalationPolicies: data.escalation_policies, isLoadingEscalationPolicies: false });
           get().addLog(`Loaded ${data.escalation_policies.length} escalation policies.`);
         } catch (error: any) {
