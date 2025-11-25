@@ -1,13 +1,44 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { api } from '../services/api'; // Import the API service
 
-// --- Types (to be moved to a separate types file later) ---
+// --- Types ---
 export interface Profile {
   id: string;
   name: string;
   description: string;
-  settings: any; // We will strictly type this progressively
+  settings: any; // Will be strictly typed progressively
   updatedAt: number;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  html_url?: string;
+}
+
+export interface ServiceIntegration {
+  id: string;
+  name: string;
+  integrationKey: string;
+  vendor?: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  html_url?: string;
+  teams: { id: string; name: string }[];
+  changeIntegrations: ServiceIntegration[];
+  include: boolean; // For local selection in UI
+}
+
+export interface EscalationPolicy {
+  id: string;
+  name: string;
+  html_url?: string;
+  num_levels?: number;
+  teams: { id: string; name: string }[];
 }
 
 export interface SimulationState {
@@ -27,8 +58,20 @@ export interface ConfigurationState {
   globalRoutingKey: string;
   selectedTeamIds: string[];
   selectedServiceIds: string[]; // Mapped from includeMap
-  // ... other config fields
+  
+  teams: Team[];
+  services: Service[];
+  escalationPolicies: EscalationPolicy[];
+  isLoadingTeams: boolean;
+  isLoadingServices: boolean;
+  isLoadingEscalationPolicies: boolean;
+
   setCredentials: (creds: Partial<ConfigurationState>) => void;
+  setSelectedTeamIds: (ids: string[]) => void;
+  setServiceInclude: (serviceId: string, include: boolean) => void;
+  fetchTeams: () => Promise<void>;
+  fetchServices: () => Promise<void>;
+  fetchEscalationPolicies: () => Promise<void>;
 }
 
 // --- Store Definition ---
@@ -50,6 +93,12 @@ export const useStore = create<AppState>()(
       globalRoutingKey: '',
       selectedTeamIds: [],
       selectedServiceIds: [],
+      teams: [],
+      services: [],
+      escalationPolicies: [],
+      isLoadingTeams: false,
+      isLoadingServices: false,
+      isLoadingEscalationPolicies: false,
       
       // --- Simulation Slice Defaults ---
       isRunning: false,
@@ -62,6 +111,57 @@ export const useStore = create<AppState>()(
 
       // --- Actions ---
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
+      setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
+      setServiceInclude: (serviceId, include) => set((state) => ({
+        services: state.services.map(svc => 
+          svc.id === serviceId ? { ...svc, include } : svc
+        )
+      })),
+
+      fetchTeams: async () => {
+        set({ isLoadingTeams: true });
+        try {
+          const data = await api.getTeams();
+          // Filter out hidden teams from original App.jsx logic
+          const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
+          const visibleTeams = data.teams.filter((team: Team) => !HIDDEN_TEAM_PREFIXES.some((prefix) => team.name?.startsWith(prefix)));
+          set({ teams: visibleTeams, isLoadingTeams: false });
+          get().addLog(`Loaded ${visibleTeams.length} teams.`);
+        } catch (error: any) {
+          get().addLog(`Failed to load teams: ${error.message}`, 'error');
+          set({ isLoadingTeams: false });
+        }
+      },
+
+      fetchServices: async () => {
+        set({ isLoadingServices: true });
+        try {
+          const { selectedTeamIds, services: currentServices } = get();
+          const data = await api.getServices(selectedTeamIds);
+          const servicesWithInclude = data.services.map((svc: Service) => ({
+            ...svc,
+            include: currentServices.find(s => s.id === svc.id)?.include || false, // Preserve existing 'include' status
+          }));
+          set({ services: servicesWithInclude, isLoadingServices: false });
+          get().addLog(`Loaded ${servicesWithInclude.length} services.`);
+        } catch (error: any) {
+          get().addLog(`Failed to load services: ${error.message}`, 'error');
+          set({ isLoadingServices: false });
+        }
+      },
+
+      fetchEscalationPolicies: async () => {
+        set({ isLoadingEscalationPolicies: true });
+        try {
+          const { selectedTeamIds } = get();
+          const data = await api.getEscalationPolicies(selectedTeamIds);
+          set({ escalationPolicies: data.escalation_policies, isLoadingEscalationPolicies: false });
+          get().addLog(`Loaded ${data.escalation_policies.length} escalation policies.`);
+        } catch (error: any) {
+          get().addLog(`Failed to load escalation policies: ${error.message}`, 'error');
+          set({ isLoadingEscalationPolicies: false });
+        }
+      },
       
       startSimulation: () => set({ isRunning: true }),
       stopSimulation: () => set({ isRunning: false }),
@@ -92,6 +192,7 @@ export const useStore = create<AppState>()(
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
         selectedTeamIds: state.selectedTeamIds,
+        // selectedServiceIds will be derived or managed differently, not directly persisted here.
       }),
     }
   )
