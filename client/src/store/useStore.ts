@@ -238,12 +238,23 @@ export const useStore = create<AppState>()(
         set({ isLoadingTeams: true });
         try {
           const { apiToken, fromEmail } = get();
-          const data = await api.getTeams({ token: apiToken, fromEmail });
-          // Filter out hidden teams from original App.jsx logic
-          const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
-          const visibleTeams = data.teams.filter((team: Team) => !HIDDEN_TEAM_PREFIXES.some((prefix) => team.name?.startsWith(prefix)));
-          set({ teams: visibleTeams, isLoadingTeams: false });
-          get().addLog(`Loaded ${visibleTeams.length} teams.`);
+          const allTeams: Team[] = [];
+          let offset = 0;
+          let more = true;
+
+          while (more) {
+            const data = await api.getTeams({ token: apiToken, fromEmail }, 100, offset);
+            // Filter out hidden teams from original App.jsx logic
+            const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
+            const visibleTeams = data.teams.filter((team: Team) => !HIDDEN_TEAM_PREFIXES.some((prefix) => team.name?.startsWith(prefix)));
+            allTeams.push(...visibleTeams);
+            
+            more = data.more;
+            offset += data.limit || 100;
+          }
+
+          set({ teams: allTeams, isLoadingTeams: false });
+          get().addLog(`Loaded ${allTeams.length} teams.`);
         } catch (error: any) {
           get().addLog(`Failed to load teams: ${error.message}`, 'error');
           set({ isLoadingTeams: false });
@@ -254,44 +265,47 @@ export const useStore = create<AppState>()(
         set({ isLoadingServices: true });
         try {
           const { selectedTeamIds, services: currentServices, apiToken, fromEmail } = get();
-          // Ensure apiToken is set before making the call
           if (!apiToken) {
             get().addLog('API Token is missing, cannot fetch services.', 'warn');
             set({ isLoadingServices: false });
             return;
           }
-          const data = await api.getServices(selectedTeamIds, { token: apiToken, fromEmail });
-          
-          // Debug: Inspect raw service data for integrations
-          console.log('[Store] fetchServices raw data:', data);
 
+          const allServices: Service[] = [];
+          let offset = 0;
+          let more = true;
           const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
 
-          const servicesWithInclude = data.services.map((svc: any) => {
-            // Extract change integrations manually to verify mapping
-            const changeIntegrations = (svc.integrations || [])
-              .filter((integration: any) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
-              .map((integration: any) => ({
-                id: integration.id,
-                name: integration.summary || integration.name || integration.type,
-                integrationKey: integration.integration_key,
-                vendor: integration.vendor?.summary || integration.vendor?.name || null,
-              }));
+          while (more) {
+            const data = await api.getServices(selectedTeamIds, { token: apiToken, fromEmail }, 100, offset);
+            
+            const batch = data.services.map((svc: any) => {
+              const changeIntegrations = (svc.integrations || [])
+                .filter((integration: any) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
+                .map((integration: any) => ({
+                  id: integration.id,
+                  name: integration.summary || integration.name || integration.type,
+                  integrationKey: integration.integration_key,
+                  vendor: integration.vendor?.summary || integration.vendor?.name || null,
+                }));
 
-            return {
-              id: svc.id,
-              name: svc.name,
-              html_url: svc.html_url,
-              teams: (svc.teams || []).map((t: any) => ({ id: t.id, name: t.name })),
-              changeIntegrations,
-              include: currentServices.find(s => s.id === svc.id)?.include || false,
-            };
-          });
-          
-          console.log('[Store] Mapped services with change integrations:', servicesWithInclude);
+              return {
+                id: svc.id,
+                name: svc.name,
+                html_url: svc.html_url,
+                teams: (svc.teams || []).map((t: any) => ({ id: t.id, name: t.name })),
+                changeIntegrations,
+                include: currentServices.find(s => s.id === svc.id)?.include || false,
+              };
+            });
 
-          set({ services: servicesWithInclude, isLoadingServices: false });
-          get().addLog(`Loaded ${servicesWithInclude.length} services.`);
+            allServices.push(...batch);
+            more = data.more;
+            offset += data.limit || 100;
+          }
+
+          set({ services: allServices, isLoadingServices: false });
+          get().addLog(`Loaded ${allServices.length} services.`);
         } catch (error: any) {
           get().addLog(`Failed to load services: ${error.message}`, 'error');
           set({ isLoadingServices: false });
@@ -302,15 +316,25 @@ export const useStore = create<AppState>()(
         set({ isLoadingEscalationPolicies: true });
         try {
           const { selectedTeamIds, apiToken, fromEmail } = get();
-          // Ensure apiToken is set before making the call
           if (!apiToken) {
             get().addLog('API Token is missing, cannot fetch escalation policies.', 'warn');
             set({ isLoadingEscalationPolicies: false });
             return;
           }
-          const data = await api.getEscalationPolicies(selectedTeamIds, { token: apiToken, fromEmail });
-          set({ escalationPolicies: data.escalation_policies, isLoadingEscalationPolicies: false });
-          get().addLog(`Loaded ${data.escalation_policies.length} escalation policies.`);
+
+          const allPolicies: EscalationPolicy[] = [];
+          let offset = 0;
+          let more = true;
+
+          while (more) {
+            const data = await api.getEscalationPolicies(selectedTeamIds, { token: apiToken, fromEmail }, 100, offset);
+            allPolicies.push(...data.escalation_policies);
+            more = data.more;
+            offset += data.limit || 100;
+          }
+
+          set({ escalationPolicies: allPolicies, isLoadingEscalationPolicies: false });
+          get().addLog(`Loaded ${allPolicies.length} escalation policies.`);
         } catch (error: any) {
           get().addLog(`Failed to load escalation policies: ${error.message}`, 'error');
           set({ isLoadingEscalationPolicies: false });
