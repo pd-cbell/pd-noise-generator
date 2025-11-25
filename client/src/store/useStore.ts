@@ -237,6 +237,9 @@ interface AppState extends SimulationState, ConfigurationState {
   activeProfileId: string | null;
   setActiveProfile: (id: string) => void;
   saveProfile: (profile: Profile) => void;
+  createCampaign: (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => Promise<ImportedCampaign>;
+  updateCampaign: (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => Promise<ImportedCampaign>;
+  deleteCampaign: (id: string) => Promise<void>;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -963,6 +966,41 @@ export const useStore = create<AppState>()(
           }
         } catch (error: any) {
           get().addLog(`Failed to delete profile: ${error.message}`, 'error');
+        }
+      },
+
+      createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
+        try {
+          const newCampaign = await api.createCampaign(campaignData);
+          get().addLog(`Campaign "${newCampaign.name}" created.`, 'info');
+          await get().loadImportedCampaigns(); // Reload all campaigns
+          return newCampaign;
+        } catch (error: any) {
+          get().addLog(`Failed to create campaign: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
+        try {
+          const updatedCampaign = await api.updateCampaign(id, campaignData);
+          get().addLog(`Campaign "${updatedCampaign.name}" updated.`, 'info');
+          await get().loadImportedCampaigns(); // Reload all campaigns
+          return updatedCampaign;
+        } catch (error: any) {
+          get().addLog(`Failed to update campaign: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      deleteCampaign: async (id: string) => {
+        try {
+          await api.deleteCampaign(id);
+          get().addLog('Campaign deleted.', 'info');
+          await get().loadImportedCampaigns(); // Reload all campaigns
+        } catch (error: any) {
+          get().addLog(`Failed to delete campaign: ${error.message}`, 'error');
+          throw error;
         }
       },
     }),

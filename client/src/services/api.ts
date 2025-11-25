@@ -150,9 +150,16 @@ export const api = {
   // --- Campaigns ---
   getCampaigns: () => fetchFromProxy('/api/campaigns'),
 
-  createCampaign: (campaign: any) =>
+  createCampaign: (campaign: Omit<ImportedCampaign, 'id' | 'source'>) =>
     fetchFromProxy('/api/campaigns', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campaign),
+    }),
+
+  updateCampaign: (id: string, campaign: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) =>
+    fetchFromProxy(`/api/campaigns/${id}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(campaign),
     }),
