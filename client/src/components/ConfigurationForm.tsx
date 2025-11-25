@@ -10,7 +10,8 @@ export const ConfigurationForm: React.FC = () => {
     isLoadingTeams, isLoadingServices, isLoadingEscalationPolicies,
     addLog,
     teams, services, escalationPolicies, 
-    selectedTeamIds, setSelectedTeamIds, setServiceInclude
+    selectedTeamIds, setSelectedTeamIds, setServiceInclude,
+    selectedEPIds, setSelectedEPIds // Added these
   } = useStore();
 
   const handleLoadTeams = async () => {
