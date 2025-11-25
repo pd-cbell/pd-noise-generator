@@ -1,0 +1,100 @@
+[
+  {
+    "event_group": {
+      "name": "Demo Simulation Import - Converted from JSON",
+      "hash_id": "03ca4379-52f8-4d9d-97d6-679e2fb97546",
+      "event_group_items": [
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Aurora MySQL shard12 nearing storage limit.\",\r\n    \"source\": \"CloudWatch\",\r\n    \"severity\": \"warning\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"aurora_volume_bytes_used_pct\",\r\n      \"current_value\": 91.3,\r\n      \"threshold\": 90,\r\n      \"service_name\": \"Payments DB - MS\",\r\n      \"event_id\": \"a00adcae-3ebd-4f89-8fea-7fbc2d422270\",\r\n      \"hostname\": \"armstrong-camacho.com\",\r\n      \"ip_address\": \"155.191.162.76\",\r\n      \"cluster_name\": \"aurora-shard12\",\r\n      \"storage_class\": \"aurora-iopt1\",\r\n      \"database_engine\": \"Aurora MySQL\",\r\n      \"finops_block\": true,\r\n      \"finops_policy\": \"finops-ebs-resize-prevention\",\r\n      \"policy_reason\": \"Prevented autoscaling due to budget overage risk\"\r\n    }\r\n  },\r\n  \"client\": \"CloudWatch\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 10,
+          "times": 1,
+          "interval_seconds": 1,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"API latency for DB-backed transfer endpoints exceeded 500ms.\",\r\n    \"source\": \"Prometheus\",\r\n    \"severity\": \"critical\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"http_response_time_p95\",\r\n      \"current_value\": \"{{int(400,600)}}\",\r\n      \"threshold\": 300,\r\n      \"service_name\": \"Payments DB - MS\",\r\n      \"event_id\": \"{{randhex(16)}}\",\r\n      \"hostname\": \"davis.net\",\r\n      \"ip_address\": \"192.168.101.206\",\r\n      \"cluster_name\": \"unleash-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"Prometheus\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "e7cbdcec-a39a-4f3f-a60b-6c56f31d1487",
+          "event_action": "trigger",
+          "delay_seconds": 40,
+          "times": 7,
+          "interval_seconds": 30,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Redis cache evictions increasing – may indicate memory pressure.\",\r\n    \"source\": \"New Relic\",\r\n    \"severity\": \"warning\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"evicted_keys\",\r\n      \"current_value\": \"{{int(1200,1900)}}\",\r\n      \"threshold\": 1000,\r\n      \"service_name\": \"Payments API - MS\",\r\n      \"event_id\": \"{{randhex(16)}}\",\r\n      \"hostname\": \"lawrence-pacheco.com\",\r\n      \"ip_address\": \"{{ip}}\",\r\n      \"cluster_name\": \"empower-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"New Relic\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 60,
+          "times": 10,
+          "interval_seconds": 30,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Redis node {{list(us-east-1c, us-east-2a, us-west-1a)}} is unavailable in payments-cluster.\",\r\n    \"source\": \"Dynatrace\",\r\n    \"severity\": \"critical\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"availability\",\r\n      \"current_value\": 0,\r\n      \"threshold\": 1,\r\n      \"service_name\": \"Payments API - MS\",\r\n      \"event_id\": \"8e51c6d9-7371-4e15-9a56-fe9757b6110b\",\r\n      \"hostname\": \"garcia-james.com\",\r\n      \"ip_address\": \"172.17.99.242\",\r\n      \"cluster_name\": \"drive-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"Dynatrace\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 90,
+          "times": 5,
+          "interval_seconds": 60,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"High I/O latency on AWS S3 Object Store – Statements.\",\r\n    \"source\": \"DataDog\",\r\n    \"severity\": \"warning\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"s3_put_latency_p95\",\r\n      \"current_value\": \"{{int(300,450)}}\",\r\n      \"threshold\": 250,\r\n      \"service_name\": \"Payments API - MS\",\r\n      \"event_id\": \"e22b2acd-8276-483b-9af3-94f271e82339\",\r\n      \"hostname\": \"dudley.com\",\r\n      \"ip_address\": \"{{ip}}\",\r\n      \"cluster_name\": \"maximize-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"DataDog\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 120,
+          "times": 8,
+          "interval_seconds": 25,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Instant transfer synthetic test failed 3x in 5 minutes.\",\r\n    \"source\": \"New Relic\",\r\n    \"severity\": \"critical\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"synthetic_test_failures\",\r\n      \"application_impact\": \"Outage Expected\",\r\n      \"current_value\": 3,\r\n      \"threshold\": 1,\r\n      \"service_name\": \"Synthetic – Instant Transfer - MS\",\r\n      \"event_id\": \"c36f6340-ddfb-4a54-8f98-9baccd630b54\",\r\n      \"hostname\": \"stanley.com\",\r\n      \"ip_address\": \"10.194.159.231\",\r\n      \"cluster_name\": \"empower-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"New Relic\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "c36f6340-ddfb-4a54-8f98-9baccd630b54",
+          "event_action": "trigger",
+          "delay_seconds": 150,
+          "times": 1,
+          "interval_seconds": 1,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Visa API response time > 700ms.\",\r\n    \"source\": \"DataDog\",\r\n    \"severity\": \"warning\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"visa_response_time\",\r\n      \"current_value\": \"{{int(650,999)}}\",\r\n      \"threshold\": 500,\r\n      \"service_name\": \"Card Processor - MS\",\r\n      \"event_id\": \"54970ad1-81fc-4894-a6ef-2b14710abbcb\",\r\n      \"hostname\": \"martin-kelly.com\",\r\n      \"ip_address\": \"192.168.36.142\",\r\n      \"cluster_name\": \"expedite-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"DataDog\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 180,
+          "times": 9,
+          "interval_seconds": 40,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"Card transaction failure rate exceeds 3% threshold.\",\r\n    \"source\": \"Prometheus\",\r\n    \"severity\": \"critical\",\r\n    \"custom_details\": {\r\n      \"metric_name\": \"card_txn_failure_pct\",\r\n      \"current_value\": 4.2,\r\n      \"threshold\": 3,\r\n      \"service_name\": \"Card Processor - MS\",\r\n      \"event_id\": \"d45878dd-fcb1-412f-9fad-98f4515d26d9\",\r\n      \"hostname\": \"sanchez.net\",\r\n      \"ip_address\": \"10.28.163.230\",\r\n      \"cluster_name\": \"enhance-cluster\"\r\n    }\r\n  },\r\n  \"client\": \"Prometheus\",\r\n  \"client_url\": \"https://example.com\"\r\n}",
+          "dedup_key": "d45878dd-fcb1-412f-9fad-98f4515d26d9",
+          "event_action": "trigger",
+          "delay_seconds": 210,
+          "times": 1,
+          "interval_seconds": 1,
+          "event_group_id": 9,
+          "event_type": "alert"
+        },
+        {
+          "payload": "{\r\n  \"payload\": {\r\n    \"summary\": \"FinOps policy -  Aurora storage autoscaling for aurora-shard12 disabled.\",\r\n    \"source\": \"Cloud Custodian\",\r\n    \"custom_details\": {\r\n      \"policy_id\": \"finops-ebs-resize-prevention\",\r\n      \"decision\": \"deny\",\r\n      \"policy_reason\": \"Projected monthly spend would exceed budget threshold\",\r\n      \"resource_type\": \"aws:aurora:cluster\",\r\n      \"resource_id\": \"aurora-shard12\",\r\n      \"region\": \"us-east-1\",\r\n      \"account\": \"prod-account\",\r\n      \"initiator\": \"autoscaling-aurora-agent\",\r\n      \"attempted_action\": \"storage_autoscale\",\r\n      \"attempted_size_gb\": 20\r\n    },\r\n    \"timestamp\": \"{{timestamp(-600)}}\"\r\n  },\r\n  \"links\": [\r\n    {\r\n      \"href\": \"https://finops.orbitpay.internal/policies/finops-ebs-resize-prevention\",\r\n      \"text\": \"View FinOps Policy\"\r\n    },\r\n    {\r\n      \"href\": \"https://console.aws.amazon.com/rds/home?region=us-east-1#database:id=aurora-shard12\",\r\n      \"text\": \"Aurora Cluster\"\r\n    }\r\n  ]\r\n}",
+          "dedup_key": "",
+          "event_action": "trigger",
+          "delay_seconds": 0,
+          "times": 1,
+          "interval_seconds": 1,
+          "event_group_id": 9,
+          "event_type": "alert"
+        }
+      ]
+    }
+  }
+]

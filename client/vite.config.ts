@@ -8,7 +8,6 @@ export default defineConfig({
     proxy: {
       '/proxy': 'http://localhost:3001', // Proxy API requests to the backend server
       '/api': 'http://localhost:3001', // Proxy backend API requests
-      '/templates': 'http://localhost:3001', // Proxy template requests
       '/config.json': 'http://localhost:3001', // Proxy config requests
     },
   },
