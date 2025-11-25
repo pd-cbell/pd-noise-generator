@@ -115,8 +115,162 @@ export const ConfigurationForm: React.FC = () => {
       
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Simulation Settings</h2>
-        <div className="space-y-4">
-           <p className="text-sm text-gray-500">Rate, probabilities, and timing configurations will go here.</p>
+        
+        <div className="space-y-6">
+          {/* Throughput & Timing */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Throughput & Timing</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="ratePerMinute" className="block text-sm font-medium text-gray-700 mb-1">Incident Rate (per minute)</label>
+                <input
+                  id="ratePerMinute"
+                  type="number"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={useStore(state => state.ratePerMinute)}
+                  onChange={(e) => useStore.getState().setSettings({ ratePerMinute: Number(e.target.value) })}
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label htmlFor="autoResolveMin" className="block text-sm font-medium text-gray-700 mb-1">Min Resolve (sec)</label>
+                  <input
+                    id="autoResolveMin"
+                    type="number"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                    value={useStore(state => state.autoResolveMinSec)}
+                    onChange={(e) => useStore.getState().setSettings({ autoResolveMinSec: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="autoResolveMax" className="block text-sm font-medium text-gray-700 mb-1">Max Resolve (sec)</label>
+                  <input
+                    id="autoResolveMax"
+                    type="number"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                    value={useStore(state => state.autoResolveMaxSec)}
+                    onChange={(e) => useStore.getState().setSettings({ autoResolveMaxSec: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Auto-Action & Healing */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Auto-Action & Healing</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="noteProbability" className="block text-sm font-medium text-gray-700 mb-1">Note Probability (0-1)</label>
+                <input
+                  id="noteProbability"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={useStore(state => state.noteProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ noteProbability: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label htmlFor="responderProb" className="block text-sm font-medium text-gray-700 mb-1">Responder Prob. Multiplier</label>
+                <input
+                  id="responderProb"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={useStore(state => state.responderProbabilityMultiplier)}
+                  onChange={(e) => useStore.getState().setSettings({ responderProbabilityMultiplier: Number(e.target.value) })}
+                />
+              </div>
+              <div className="md:col-span-2 flex items-center gap-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                <div className="flex items-center">
+                  <input
+                    id="autoHealEnabled"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    checked={useStore(state => state.autoHealConfig.enabled)}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      autoHealConfig: { ...useStore.getState().autoHealConfig, enabled: e.target.checked } 
+                    })}
+                  />
+                  <label htmlFor="autoHealEnabled" className="ml-2 text-sm font-medium text-gray-700">Enable Auto-Heal (Warnings)</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="healProb" className="text-sm text-gray-600">Prob:</label>
+                  <input
+                    id="healProb"
+                    type="number"
+                    step="0.1"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.autoHealConfig.warningProbability)}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      autoHealConfig: { ...useStore.getState().autoHealConfig, warningProbability: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2 flex items-center">
+                 <input
+                    id="resumeExisting"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    checked={useStore(state => state.resumeExistingEnabled)}
+                    onChange={(e) => useStore.getState().setSettings({ resumeExistingEnabled: e.target.checked })}
+                  />
+                  <label htmlFor="resumeExisting" className="ml-2 text-sm font-medium text-gray-700">Resume existing incidents on start</label>
+              </div>
+            </div>
+          </div>
+
+          {/* Severity Distribution */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Severity Weights (Must sum to ~1.0)</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {['info', 'warning', 'error', 'critical'].map(sev => (
+                <div key={sev}>
+                  <label htmlFor={`sev-${sev}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{sev}</label>
+                  <input
+                    id={`sev-${sev}`}
+                    type="number"
+                    step="0.05"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.severityWeights[sev as keyof typeof state.severityWeights])}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      severityWeights: { ...useStore.getState().severityWeights, [sev]: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Observability Mix */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Observability Payload Mix</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.keys(useStore.getState().sourceMix).map(source => (
+                <div key={source}>
+                  <label htmlFor={`mix-${source}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{source}</label>
+                  <input
+                    id={`mix-${source}`}
+                    type="number"
+                    step="0.05"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.sourceMix[source])}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      sourceMix: { ...useStore.getState().sourceMix, [source]: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

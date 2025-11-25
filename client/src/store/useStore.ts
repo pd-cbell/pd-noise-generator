@@ -107,6 +107,20 @@ export interface SimulationState {
   evalTick: () => void; // Periodic evaluation for incidents
 }
 
+export interface AutoHealConfig {
+  enabled: boolean;
+  warningProbability: number;
+  minDelaySec: number;
+  maxDelaySec: number;
+}
+
+export const DEFAULT_AUTO_HEAL_CONFIG: AutoHealConfig = {
+  enabled: true,
+  warningProbability: 0.2,
+  minDelaySec: 30,
+  maxDelaySec: 90,
+};
+
 export interface ConfigurationState {
   apiToken: string;
   pdSubdomain: string;
@@ -114,6 +128,17 @@ export interface ConfigurationState {
   globalRoutingKey: string;
   selectedTeamIds: string[];
   
+  // Simulation Settings
+  ratePerMinute: number;
+  noteProbability: number;
+  responderProbabilityMultiplier: number;
+  autoResolveMinSec: number;
+  autoResolveMaxSec: number;
+  severityWeights: { info: number; warning: number; error: number; critical: number };
+  autoHealConfig: AutoHealConfig;
+  resumeExistingEnabled: boolean;
+  sourceMix: Record<string, number>;
+
   teams: Team[];
   services: Service[];
   escalationPolicies: EscalationPolicy[];
@@ -127,6 +152,7 @@ export interface ConfigurationState {
   lastChangeEvent: { ts: number; serviceName: string; failureSummary: string } | null;
 
   setCredentials: (creds: Partial<ConfigurationState>) => void;
+  setSettings: (settings: Partial<ConfigurationState>) => void;
   setSelectedTeamIds: (ids: string[]) => void;
   setServiceInclude: (serviceId: string, include: boolean) => void;
   fetchTeams: () => Promise<void>;
@@ -161,6 +187,17 @@ export const useStore = create<AppState>()(
       globalRoutingKey: '',
       selectedTeamIds: [],
       
+      // Simulation Defaults
+      ratePerMinute: 6,
+      noteProbability: 0.5,
+      responderProbabilityMultiplier: 1.0,
+      autoResolveMinSec: 90,
+      autoResolveMaxSec: 240,
+      severityWeights: { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 },
+      autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
+      resumeExistingEnabled: true,
+      sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
+
       teams: [],
       services: [],
       escalationPolicies: [],
@@ -185,6 +222,8 @@ export const useStore = create<AppState>()(
 
       // --- Actions ---
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
+      setSettings: (settings) => set((state) => ({ ...state, ...settings })),
+      setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
       setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
       setServiceInclude: (serviceId, include) => set((state) => ({
         services: state.services.map(svc => 
@@ -369,14 +408,26 @@ export const useStore = create<AppState>()(
       name: 'pdns-storage', // Unique name for localStorage key
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Persist only configuration that isn't stored in the DB profile
+        // Persist only configuration and profiles, not runtime state like logs or activeIncidents
+        profiles: state.profiles,
+        activeProfileId: state.activeProfileId,
         apiToken: state.apiToken,
         pdSubdomain: state.pdSubdomain,
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
         selectedTeamIds: state.selectedTeamIds,
-        activeProfileId: state.activeProfileId, // Keep track of which profile is active locally
         campaignConfig: state.campaignConfig,
+        
+        // Persist Simulation Settings
+        ratePerMinute: state.ratePerMinute,
+        noteProbability: state.noteProbability,
+        responderProbabilityMultiplier: state.responderProbabilityMultiplier,
+        autoResolveMinSec: state.autoResolveMinSec,
+        autoResolveMaxSec: state.autoResolveMaxSec,
+        severityWeights: state.severityWeights,
+        autoHealConfig: state.autoHealConfig,
+        resumeExistingEnabled: state.resumeExistingEnabled,
+        sourceMix: state.sourceMix,
       }),
     }
   )
