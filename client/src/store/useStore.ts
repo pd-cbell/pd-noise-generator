@@ -227,7 +227,7 @@ export const useStore = create<AppState>()(
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
       setSettings: (settings) => set((state) => ({ ...state, ...settings })),
       setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
-      setSelectedEPIds: (ids) => set({ selectedEPIds: ids }), // Implemented
+      setSelectedEPIds: (ids) => set({ selectedEPIds: ids }),
       setServiceInclude: (serviceId, include) => set((state) => ({
         services: state.services.map(svc => 
           svc.id === serviceId ? { ...svc, include } : svc
