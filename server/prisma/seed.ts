@@ -6,41 +6,53 @@ const prisma = new PrismaClient();
 
 async function main() {
   const templatesDir = path.join(__dirname, '../../client/public/templates');
-  console.log(`Reading templates from ${templatesDir}`);
+  console.log(`[Seed] Reading templates from ${templatesDir}`);
 
   try {
     const files = await fs.readdir(templatesDir);
     const jsonFiles = files.filter(f => f.endsWith('.json') && f !== 'index.json');
+    console.log(`[Seed] Found JSON files: ${jsonFiles.join(', ')}`);
 
     for (const file of jsonFiles) {
       const filePath = path.join(templatesDir, file);
-      console.log(`Processing ${file}...`);
+      console.log(`[Seed] Processing ${filePath}...`);
       
       const content = await fs.readFile(filePath, 'utf-8');
       const data = JSON.parse(content);
       
-      // Support both single object or array format (as seen in payloads.ts logic)
       const campaignGroups = Array.isArray(data) ? data : [data];
+      console.log(`[Seed] Found ${campaignGroups.length} potential campaign groups in ${file}.`);
 
       for (const group of campaignGroups) {
+        console.log(`[Seed] Current group object structure: ${JSON.stringify(group, null, 2)}`); // Log group structure
+        
         const meta = group.event_group || group;
-        const items = group.event_group_items || [];
+        console.log(`[Seed] Meta object structure (after event_group check): ${JSON.stringify(meta, null, 2)}`); // Log meta structure
 
-        if (!items.length) continue;
+        const items = Array.isArray(meta?.event_group_items) ? meta.event_group_items : [];
+        console.log(`[Seed] meta.event_group_items: ${JSON.stringify(meta?.event_group_items, null, 2)}`); // Log raw items array from meta
+        console.log(`[Seed] Items after Array.isArray check: ${items.length}`); // Log items.length
+        
+        if (!items.length) {
+            console.log(`[Seed] Skipping campaign (no items found after parsing).`);
+            continue;
+        }
+
+        const campaignName = `${meta.name} (from ${file})`; // Make name unique
 
         // Check uniqueness by name to avoid dupes on re-seed
         const existing = await prisma.campaign.findFirst({
-          where: { name: meta.name }
+          where: { name: campaignName }
         });
 
         if (existing) {
-          console.log(`  Campaign "${meta.name}" already exists. Skipping.`);
+          console.log(`[Seed] Campaign "${campaignName}" already exists in DB (ID: ${existing.id}). Skipping.`);
           continue;
         }
 
         await prisma.campaign.create({
           data: {
-            name: meta.name,
+            name: campaignName,
             description: meta.description,
             source: file,
             items: {
@@ -57,11 +69,11 @@ async function main() {
             }
           }
         });
-        console.log(`  Created campaign: "${meta.name}" with ${items.length} steps.`);
+        console.log(`[Seed] Created campaign: "${meta.name}" with ${items.length} steps.`);
       }
     }
   } catch (e) {
-    console.error('Seeding failed:', e);
+    console.error('[Seed] Seeding failed:', e);
   }
 }
 

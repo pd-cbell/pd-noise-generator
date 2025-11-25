@@ -261,10 +261,35 @@ export const useStore = create<AppState>()(
             return;
           }
           const data = await api.getServices(selectedTeamIds, { token: apiToken, fromEmail });
-          const servicesWithInclude = data.services.map((svc: Service) => ({
-            ...svc,
-            include: currentServices.find(s => s.id === svc.id)?.include || false, // Preserve existing 'include' status
-          }));
+          
+          // Debug: Inspect raw service data for integrations
+          console.log('[Store] fetchServices raw data:', data);
+
+          const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
+
+          const servicesWithInclude = data.services.map((svc: any) => {
+            // Extract change integrations manually to verify mapping
+            const changeIntegrations = (svc.integrations || [])
+              .filter((integration: any) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
+              .map((integration: any) => ({
+                id: integration.id,
+                name: integration.summary || integration.name || integration.type,
+                integrationKey: integration.integration_key,
+                vendor: integration.vendor?.summary || integration.vendor?.name || null,
+              }));
+
+            return {
+              id: svc.id,
+              name: svc.name,
+              html_url: svc.html_url,
+              teams: (svc.teams || []).map((t: any) => ({ id: t.id, name: t.name })),
+              changeIntegrations,
+              include: currentServices.find(s => s.id === svc.id)?.include || false,
+            };
+          });
+          
+          console.log('[Store] Mapped services with change integrations:', servicesWithInclude);
+
           set({ services: servicesWithInclude, isLoadingServices: false });
           get().addLog(`Loaded ${servicesWithInclude.length} services.`);
         } catch (error: any) {
@@ -305,8 +330,6 @@ export const useStore = create<AppState>()(
         try {
           // Fetch from API instead of local file parsing
           const data = await api.getCampaigns();
-          console.log('[Store] Raw campaign data from API:', data); // Debug log
-
           const campaigns = (data.campaigns || []).map((c: any) => ({
             id: c.id,
             name: c.name,
@@ -324,11 +347,9 @@ export const useStore = create<AppState>()(
             }))
           }));
           
-          console.log('[Store] Mapped campaigns:', campaigns); // Debug log
           set({ importedCampaigns: campaigns });
           get().addLog(`Loaded ${campaigns.length} campaigns from database.`, 'info');
         } catch (error: any) {
-          console.error('[Store] Failed to load campaigns:', error); // Debug log
           get().addLog(`Failed to load campaigns: ${error.message}`, 'error');
         }
       },
