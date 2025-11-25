@@ -105,6 +105,7 @@ export interface SimulationState {
   avgMtta: Record<IncidentSeverity | 'global', number>; // milliseconds
   avgMttr: Record<IncidentSeverity | 'global', number>; // milliseconds
   apiRpm: number;
+  apiCallsLast60s: number; // New: API calls in the last 60 seconds
 
   // Internal Counters (not exposed to UI mostly)
   _mttaSums: Record<IncidentSeverity | 'global', number>;
@@ -113,6 +114,7 @@ export interface SimulationState {
   _mttrCounts: Record<IncidentSeverity | 'global', number>;
   _apiCallCount: number;
   _lastRpmCheck: number;
+  _apiCallTimestamps: number[]; // New: Timestamps of recent API calls
   
   startSimulation: () => void;
   pauseSimulation: () => void; // Stop generating, keep managing
@@ -280,6 +282,7 @@ export const useStore = create<AppState>()(
       avgMtta: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       apiRpm: 0,
+      apiCallsLast60s: 0,
 
       _mttaSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       _mttaCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
@@ -287,6 +290,7 @@ export const useStore = create<AppState>()(
       _mttrCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       _apiCallCount: 0,
       _lastRpmCheck: 0,
+      _apiCallTimestamps: [],
       
       // --- Profile Slice Defaults ---
       profiles: [],
@@ -500,16 +504,24 @@ export const useStore = create<AppState>()(
         return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
       }),
 
-      incrementApiCount: () => set((state) => ({ _apiCallCount: state._apiCallCount + 1 })),
+      incrementApiCount: () => set((state) => ({ 
+        _apiCallCount: state._apiCallCount + 1,
+        _apiCallTimestamps: [...state._apiCallTimestamps, Date.now()]
+      })),
 
       evalTick: async () => {
-        const { isManaging, activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident, _lastRpmCheck, _apiCallCount } = get();
+        const { isManaging, activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident, _lastRpmCheck, _apiCallCount, _apiCallTimestamps } = get();
         
         if (!isManaging) return;
 
         const now = Date.now();
 
-        // Update RPM every 5 seconds
+        // Prune old timestamps and calculate apiCallsLast60s
+        const oneMinuteAgo = now - 60000;
+        const recentTimestamps = _apiCallTimestamps.filter(timestamp => timestamp > oneMinuteAgo);
+        set({ _apiCallTimestamps: recentTimestamps, apiCallsLast60s: recentTimestamps.length });
+
+        // Update RPM every 5 seconds (Current RPM calculation based on last 5s burst)
         if (now - _lastRpmCheck > 5000) {
             // If first run, just set ts
             if (_lastRpmCheck === 0) {

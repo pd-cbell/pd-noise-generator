@@ -66,6 +66,9 @@ export const MonitorDashboard: React.FC = () => {
                 <div className="flex items-center gap-1 text-indigo-600">
                    <Zap className="w-3 h-3" />
                    <span className="text-lg font-bold">{apiRpm}</span>
+                   {apiCallsLast60s !== undefined && apiCallsLast60s !== null && (
+                     <span className="ml-1 text-xs text-gray-500 font-medium">({apiCallsLast60s} in 60s)</span>
+                   )}
                 </div>
              </div>
           </div>

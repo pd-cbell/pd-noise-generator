@@ -31,6 +31,19 @@ These notes help future pairing sessions or automation agents quickly orient the
 - **Payloads:** `payloads.ts` generates high-fidelity JSON for integrations (CloudWatch, Datadog, NewRelic, etc.).
 - **Change Events:** routed through `/proxy/change_events`.
 
+## Roadmap
+
+### v1.6 - High Fidelity & Control (Next)
+- **API RPM Enhancement:** Show current RPM + "Last 60s" total count.
+- **Event Bursts:** Implement logic to send repeated events (same dedup_key) to demonstrate Event Compression/Intelligence.
+- **Campaign Wiring:** Finalize backend connection for firing complex campaigns and change events.
+- **Campaign Editor:** UI for creating and editing campaigns/payloads in the DB.
+
+### v1.7 - Identity & Platform
+- **Authentication:** Google OAuth integration.
+- **User Profiles:** Link Settings/Profiles to authenticated Users.
+- **UI Refactor:** Move "Org & Credentials" from Configure tab to a Header Dropdown/Profile Menu.
+
 ## Key Files
 - `client/src/store/useStore.ts`: The brain. Holds all configuration, metrics, and actions (`ackIncident`, `triggerIncident`).
 - `client/src/services/SimulationEngine.ts`: The heart. Manages the `setTimeout` loops for generation and `setInterval` for evaluation.
