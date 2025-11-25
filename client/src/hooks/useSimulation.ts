@@ -3,15 +3,15 @@ import { useStore } from '../store/useStore';
 import { simulationEngine } from '../services/SimulationEngine';
 
 export function useSimulation() {
-  const isRunning = useStore((state) => state.isRunning);
+  const isManaging = useStore((state) => state.isManaging);
   // Use a ref to track if we've started to avoid double-start in strict mode
   const engineStarted = useRef(false);
 
   useEffect(() => {
-    if (isRunning && !engineStarted.current) {
+    if (isManaging && !engineStarted.current) {
       simulationEngine.start();
       engineStarted.current = true;
-    } else if (!isRunning && engineStarted.current) {
+    } else if (!isManaging && engineStarted.current) {
       simulationEngine.stop();
       engineStarted.current = false;
     }
@@ -23,5 +23,5 @@ export function useSimulation() {
         engineStarted.current = false;
       }
     };
-  }, [isRunning]);
+  }, [isManaging]);
 }

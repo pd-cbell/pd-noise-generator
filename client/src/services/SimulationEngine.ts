@@ -23,13 +23,24 @@ export class SimulationEngine {
   }
 
   private scheduleNextFire() {
-    const { isRunning, ratePerMinute, services, triggerIncident, addLog } = useStore.getState();
+    const { isGenerating, ratePerMinute, services, triggerIncident, addLog } = useStore.getState();
 
-    if (!isRunning) return;
+    if (!isGenerating) {
+        // If paused/stopped, check again in 1s just in case state changes, or let the loop die?
+        // Better: let the loop die. The `start()` method will restart it if needed?
+        // ACTUALLY: The `useSimulation` hook handles start/stop.
+        // If we pause, `isGenerating` becomes false. We should probably stop scheduling new fires.
+        // But if we unpause, we need to restart firing. 
+        // Does the Engine's `start()` method get called on unpause?
+        // If `useSimulation` tracks `isManaging`, and `isManaging` stays true during pause, then `start()` is NOT called again.
+        // So we MUST keep the loop alive or have a way to restart it.
+        // EASIEST: Keep loop alive but do nothing if !isGenerating.
+        this.fireTimer = setTimeout(() => this.scheduleNextFire(), 1000);
+        return;
+    }
 
     const rpm = Math.max(0, Number(ratePerMinute) || 0);
     if (rpm <= 0) {
-        // If rate is 0, check again in 1 second to see if it changed
         this.fireTimer = setTimeout(() => this.scheduleNextFire(), 1000);
         return;
     }
@@ -37,22 +48,20 @@ export class SimulationEngine {
     // Poisson process: Inter-arrival time = -ln(1-u) / lambda
     const lambdaPerSec = rpm / 60;
     const u = Math.random();
-    // Avoid u=1 to prevent Infinity
     const safeU = u >= 1 ? 0.99 : u;
     const interArrivalSec = -Math.log(1 - safeU) / Math.max(lambdaPerSec, 1e-9);
-    const delayMs = Math.max(250, interArrivalSec * 1000); // Cap minimum delay at 250ms
+    const delayMs = Math.max(250, interArrivalSec * 1000);
 
     this.fireTimer = setTimeout(async () => {
       const currentStore = useStore.getState();
-      if (!currentStore.isRunning) return;
+      if (!currentStore.isGenerating) {
+          this.scheduleNextFire(); // Reschedule to keep loop alive
+          return;
+      }
 
-      // Targeting Logic
       const targets = currentStore.services.filter(s => s.include);
       
-      if (targets.length === 0) {
-        // No targets, just wait
-      } else {
-        // Pick a random target
+      if (targets.length > 0) {
         const target = targets[Math.floor(Math.random() * targets.length)];
         await triggerIncident(target);
       }
@@ -63,8 +72,8 @@ export class SimulationEngine {
 
   private startEvalLoop() {
     this.evalTimer = setInterval(() => {
-      const { isRunning, evalTick } = useStore.getState();
-      if (isRunning) {
+      const { isManaging, evalTick } = useStore.getState();
+      if (isManaging) {
         evalTick();
       }
     }, 1000); // 1Hz tick

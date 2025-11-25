@@ -94,26 +94,36 @@ const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
 
 
 export interface SimulationState {
-  isRunning: boolean;
+  isGenerating: boolean; // Controls new incident creation
+  isManaging: boolean;   // Controls lifecycle (ack/resolve) of existing incidents
   activeIncidents: Incident[];
   log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[];
   monitorTrend: { ts: number; count: number }[];
   totalEvents: number;
-  avgMtta: number; // milliseconds
-  avgMttr: number; // milliseconds
-  _mttaSum: number;
-  _mttaCount: number;
-  _mttrSum: number;
-  _mttrCount: number;
+  
+  // Metrics
+  avgMtta: Record<IncidentSeverity | 'global', number>; // milliseconds
+  avgMttr: Record<IncidentSeverity | 'global', number>; // milliseconds
+  apiRpm: number;
+
+  // Internal Counters (not exposed to UI mostly)
+  _mttaSums: Record<IncidentSeverity | 'global', number>;
+  _mttaCounts: Record<IncidentSeverity | 'global', number>;
+  _mttrSums: Record<IncidentSeverity | 'global', number>;
+  _mttrCounts: Record<IncidentSeverity | 'global', number>;
+  _apiCallCount: number;
+  _lastRpmCheck: number;
   
   startSimulation: () => void;
-  stopSimulation: () => void;
+  pauseSimulation: () => void; // Stop generating, keep managing
+  stopSimulation: () => void; // Stop everything
   addLog: (msg: string, type?: 'info' | 'warn' | 'error') => void;
   addIncident: (incident: Incident) => void;
   updateIncident: (dedupKey: string, updates: Partial<Incident>) => void;
   removeIncident: (dedupKey: string) => void;
   clearActiveIncidents: () => void;
   addMonitorTrendData: (count: number) => void;
+  incrementApiCount: () => void;
   evalTick: () => void; // Periodic evaluation for incidents
   triggerIncident: (service: Service, failureContext?: any) => Promise<void>;
   ackIncident: (dedupKey: string) => Promise<void>;
@@ -260,17 +270,23 @@ export const useStore = create<AppState>()(
       lastChangeEvent: null,
       
       // --- Simulation Slice Defaults ---
-      isRunning: false,
+      isGenerating: false,
+      isManaging: false,
       activeIncidents: [],
       log: [],
       monitorTrend: [],
       totalEvents: 0,
-      avgMtta: 0,
-      avgMttr: 0,
-      _mttaSum: 0,
-      _mttaCount: 0,
-      _mttrSum: 0,
-      _mttrCount: 0,
+      
+      avgMtta: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      apiRpm: 0,
+
+      _mttaSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      _mttaCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      _mttrSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      _mttrCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      _apiCallCount: 0,
+      _lastRpmCheck: 0,
       
       // --- Profile Slice Defaults ---
       profiles: [],
@@ -453,8 +469,9 @@ export const useStore = create<AppState>()(
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
       
-      startSimulation: () => set({ isRunning: true }),
-      stopSimulation: () => set({ isRunning: false }),
+      startSimulation: () => set({ isGenerating: true, isManaging: true }),
+      pauseSimulation: () => set({ isGenerating: false, isManaging: true }),
+      stopSimulation: () => set({ isGenerating: false, isManaging: false }),
       
       addLog: (msg, type = 'info') => set((state) => ({
         log: [{ ts: new Date().toLocaleTimeString(), type, msg }, ...state.log].slice(0, 800)
@@ -483,18 +500,29 @@ export const useStore = create<AppState>()(
         return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
       }),
 
+      incrementApiCount: () => set((state) => ({ _apiCallCount: state._apiCallCount + 1 })),
+
       evalTick: async () => {
-        // Periodic lifecycle updates (auto-resolve, etc.)
-        const { activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident } = get();
+        const { isManaging, activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident, _lastRpmCheck, _apiCallCount } = get();
+        
+        if (!isManaging) return;
+
         const now = Date.now();
 
-        // Iterate sequentially or parallel - parallel is fine for resolution checks
-        // We need to be careful not to modify state inside the loop in a way that breaks iteration if we were removing,
-        // but we are using `forEach` on a snapshot or `map`. 
-        // Since `evalTick` is called frequently, we should limit how many API calls we make.
-        // Let's resolve only one incident per tick to avoid rate limits if many are pending.
-        
-        const pendingResolution = activeIncidents.find(inc => !inc.incidentId && (now - inc.startedAt > 4000) && (now - inc.startedAt < 60000)); // Check only recent ones, stop checking after 1m
+        // Update RPM every 5 seconds
+        if (now - _lastRpmCheck > 5000) {
+            // If first run, just set ts
+            if (_lastRpmCheck === 0) {
+                set({ _lastRpmCheck: now });
+            } else {
+                const elapsed = now - _lastRpmCheck;
+                const rpm = Math.round(_apiCallCount * (60000 / elapsed));
+                set({ apiRpm: rpm, _apiCallCount: 0, _lastRpmCheck: now });
+            }
+        }
+
+        // Periodic resolution of ID mapping (one per tick to avoid rate limits)
+        const pendingResolution = activeIncidents.find(inc => !inc.incidentId && (now - inc.startedAt > 4000) && (now - inc.startedAt < 60000));
         
         if (pendingResolution && apiToken) {
            try {
@@ -502,29 +530,35 @@ export const useStore = create<AppState>()(
              const match = response.incidents?.[0];
              if (match) {
                updateIncident(pendingResolution.dedupKey, { incidentId: match.id });
-               // Optional: log success? "Mapped dedupKey to ID..."
              }
-           } catch (e) {
-             // Ignore
-           }
+           } catch (e) { /* Ignore */ }
         }
 
         // Sync checks for auto-resolve/heal and noise generation
         for (const inc of activeIncidents) {
-          // Skip if no ID yet
           if (!inc.incidentId) continue;
           
           const config = severityConfigs[inc.severity];
-          if (!config) continue; // Should not happen
+          if (!config) continue;
 
           // Auto-Resolve Check
           if (inc.resolveAt && now >= inc.resolveAt) {
-            // Update MTTR
             const timeToResolve = now - inc.startedAt;
             set((state) => {
-                const newCount = state._mttrCount + 1;
-                const newSum = state._mttrSum + timeToResolve;
-                return { _mttrCount: newCount, _mttrSum: newSum, avgMttr: newSum / newCount };
+                const sev = inc.severity;
+                const newCounts = { ...state._mttrCounts };
+                const newSums = { ...state._mttrSums };
+                const newAvgs = { ...state.avgMttr };
+
+                newCounts.global++;
+                newSums.global += timeToResolve;
+                newAvgs.global = newSums.global / newCounts.global;
+
+                newCounts[sev]++;
+                newSums[sev] += timeToResolve;
+                newAvgs[sev] = newSums[sev] / newCounts[sev];
+
+                return { _mttrCounts: newCounts, _mttrSums: newSums, avgMttr: newAvgs };
             });
 
             removeIncident(inc.dedupKey);
@@ -532,23 +566,31 @@ export const useStore = create<AppState>()(
             
             try {
                 if (apiToken) {
-                    // Add resolution note
                     await api.addNote(inc.incidentId, `Auto-resolved by simulator (Duration: ${((now - inc.startedAt)/1000).toFixed(0)}s)`, { token: apiToken, fromEmail });
-                    // Resolve
                     await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
                 }
             } catch (e) { /* ignore */ }
-            continue; // Done with this one
+            continue;
           }
           
           // Auto-Heal Check (Warning only)
           if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
-             // Update MTTR
              const timeToResolve = now - inc.startedAt;
              set((state) => {
-                const newCount = state._mttrCount + 1;
-                const newSum = state._mttrSum + timeToResolve;
-                return { _mttrCount: newCount, _mttrSum: newSum, avgMttr: newSum / newCount };
+                const sev = inc.severity;
+                const newCounts = { ...state._mttrCounts };
+                const newSums = { ...state._mttrSums };
+                const newAvgs = { ...state.avgMttr };
+
+                newCounts.global++;
+                newSums.global += timeToResolve;
+                newAvgs.global = newSums.global / newCounts.global;
+
+                newCounts[sev]++;
+                newSums[sev] += timeToResolve;
+                newAvgs[sev] = newSums[sev] / newCounts[sev];
+
+                return { _mttrCounts: newCounts, _mttrSums: newSums, avgMttr: newAvgs };
              });
 
              removeIncident(inc.dedupKey);
@@ -566,11 +608,10 @@ export const useStore = create<AppState>()(
           
           // Auto-Ack
           if (!inc.acked && inc.autoAckAt && now >= inc.autoAckAt) {
-            ackIncident(inc.dedupKey); // Uses the action that handles metrics/API
+            ackIncident(inc.dedupKey);
           }
 
           // Add Notes
-          // Check if enough time passed since last note (e.g. 30s)
           if ((!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < config.noteProbability) {
              const note = inc.noteContext[Math.floor(Math.random() * inc.noteContext.length)] || "Investigating...";
              try {
@@ -580,11 +621,8 @@ export const useStore = create<AppState>()(
              } catch (e) { /* ignore */ }
           }
           
-          // Request Responder (if not yet requested)
+          // Request Responder
           if (!inc.responderRequested && Math.random() < config.responderProbability) {
-            // Need to get a valid user ID from `fromEmail` to request a responder.
-            // This is a more complex flow, requiring `api.resolveUser` and then `api.requestResponder`.
-            // For now, mark as requested and log. Full implementation later.
             updateIncident(inc.dedupKey, { responderRequested: true });
             addLog(`Simulating responder request for ${inc.incidentId}`, 'info');
           }
@@ -709,12 +747,25 @@ export const useStore = create<AppState>()(
           const now = Date.now();
           const timeToAck = now - incident.startedAt;
           set((state) => {
-            const newCount = state._mttaCount + 1;
-            const newSum = state._mttaSum + timeToAck;
+            const sev = incident.severity;
+            const newCounts = { ...state._mttaCounts };
+            const newSums = { ...state._mttaSums };
+            const newAvgs = { ...state.avgMtta };
+
+            // Update Global
+            newCounts.global++;
+            newSums.global += timeToAck;
+            newAvgs.global = newSums.global / newCounts.global;
+
+            // Update Severity
+            newCounts[sev]++;
+            newSums[sev] += timeToAck;
+            newAvgs[sev] = newSums[sev] / newCounts[sev];
+
             return {
-              _mttaCount: newCount,
-              _mttaSum: newSum,
-              avgMtta: newSum / newCount
+              _mttaCounts: newCounts,
+              _mttaSums: newSums,
+              avgMtta: newAvgs
             };
           });
 
@@ -737,12 +788,25 @@ export const useStore = create<AppState>()(
           const now = Date.now();
           const timeToResolve = now - incident.startedAt;
           set((state) => {
-            const newCount = state._mttrCount + 1;
-            const newSum = state._mttrSum + timeToResolve;
+            const sev = incident.severity;
+            const newCounts = { ...state._mttrCounts };
+            const newSums = { ...state._mttrSums };
+            const newAvgs = { ...state.avgMttr };
+
+            // Update Global
+            newCounts.global++;
+            newSums.global += timeToResolve;
+            newAvgs.global = newSums.global / newCounts.global;
+
+            // Update Severity
+            newCounts[sev]++;
+            newSums[sev] += timeToResolve;
+            newAvgs[sev] = newSums[sev] / newCounts[sev];
+
             return {
-              _mttrCount: newCount,
-              _mttrSum: newSum,
-              avgMttr: newSum / newCount
+              _mttrCounts: newCounts,
+              _mttrSums: newSums,
+              avgMttr: newAvgs
             };
           });
 

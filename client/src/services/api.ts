@@ -1,4 +1,9 @@
+import { useStore } from '../store/useStore';
+
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
+  // Track API call
+  useStore.getState().incrementApiCount();
+
   const res = await fetch(url, options);
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));

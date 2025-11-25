@@ -1,10 +1,16 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore, IncidentSeverity } from '../store/useStore';
 import { Incident } from '../store/useStore'; 
 import { TrendChart } from './TrendChart';
+import { Activity, PauseCircle, PlayCircle, StopCircle, Zap } from 'lucide-react';
 
 export const MonitorDashboard: React.FC = () => {
-  const { activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, avgMtta, avgMttr, totalEvents } = useStore();
+  const { 
+    activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, 
+    avgMtta, avgMttr, totalEvents, apiRpm,
+    isGenerating, isManaging
+  } = useStore();
+  
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll for log viewer
@@ -17,7 +23,7 @@ export const MonitorDashboard: React.FC = () => {
   const activeIncidentCount = activeIncidents.length;
 
   const formatDuration = (ms: number) => {
-    if (!ms) return '--';
+    if (!ms || ms === 0) return '--';
     const s = Math.round(ms / 1000);
     if (s < 60) return `${s}s`;
     const m = Math.floor(s / 60);
@@ -25,25 +31,102 @@ export const MonitorDashboard: React.FC = () => {
     return `${m}m ${rs}s`;
   };
 
+  const getStatus = () => {
+    if (isGenerating && isManaging) return { label: 'Running', color: 'text-green-600', icon: PlayCircle };
+    if (!isGenerating && isManaging) return { label: 'Paused', color: 'text-yellow-600', icon: PauseCircle };
+    return { label: 'Stopped', color: 'text-red-600', icon: StopCircle };
+  };
+
+  const status = getStatus();
+  const StatusIcon = status.icon;
+
   return (
     <div className="p-6 h-full flex flex-col gap-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-sm text-gray-500 font-medium">Active Incidents</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{activeIncidentCount}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Activity & Status */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm text-gray-500 font-medium">Active Incidents</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{activeIncidentCount}</p>
+            </div>
+            <div className={`flex items-center gap-1 ${status.color} bg-opacity-10 px-2 py-1 rounded-full bg-current`}>
+              <StatusIcon className="w-4 h-4" />
+              <span className="text-xs font-bold">{status.label}</span>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-between items-end">
+             <div>
+                <p className="text-xs text-gray-400 font-medium">TOTAL EVENTS</p>
+                <p className="text-lg font-semibold text-gray-700">{totalEvents}</p>
+             </div>
+             <div className="text-right">
+                <p className="text-xs text-gray-400 font-medium">API RPM</p>
+                <div className="flex items-center gap-1 text-indigo-600">
+                   <Zap className="w-3 h-3" />
+                   <span className="text-lg font-bold">{apiRpm}</span>
+                </div>
+             </div>
+          </div>
         </div>
+
+        {/* Card 2: MTTA Breakdown */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-sm text-gray-500 font-medium">Avg. MTTA</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDuration(avgMtta)}</p>
+          <p className="text-sm text-gray-500 font-medium mb-2">Avg. Time to Ack (MTTA)</p>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-1">
+               <span className="text-xs font-bold text-gray-700">Global</span>
+               <span className="text-sm font-bold text-gray-900">{formatDuration(avgMtta.global)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+               <div>
+                 <span className="block text-gray-400">Warn</span>
+                 <span className="font-medium text-yellow-700">{formatDuration(avgMtta.warning)}</span>
+               </div>
+               <div>
+                 <span className="block text-gray-400">Error</span>
+                 <span className="font-medium text-orange-700">{formatDuration(avgMtta.error)}</span>
+               </div>
+               <div>
+                 <span className="block text-gray-400">Crit</span>
+                 <span className="font-medium text-red-700">{formatDuration(avgMtta.critical)}</span>
+               </div>
+            </div>
+          </div>
         </div>
+
+        {/* Card 3: MTTR Breakdown */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-sm text-gray-500 font-medium">Avg. MTTR</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{formatDuration(avgMttr)}</p>
+          <p className="text-sm text-gray-500 font-medium mb-2">Avg. Time to Resolve (MTTR)</p>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-1">
+               <span className="text-xs font-bold text-gray-700">Global</span>
+               <span className="text-sm font-bold text-gray-900">{formatDuration(avgMttr.global)}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+               <div>
+                 <span className="block text-gray-400">Warn</span>
+                 <span className="font-medium text-yellow-700">{formatDuration(avgMttr.warning)}</span>
+               </div>
+               <div>
+                 <span className="block text-gray-400">Error</span>
+                 <span className="font-medium text-orange-700">{formatDuration(avgMttr.error)}</span>
+               </div>
+               <div>
+                 <span className="block text-gray-400">Crit</span>
+                 <span className="font-medium text-red-700">{formatDuration(avgMttr.critical)}</span>
+               </div>
+            </div>
+          </div>
         </div>
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-          <p className="text-sm text-gray-500 font-medium">Total Events</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{totalEvents}</p>
+
+        {/* Card 4: Simulation Health (Placeholder or Trend summary) */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+           <p className="text-sm text-gray-500 font-medium mb-2">Health & Trends</p>
+           <div className="flex-1 flex items-center justify-center text-gray-400 text-xs italic">
+              Additional metrics coming soon...
+           </div>
         </div>
       </div>
 
