@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import proxyRouter from './routes/proxy';
+import profilesRouter from './routes/profiles';
 
 dotenv.config();
 
@@ -10,8 +12,11 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3001;
 
+app.use('/proxy', proxyRouter);
+app.use('/api/profiles', profilesRouter);
+
 app.get('/', (req, res) => {
-  res.send('Server is running!');
+  res.send('PD Noise Simulator API is running!');
 });
 
 app.listen(PORT, () => {
