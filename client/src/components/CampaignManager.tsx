@@ -19,12 +19,10 @@ export const CampaignManager: React.FC = () => {
 
   // Calculate change coverage stats
   const changeCoverage = useMemo(() => {
-    console.log('[CampaignManager] Calculating coverage for services:', services); // Debug log
     const includedServices = services.filter((svc: Service) => svc.include);
     const includedWithChange = includedServices.filter((svc: Service) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
     const totalWithChange = services.filter((svc: Service) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
     
-    console.log('[CampaignManager] Coverage result:', { included: includedServices.length, includedWithChange, totalWithChange }); // Debug log
     return {
       included: includedServices.length,
       includedWithChange,
