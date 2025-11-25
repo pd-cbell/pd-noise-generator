@@ -7,7 +7,7 @@ import { Activity, PauseCircle, PlayCircle, StopCircle, Zap } from 'lucide-react
 export const MonitorDashboard: React.FC = () => {
   const { 
     activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, 
-    avgMtta, avgMttr, totalEvents, apiRpm, apiCallsLast60s,
+    avgMtta, avgMttr, totalEvents, apiRpm, apiCallsLast60s, droppedEvents,
     isGenerating, isManaging
   } = useStore();
   
@@ -124,11 +124,15 @@ export const MonitorDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Card 4: Simulation Health (Placeholder or Trend summary) */}
+        {/* Card 4: Simulation Health */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col">
            <p className="text-sm text-gray-500 font-medium mb-2">Health & Trends</p>
-           <div className="flex-1 flex items-center justify-center text-gray-400 text-xs italic">
-              Additional metrics coming soon...
+           <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center">
+                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Dropped Events</span>
+                 <span className={`text-xl font-bold ${droppedEvents > 0 ? 'text-red-600' : 'text-gray-700'}`}>{droppedEvents}</span>
+              </div>
+              <p className="text-xs text-gray-400">Incidents failed to map after retry (30s).</p>
            </div>
         </div>
       </div>

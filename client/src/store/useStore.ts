@@ -54,10 +54,12 @@ export interface Incident {
   startedAt: number;
   incidentId: string | null;
   mapAttempts: number;
+  lastMapAttemptAt?: number; // New: Timestamp of last ID mapping attempt
   nextEvalAt: number;
   ackAt: number | null;
-  autoAckAt: number | null; // New: For time-based auto-ack
+  autoAckAt: number | null;
   acked: boolean;
+
   firstResponderAt: number | null;
   responderRequested: boolean;
   lastNoteAt: number | null;
@@ -106,6 +108,7 @@ export interface SimulationState {
   avgMttr: Record<IncidentSeverity | 'global', number>; // milliseconds
   apiRpm: number;
   apiCallsLast60s: number; // New: API calls in the last 60 seconds
+  droppedEvents: number; // New: Incidents dropped due to failed mapping (suppressed)
 
   // Internal Counters (not exposed to UI mostly)
   _mttaSums: Record<IncidentSeverity | 'global', number>;
@@ -288,6 +291,7 @@ export const useStore = create<AppState>()(
       avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       apiRpm: 0,
       apiCallsLast60s: 0,
+      droppedEvents: 0,
 
       _mttaSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
       _mttaCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
@@ -595,17 +599,39 @@ export const useStore = create<AppState>()(
             }
         }
 
-        // Periodic resolution of ID mapping (one per tick to avoid rate limits)
-        const pendingResolution = activeIncidents.find(inc => !inc.incidentId && (now - inc.startedAt > 4000) && (now - inc.startedAt < 60000));
-        
-        if (pendingResolution && apiToken) {
-           try {
-             const response = await api.getIncidentByDedupKey(pendingResolution.dedupKey, { token: apiToken, fromEmail });
-             const match = response.incidents?.[0];
-             if (match) {
-               updateIncident(pendingResolution.dedupKey, { incidentId: match.id });
-             }
-           } catch (e) { /* Ignore */ }
+        // Periodic resolution of ID mapping (Rate limited to 2 per tick)
+        if (apiToken) {
+            const pendingCandidates = activeIncidents.filter(inc => 
+                !inc.incidentId &&
+                (
+                    (inc.mapAttempts === 0 && now - inc.startedAt > 10000) || // Attempt 0: Wait 10s
+                    (inc.mapAttempts === 1 && inc.lastMapAttemptAt && now - inc.lastMapAttemptAt > 30000) // Attempt 1: Wait 30s
+                )
+            );
+
+            for (const candidate of pendingCandidates.slice(0, 2)) {
+                try {
+                    const response = await api.getIncidentByDedupKey(candidate.dedupKey, { token: apiToken, fromEmail });
+                    const match = response.incidents?.[0];
+                    
+                    if (match) {
+                        updateIncident(candidate.dedupKey, { incidentId: match.id });
+                    } else {
+                        // Not found
+                        if (candidate.mapAttempts === 0) {
+                            // Retry later
+                            updateIncident(candidate.dedupKey, { mapAttempts: 1, lastMapAttemptAt: now });
+                        } else {
+                            // Drop
+                            removeIncident(candidate.dedupKey);
+                            set((state) => ({ droppedEvents: state.droppedEvents + 1 }));
+                            addLog(`Dropped incident ${candidate.dedupKey.substring(0, 8)} (Suppressed/Grouped)`, 'warn');
+                        }
+                    }
+                } catch (e) { 
+                    // Ignore transient API errors, try again next tick
+                }
+            }
         }
 
         // Sync checks for auto-resolve/heal and noise generation
@@ -665,7 +691,7 @@ export const useStore = create<AppState>()(
                 newAvgs[sev] = newSums[sev] / newCounts[sev];
 
                 return { _mttrCounts: newCounts, _mttrSums: newSums, avgMttr: newAvgs };
-             });
+            });
 
              removeIncident(inc.dedupKey);
              addLog(`Auto-healed warning incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
