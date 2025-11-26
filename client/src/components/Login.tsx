@@ -3,7 +3,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, loginAsDev } = useAuth();
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -11,7 +11,7 @@ export const Login: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">PD Noise Simulator</h1>
         <p className="text-gray-500 mb-8">Sign in to manage simulations and profiles.</p>
         
-        <div className="flex justify-center">
+        <div className="flex justify-center flex-col gap-4 items-center">
             <GoogleLogin
               onSuccess={credentialResponse => {
                 if (credentialResponse.credential) {
@@ -22,6 +22,15 @@ export const Login: React.FC = () => {
                 console.log('Login Failed');
               }}
             />
+            
+            {import.meta.env.DEV && (
+                <button 
+                    onClick={() => loginAsDev()}
+                    className="text-xs text-gray-400 hover:text-gray-600 underline"
+                >
+                    Dev Login (Bypass)
+                </button>
+            )}
         </div>
       </div>
     </div>

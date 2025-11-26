@@ -1,6 +1,28 @@
-import { SimulationManager } from './services/ServerSimulationEngine'; // Import the class
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+import proxyRouter from './routes/proxy';
+import profilesRouter from './routes/profiles';
+import campaignsRouter from './routes/campaigns';
+import authRouter from './routes/auth';
+import { SimulationManager } from './services/ServerSimulationEngine';
 
-// ... (other code)
+dotenv.config();
+
+const app = express();
+const server = http.createServer(app);
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+app.use(cors({
+  origin: CLIENT_URL,
+  credentials: true
+}));
+app.use(express.json());
+app.use(cookieParser());
 
 const io = new Server(server, {
   cors: {
@@ -31,7 +53,9 @@ io.use((socket, next) => {
   }
 });
 
-const simulationManager = new SimulationManager(io); // Create the singleton instance
+// Create the singleton instance
+const simulationManager = new SimulationManager(io);
+export { simulationManager };
 
 io.on('connection', (socket) => {
   const userId = socket.data.user.userId;

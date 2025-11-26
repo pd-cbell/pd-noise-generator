@@ -70,30 +70,68 @@ router.get('/me', async (req, res) => {
             fromEmail: user.encryptedFromEmail ? decrypt(user.encryptedFromEmail) : null,
         };
 
-        res.json({ user, credentials });
-    } catch (e) {
-        res.status(401).json({ error: 'Invalid token' });
-    }
-});
-
-// Update Credentials (Protected)
-router.put('/credentials', authenticateUser, async (req: any, res) => {
-  const { userId } = (req as AuthRequest).user!;
-  const { apiToken, globalRoutingKey, fromEmail } = req.body;
-
-  try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        encryptedPagerDutyApiToken: apiToken ? encrypt(apiToken) : undefined,
-        encryptedGlobalRoutingKey: globalRoutingKey ? encrypt(globalRoutingKey) : undefined,
-        encryptedFromEmail: fromEmail ? encrypt(fromEmail) : undefined,
-      },
-    });
-    res.json({ message: 'Credentials updated' });
-  } catch (error: any) {
-    res.status(500).json({ error: 'Failed to update credentials', details: error.message });
-  }
-});
-
-export default router;
+            res.json({ user, credentials });
+          } catch (e) {
+            res.status(401).json({ error: 'Invalid token' });
+          }
+        });
+        
+        // Update Credentials (Protected)
+        router.put('/credentials', authenticateUser, async (req: any, res) => {
+          const { userId } = (req as AuthRequest).user!;
+          const { apiToken, globalRoutingKey, fromEmail } = req.body;
+        
+          try {
+            await prisma.user.update({
+              where: { id: userId },
+              data: {
+                encryptedPagerDutyApiToken: apiToken ? encrypt(apiToken) : undefined,
+                encryptedGlobalRoutingKey: globalRoutingKey ? encrypt(globalRoutingKey) : undefined,
+                encryptedFromEmail: fromEmail ? encrypt(fromEmail) : undefined,
+              },
+            });
+            res.json({ message: 'Credentials updated' });
+          } catch (error: any) {
+            res.status(500).json({ error: 'Failed to update credentials', details: error.message });
+          }
+        });
+        
+        // DEV ONLY: Bypass Google Auth
+        if (process.env.NODE_ENV !== 'production') {
+          router.post('/dev-login', async (req, res) => {
+            try {
+              const email = 'dev@localhost';
+              const googleId = 'dev-dummy-id';
+              
+              const user = await prisma.user.upsert({
+                where: { googleId },
+                update: {},
+                create: { 
+                  googleId, 
+                  email, 
+                  name: 'Dev User', 
+                  avatarUrl: 'https://via.placeholder.com/150' 
+                },
+              });
+        
+              const sessionToken = jwt.sign(
+                { userId: user.id, email: user.email },
+                process.env.JWT_SECRET || 'dev-secret-key-change-me', 
+                { expiresIn: '7d' }
+              );
+        
+              res.cookie('token', sessionToken, {
+                httpOnly: true,
+                secure: false,
+                sameSite: 'lax',
+                maxAge: 7 * 24 * 60 * 60 * 1000,
+              });
+        
+              res.json({ user });
+            } catch (error: any) {
+              res.status(500).json({ error: 'Dev login failed', details: error.message });
+            }
+          });
+        }
+        
+        export default router;

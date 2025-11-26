@@ -18,6 +18,7 @@ interface AuthContextType {
   credentials: Credentials | null;
   isLoading: boolean;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  loginAsDev: () => Promise<void>;
   logout: () => Promise<void>;
   updateCredentials: (creds: Partial<Credentials>) => Promise<void>;
 }
@@ -65,10 +66,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const data = await res.json();
     setUser(data.user);
-    // Credentials might not come back on login if we don't change the endpoint, 
-    // but usually we redirect or refresh. For now, we assume login returns user only until reload?
-    // Actually, login endpoint currently only returns { user }. I should update it if I want creds immediately.
-    // Or just trigger a reload/fetch.
+  };
+
+  const loginAsDev = async () => {
+    const res = await fetch(`${API_BASE}/auth/dev-login`, {
+        method: 'POST',
+        credentials: 'include'
+    });
+    if (!res.ok) throw new Error('Dev Login failed');
+    const data = await res.json();
+    setUser(data.user);
   };
 
   const logout = async () => {
@@ -90,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, credentials, isLoading, loginWithGoogle, logout, updateCredentials }}>
+    <AuthContext.Provider value={{ user, credentials, isLoading, loginWithGoogle, loginAsDev, logout, updateCredentials }}>
       {children}
     </AuthContext.Provider>
   );
