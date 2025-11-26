@@ -27,7 +27,7 @@ export const useServerSimulation = (): UseServerSimulation => {
   const socketRef = useRef<Socket | null>(null);
   const [currentSimState, setCurrentSimState] = useState<ServerSimulationState | null>(null);
   const [isSimRunning, setIsSimRunning] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // Default to false, waiting for user
 
   const startSimulation = useCallback(() => {
     if (socketRef.current && user && credentials) {
@@ -59,6 +59,7 @@ export const useServerSimulation = (): UseServerSimulation => {
 
   useEffect(() => {
     if (user && !socketRef.current) {
+      setIsLoading(true); // Start loading when connecting
       const socket = io(API_BASE, {
         withCredentials: true, // Send cookies for auth
       });
@@ -99,6 +100,8 @@ export const useServerSimulation = (): UseServerSimulation => {
       });
 
       socketRef.current = socket;
+    } else if (!user) {
+        setIsLoading(false); // Ensure loading is off if no user
     }
 
     return () => {
