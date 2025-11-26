@@ -61,6 +61,56 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// PUT /api/campaigns/:id - Update a campaign
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, description, source, items } = req.body;
+    const campaignId = req.params.id;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Update Campaign details
+      const campaign = await tx.campaign.update({
+        where: { id: campaignId },
+        data: { name, description, source },
+      });
+
+      // 2. Delete existing items
+      await tx.campaignItem.deleteMany({
+        where: { campaignId },
+      });
+
+      // 3. Create new items
+      if (items && items.length > 0) {
+        await tx.campaignItem.createMany({
+          data: items.map((item: any, idx: number) => ({
+            campaignId,
+            order: idx,
+            payload: item.payload || {}, 
+            eventAction: item.eventAction || 'trigger',
+            eventType: item.eventType || 'alert', 
+            dedupKey: item.dedupKey,
+            delaySeconds: Number(item.delaySeconds) || 0,
+            repeatCount: Number(item.repeatCount) || 1,
+            intervalSeconds: Number(item.intervalSeconds) || 0,
+          })),
+        });
+      }
+
+      return campaign;
+    });
+
+    // Fetch final result with items to return
+    const finalCampaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: { items: { orderBy: { order: 'asc' } } },
+    });
+
+    res.json(finalCampaign);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to update campaign', details: error.message });
+  }
+});
+
 // DELETE /api/campaigns/:id
 router.delete('/:id', async (req, res) => {
   try {
