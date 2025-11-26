@@ -102,13 +102,14 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       });
 
       socket.on('sim_state', (state: ServerSimulationState) => {
+        console.log('SimulationProvider: State Sync', state);
         setCurrentSimState(state);
         setIsSimRunning(state.isRunning);
         setIsLoading(false);
       });
 
       socket.on('sim_tick', (state: ServerSimulationState) => {
-        // console.log('SimulationProvider: Tick', state);
+        console.log('SimulationProvider: Tick', state);
         setCurrentSimState(state);
         setIsSimRunning(state.isRunning);
       });
