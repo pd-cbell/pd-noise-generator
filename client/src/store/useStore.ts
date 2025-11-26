@@ -1012,7 +1012,21 @@ export const useStore = create<AppState>()(
 
       createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
         try {
-          const newCampaign = await api.createCampaign(campaignData);
+          // Transform payloadString back to payload JSON object for the backend
+          const apiPayload = {
+            ...campaignData,
+            items: campaignData.items.map(item => {
+              let payload = {};
+              try {
+                payload = JSON.parse(item.payloadString);
+              } catch (e) {
+                console.error("Failed to parse payloadString for item", item.id);
+              }
+              return { ...item, payload };
+            })
+          };
+
+          const newCampaign = await api.createCampaign(apiPayload);
           get().addLog(`Campaign "${newCampaign.name}" created.`, 'info');
           await get().loadImportedCampaigns(); // Reload all campaigns
           return newCampaign;
@@ -1024,7 +1038,21 @@ export const useStore = create<AppState>()(
 
       updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
         try {
-          const updatedCampaign = await api.updateCampaign(id, campaignData);
+          // Transform payloadString back to payload JSON object for the backend
+          const apiPayload = {
+            ...campaignData,
+            items: campaignData.items?.map(item => {
+              let payload = {};
+              try {
+                payload = JSON.parse(item.payloadString);
+              } catch (e) {
+                console.error("Failed to parse payloadString for item", item.id);
+              }
+              return { ...item, payload };
+            })
+          };
+
+          const updatedCampaign = await api.updateCampaign(id, apiPayload);
           get().addLog(`Campaign "${updatedCampaign.name}" updated.`, 'info');
           await get().loadImportedCampaigns(); // Reload all campaigns
           return updatedCampaign;
