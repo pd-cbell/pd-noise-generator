@@ -3,11 +3,14 @@ import { Header } from './components/Header';
 import { ConfigurationForm } from './components/ConfigurationForm';
 import { MonitorDashboard } from './components/MonitorDashboard';
 import { CampaignManager } from './components/CampaignManager';
-import { CampaignEditor } from './components/CampaignEditor'; // Import CampaignEditor
+import { CampaignEditor } from './components/CampaignEditor';
+import { Login } from './components/Login';
 import { useSimulation } from './hooks/useSimulation';
+import { useAuth } from './contexts/AuthContext';
 
 function App() {
-  const [activePage, setActivePage] = useState('campaigns'); // Start on campaigns for testing editor
+  const { user, isLoading } = useAuth();
+  const [activePage, setActivePage] = useState('configure');
   const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
   
   // Initialize simulation engine
@@ -26,6 +29,14 @@ function App() {
   const handleCloseEditor = () => {
     setEditingCampaignId(null);
   };
+
+  if (isLoading) {
+    return <div className="h-screen flex items-center justify-center text-gray-500">Loading Session...</div>;
+  }
+
+  if (!user) {
+    return <Login />;
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 font-sans text-gray-900">

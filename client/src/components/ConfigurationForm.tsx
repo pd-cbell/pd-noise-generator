@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { Loader2 } from 'lucide-react'; 
-import { SeverityTabs } from './SeverityTabs'; // Import the new component
+import { Loader2, Save } from 'lucide-react'; 
+import { SeverityTabs } from './SeverityTabs'; 
+import { useAuth } from '../contexts/AuthContext';
 
 export const ConfigurationForm: React.FC = () => {
   const { 
@@ -14,6 +15,29 @@ export const ConfigurationForm: React.FC = () => {
     selectedTeamIds, setSelectedTeamIds, setServiceInclude,
     selectedEPIds, setSelectedEPIds
   } = useStore();
+
+  const { credentials, updateCredentials } = useAuth();
+
+  useEffect(() => {
+    if (credentials) {
+        if (!apiToken && credentials.apiToken) setCredentials({ apiToken: credentials.apiToken });
+        if (!globalRoutingKey && credentials.globalRoutingKey) setCredentials({ globalRoutingKey: credentials.globalRoutingKey });
+        if (!fromEmail && credentials.fromEmail) setCredentials({ fromEmail: credentials.fromEmail });
+    }
+  }, [credentials]);
+
+  const handleSaveToProfile = async () => {
+      if (!apiToken && !globalRoutingKey && !fromEmail) {
+          addLog("No credentials to save.", "warn");
+          return;
+      }
+      try {
+          await updateCredentials({ apiToken, globalRoutingKey, fromEmail });
+          addLog("Credentials saved to your user profile.", "info");
+      } catch (e) {
+          addLog("Failed to save credentials to profile.", "error");
+      }
+  };
 
   const handleLoadTeams = async () => {
     if (!apiToken || !pdSubdomain) {
@@ -97,12 +121,19 @@ export const ConfigurationForm: React.FC = () => {
                onChange={(e) => setCredentials({ fromEmail: e.target.value })}
              />
           </div>
-          <div className="pt-2">
+          <div className="pt-2 flex gap-2">
+            <button
+              onClick={handleSaveToProfile}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-colors"
+            >
+              <Save className="w-4 h-4" />
+              Save to Profile
+            </button>
             <button
               onClick={handleLoadTeams}
               disabled={!apiToken || !pdSubdomain || isTeamsLoading}
               className={`
-                w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold text-white transition-colors
+                flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold text-white transition-colors
                 ${(!apiToken || !pdSubdomain)
                   ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700'}

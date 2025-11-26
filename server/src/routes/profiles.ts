@@ -1,12 +1,18 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../prisma';
+import { authenticateUser, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-// GET /api/profiles - List all profiles
-router.get('/', async (req, res) => {
+// Apply auth middleware to all routes
+router.use(authenticateUser);
+
+// GET /api/profiles - List all profiles for the logged-in user
+router.get('/', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
     const profiles = await prisma.profile.findMany({
+      where: { userId },
       orderBy: { updatedAt: 'desc' },
     });
     res.json({ profiles });
@@ -15,11 +21,12 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/profiles/:id - Get a single profile
-router.get('/:id', async (req, res) => {
+// GET /api/profiles/:id - Get a single profile (scoped)
+router.get('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
-    const profile = await prisma.profile.findUnique({
-      where: { id: req.params.id },
+    const profile = await prisma.profile.findFirst({
+      where: { id: req.params.id, userId },
     });
     if (!profile) {
       return res.status(404).json({ error: 'Profile not found' });
@@ -31,7 +38,8 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/profiles - Create a new profile
-router.post('/', async (req, res) => {
+router.post('/', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
     const { name, description, settings } = req.body;
     const profile = await prisma.profile.create({
@@ -39,6 +47,7 @@ router.post('/', async (req, res) => {
         name,
         description,
         settings: settings || {},
+        userId,
       },
     });
     res.status(201).json(profile);
@@ -48,8 +57,13 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/profiles/:id - Update a profile
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
+    // Ensure ownership
+    const existing = await prisma.profile.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) return res.status(404).json({ error: 'Profile not found' });
+
     const { name, description, settings } = req.body;
     const profile = await prisma.profile.update({
       where: { id: req.params.id },
@@ -66,8 +80,13 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/profiles/:id - Delete a profile
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
+    // Ensure ownership
+    const existing = await prisma.profile.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) return res.status(404).json({ error: 'Profile not found' });
+
     await prisma.profile.delete({
       where: { id: req.params.id },
     });

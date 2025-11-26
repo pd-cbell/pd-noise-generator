@@ -1,15 +1,16 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../prisma';
 import { CampaignExecutor } from '../services/CampaignExecutor';
+import { authenticateUser, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-// POST /api/campaigns/:id/trigger - Webhook trigger
+// POST /api/campaigns/:id/trigger - Webhook trigger (Public/Unauthenticated)
 router.post('/:id/trigger', async (req, res) => {
   try {
     const campaignId = req.params.id;
     
-    // Fetch campaign first to check for stored credentials
+    // Fetch campaign (No user scoping here, allows CI/CD triggering)
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: { items: { orderBy: { order: 'asc' } } },
@@ -19,11 +20,9 @@ router.post('/:id/trigger', async (req, res) => {
       return res.status(404).json({ error: "Campaign not found" });
     }
 
-    // Extract credentials from headers, body, or stored campaign
     const globalRoutingKey = (req.headers['x-pd-routing-key'] as string) || req.body.globalRoutingKey;
     const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
 
-    // Fire and forget (Async execution)
     const executor = new CampaignExecutor({
       globalRoutingKey,
       changeRoutingKey
@@ -42,10 +41,15 @@ router.post('/:id/trigger', async (req, res) => {
   }
 });
 
-// GET /api/campaigns - List all campaigns with items
-router.get('/', async (req, res) => {
+// Apply auth middleware to all subsequent routes (CRUD)
+router.use(authenticateUser);
+
+// GET /api/campaigns - List all campaigns for the logged-in user
+router.get('/', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
     const campaigns = await prisma.campaign.findMany({
+      where: { userId },
       include: { items: { orderBy: { order: 'asc' } } },
       orderBy: { createdAt: 'desc' },
     });
@@ -56,7 +60,8 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/campaigns - Create a new campaign
-router.post('/', async (req, res) => {
+router.post('/', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
     const { name, description, source, integrationKey, items } = req.body;
     
@@ -66,6 +71,7 @@ router.post('/', async (req, res) => {
         description,
         source,
         integrationKey,
+        userId, // Assign owner
         items: {
           create: (items || []).map((item: any, idx: number) => ({
             order: idx,
@@ -89,11 +95,12 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/campaigns/:id - Get a single campaign
-router.get('/:id', async (req, res) => {
+// GET /api/campaigns/:id - Get a single campaign (Scoped)
+router.get('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: req.params.id, userId },
       include: { items: { orderBy: { order: 'asc' } } },
     });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
@@ -103,9 +110,14 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/campaigns/:id - Update a campaign
-router.put('/:id', async (req, res) => {
+// PUT /api/campaigns/:id - Update a campaign (Scoped)
+router.put('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
+    // Ensure ownership
+    const existing = await prisma.campaign.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) return res.status(404).json({ error: 'Campaign not found' });
+
     const { name, description, source, integrationKey, items } = req.body;
     const campaignId = req.params.id;
 
@@ -155,9 +167,14 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/campaigns/:id
-router.delete('/:id', async (req, res) => {
+// DELETE /api/campaigns/:id - Delete a campaign (Scoped)
+router.delete('/:id', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
   try {
+    // Ensure ownership
+    const existing = await prisma.campaign.findFirst({ where: { id: req.params.id, userId } });
+    if (!existing) return res.status(404).json({ error: 'Campaign not found' });
+
     await prisma.campaign.delete({ where: { id: req.params.id } });
     res.status(204).send();
   } catch (error: any) {
