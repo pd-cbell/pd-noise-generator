@@ -5,16 +5,16 @@ import { MonitorDashboard } from './components/MonitorDashboard';
 import { CampaignManager } from './components/CampaignManager';
 import { CampaignEditor } from './components/CampaignEditor';
 import { Login } from './components/Login';
-import { useSimulation } from './hooks/useSimulation';
 import { useAuth } from './contexts/AuthContext';
+import { useServerSimulation } from './hooks/useServerSimulation';
 
 function App() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); // New
   const [activePage, setActivePage] = useState('configure');
   const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
   
-  // Initialize simulation engine
-  useSimulation();
+  // No longer using browser-side simulation engine directly here
 
   const handleNavigate = (page: string) => {
     setEditingCampaignId(null); // Close editor when navigating away
@@ -30,7 +30,7 @@ function App() {
     setEditingCampaignId(null);
   };
 
-  if (isLoading) {
+  if (isAuthLoading || isSimLoading) { // Check both auth and sim loading
     return <div className="h-screen flex items-center justify-center text-gray-500">Loading Session...</div>;
   }
 
@@ -40,7 +40,11 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 font-sans text-gray-900">
-      <Header activePage={activePage} onNavigate={handleNavigate} />
+      <Header 
+        activePage={activePage} 
+        onNavigate={handleNavigate} 
+        isSimRunning={isSimRunning} // Pass to Header
+      />
       
       <main className="flex-1 overflow-auto relative">
         {activePage === 'configure' && <ConfigurationForm />}
