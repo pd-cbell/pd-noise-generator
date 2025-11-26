@@ -1,14 +1,38 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  noise-simulator:
-    build:
-      context: .
-    env_file:
-      - .env
-    ports:
-      - "${PORT:-3001}:3001"
+  db:
+    image: postgres:15-alpine
     environment:
-      # Allow overriding via docker-compose overrides without editing .env
-      PORT: "${PORT:-3001}"
-    restart: unless-stopped
+      POSTGRES_USER: pdns
+      POSTGRES_PASSWORD: pdnspassword
+      POSTGRES_DB: pdns_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pdns"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./server
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgres://pdns:pdnspassword@db:5432/pdns_db
+      # PD_API_BASE defaults to https://api.pagerduty.com in code if missing
+    restart: always
+
+  web:
+    build: ./client
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    restart: always
+
+volumes:
+  postgres_data:

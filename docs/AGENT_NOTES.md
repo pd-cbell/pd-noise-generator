@@ -33,11 +33,24 @@ These notes help future pairing sessions or automation agents quickly orient the
 
 ## Roadmap
 
-### v1.6.1 - Campaign Editor UX (Complete)
+### v1.6.2 - Import Crux (Robust Re-attempt)
+**Goal:** Safely integrate Crux campaign import functionality without introducing rendering issues.
+**Lessons Learned from v1.6.1 failure:**
+- Zustand's `persist` middleware can cause hydration timing issues, leading to `undefined` state variables on initial render.
+- Components must be highly defensive when accessing store-derived state (e.g., `(variable || []).property` or optional chaining `variable?.property`).
+- Large, multi-file changes are prone to errors if not tested incrementally.
+**Strategy for re-attempt:**
+1.  Isolate `importCampaignFromCrux` action and its types in `useStore.ts`.
+2.  Implement robust null/undefined checks for *all* store-derived arrays/objects (`services`, `importedCampaigns`, `campaignConfig`, etc.) directly in `CampaignManager.tsx` and any other affected components.
+3.  Add the UI elements (button, file input) only *after* the component is stable with the defensive checks.
+4.  Test incrementally after each change.
+
+### v1.6.1 - Campaign Editor UX & Zero-Config Webhooks (Complete)
 - **Collapsible Steps:** Improve UI for long campaigns.
 - **Named Steps:** Add `stepName` to schema.
 - **Per-Step Routing:** Add `integrationKey` to schema for Change events.
 - **JSON Tools:** Prettify/Validate JSON in editor.
+- **Zero-Config Webhooks:** Added POST /api/campaigns/:id/trigger endpoint and UI for campaign-level incident routing key. (Note: API Token removal was also part of this refinement).
 
 ### v1.6 - High Fidelity & Control (Complete)
 - **API RPM Enhancement:** Show current RPM + "Last 60s" total count.

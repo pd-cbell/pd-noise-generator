@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'PagerDuty Noise Simulator - EC2 Deployment'
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  
+  RepoUrl:
+    Description: Git repository URL to clone
+    Type: String
+    Default: https://github.com/pd-cbell/pd-noise-generator.git
+
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t3.medium
+    AllowedValues: [t3.small, t3.medium, t3.large, m5.large]
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0230bd60aa48260c6 # Amazon Linux 2023
+    us-west-2:
+      AMI: ami-0cd3c7f72edd5b06d
+    eu-west-1:
+      AMI: ami-01dd271720c1ba44f
+
+Resources:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and SSH
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      SecurityGroups:
+        - !Ref SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf update -y
+          dnf install -y docker git
+          service docker start
+          usermod -a -G docker ec2-user
+          
+          # Install Docker Compose
+          mkdir -p /usr/local/lib/docker/cli-plugins/
+          curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose
+          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          
+          # Clone and Run
+          cd /home/ec2-user
+          git clone ${RepoUrl} noise-generator
+          cd noise-generator
+          
+          # Start
+          docker compose up -d
+
+Outputs:
+  URL:
+    Description: Application URL
+    Value: !Sub "http://${EC2Instance.PublicDnsName}:8080"

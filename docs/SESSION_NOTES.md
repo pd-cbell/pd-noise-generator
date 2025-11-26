@@ -1,32 +1,35 @@
-# Session Notes (v1.6.1 Complete)
+## Failed Workstream: v1.6.1 - Import Crux Feature (Reverted)
 
 **Date:** 2025-11-26
 **Facilitator:** Gemini Agent
 
-## Workstream v1.6.1 – Campaign Editor UX & Precision
+### Goals (Re-attempt Required)
+- Add "Import (Crux)" button to CampaignManager.
+- Implement logic to parse Crux JSON and create new campaigns from it.
 
-### Goals
-- Improve the usability of the Campaign Editor for long scenarios (collapsible steps).
-- Allow named steps for better readability.
-- Support per-step integration keys for Change Events (replacing global overrides).
-- Add modern JSON editing conveniences (prettify).
+### Issues Encountered & Root Causes (Suspected)
+- Repeated `Uncaught TypeError: Cannot read properties of undefined (reading 'length')` errors in `CampaignManager.tsx` related to:
+    - `services`: (Line 57) during `changeCoverage` calculation.
+    - `importedCampaigns`: (Line 89/300) when accessing `length` or `map`.
+- `Uncaught TypeError: Cannot read properties of undefined (reading 'enabled')` in `CampaignManager.tsx` (Line 96) related to `campaignConfig`.
+- `Uncaught TypeError: importCampaignFromCrux is not a function` in CampaignManager.tsx.
+- **Root Cause (Suspected):** A combination of factors:
+    1.  **Zustand `persist` hydration timing:** Despite providing default values in `useStore()` destructuring, components were attempting to render before the persisted state (especially arrays and objects like `services`, `importedCampaigns`, `campaignConfig`) was fully hydrated by Zustand's `persist` middleware, leading to `undefined` values during the initial render pass.
+    2.  **Lack of sufficient inline defensive programming:** While some destructuring defaults were added, not every access point in the JSX used robust `(variable || []).property` or `variable?.property` checks.
+    3.  **Accidental code loss/re-introduction:** The initial implementation of `importCampaignFromCrux` store action was lost during a `git reset` (while fixing the payload persistence bug), leading to the "is not a function" error when the UI attempted to call it. This was fixed, but the rendering stability issues persisted.
+    4.  **Complexity of changes:** Multiple intertwined changes (UI refactor, new store action, backend updates) made debugging difficult.
 
-### Completed Tasks
-- **Database:**
-    - Added `stepName` and `integrationKey` to `CampaignItem` model.
-    - Applied migration `add_campaign_item_fields`.
-- **Frontend (CampaignEditor):**
-    - Implemented collapsible cards for steps.
-    - Added "Step Name" input field.
-    - Added "Routing Key" input field (conditional: only when type = 'change').
-    - Added "Prettify JSON" button to the payload editor.
-- **Backend (API/Logic):**
-    - Updated `campaigns.ts` (POST/PUT) to persist new fields.
-    - Updated `triggerImportedCampaign` (Store) to use the per-step key if present.
+### Resolution
+- Reverted the repository to commit `4923f3d` (`fix: parse payloadString to JSON before saving campaigns`), which was the last known stable state before attempting the "Import Crux" feature.
+- This ensures the core Campaign Editor UX and Zero-Config Webhook features (from v1.6.1) remain functional.
+
+### Next Steps for Re-attempt
+- A more modular and defensive approach will be used for re-implementing the "Import Crux" feature.
+- Explicit `null`/`undefined` checks or conditional rendering will be used for any state derived from the store during initial renders.
 
 ---
 
-# Session Notes (v1.6 Complete)
+# Session Notes (v1.6.1 - Zero-Config Webhooks Complete)
 
 **Date:** 2025-11-26
 **Facilitator:** Gemini Agent
