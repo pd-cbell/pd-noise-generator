@@ -29,26 +29,26 @@ export const useServerSimulation = (): UseServerSimulation => {
   const [isSimRunning, setIsSimRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Get current simulation config from Zustand store
-  const simConfig = useStore(state => ({
-    ratePerMinute: state.ratePerMinute,
-    severityWeights: state.severityWeights,
-    autoHealConfig: state.autoHealConfig,
-    resumeExistingEnabled: state.resumeExistingEnabled,
-    sourceMix: state.sourceMix,
-    burstProbability: state.burstProbability,
-    severityConfigs: state.severityConfigs,
-    // When sending config to server, we need selected services to be full objects, not just IDs
-    selectedServices: state.services.filter(svc => svc.include), 
-  }));
-
   const startSimulation = useCallback(() => {
     if (socketRef.current && user && credentials) {
       setIsLoading(true);
+      // Get current simulation config from Zustand store state directly
+      const state = useStore.getState();
+      const simConfig = {
+        ratePerMinute: state.ratePerMinute,
+        severityWeights: state.severityWeights,
+        autoHealConfig: state.autoHealConfig,
+        resumeExistingEnabled: state.resumeExistingEnabled,
+        sourceMix: state.sourceMix,
+        burstProbability: state.burstProbability,
+        severityConfigs: state.severityConfigs,
+        selectedServices: state.services.filter(svc => svc.include), 
+      };
+      
       // Send config and credentials for the server engine to use
       socketRef.current.emit('start_simulation', { config: simConfig, credentials });
     }
-  }, [user, credentials, simConfig]);
+  }, [user, credentials]); // simConfig removed from deps
 
   const stopSimulation = useCallback(() => {
     if (socketRef.current) {
