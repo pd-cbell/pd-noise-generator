@@ -1,84 +1,66 @@
-# PagerDuty Incident Noise Simulator v1.6
+# PagerDuty Incident Noise Simulator v1.7
 
-A full-stack application for generating realistic incident noise and telemetry signals against a PagerDuty account. Perfect for demos, workshops, and chaos engineering simulations.
+A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now with **Server-Side Execution**, **User Authentication**, and **Persistent Sessions**.
 
-![Version](https://img.shields.io/badge/version-1.6-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.7-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
-## 🚀 New in v1.6
-- **Failure Campaigns:** Design complex, multi-step failure scenarios (Alerts + Change Events) with a visual editor.
-- **Zero-Config Webhooks:** Trigger campaigns from any external tool (CI/CD, Slack, scripts) using a simple "Magic Link"—no headers required.
-- **Crux Import:** Import existing Crux payload definitions directly into the simulator.
+## 🚀 New in v1.7 (Replatform)
+- **Headless Simulation:** The simulation engine runs on the backend. You can close your browser, and noise will continue to generate.
+- **Multi-User Support:** Sign in with Google (or Dev Login). Each user has their own isolated Profiles, Campaigns, and Active Simulations.
+- **Real-Time Dashboard:** Powered by WebSockets (Socket.io) for instant updates on incidents, API usage, and MTTA/MTTR metrics.
+- **Secure Credentials:** PagerDuty API tokens are encrypted at rest (AES-256) and linked to your user profile. No more copy-pasting tokens every session.
+- **Cloud Database:** Ready for AWS RDS deployment via CloudFormation.
+
+## ✨ Core Features
+- **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.
+- **Lifecycle Automation:** Auto-Acknowledge and Auto-Resolve incidents based on severity targets.
+- **Campaign Engine:** Design complex failure scenarios (Alerts + Change Events) with a visual editor.
+- **Zero-Config Webhooks:** Trigger campaigns from CI/CD pipelines using secure, token-less magic links.
 - **Event Bursts:** Simulate "Event Storms" with compressed alert bursts.
-- **Live Metrics:** Real-time tracking of API RPM, MTTA, and MTTR.
 
-## ✨ Features
+## 🛠️ Local Development
 
-### 🎛️ Interactive Simulation
-- **Realistic Traffic:** Generates incidents using a Poisson distribution to mimic real-world entropy.
-- **Full Lifecycle:** Automatically acknowledges and resolves incidents based on configurable MTTA/MTTR targets per severity.
-- **Responder Simulation:** Automatically adds notes and requests responders to simulate team activity.
+### Prerequisites
+- Node.js 18+
+- Docker (for PostgreSQL)
 
-### 💥 Campaign Engine
-- **Visual Editor:** Create linear scenarios (e.g., "Database Upgrade Failure") that mix Incidents and Change Events.
-- **Change Events:** Correlate deployments (Change Events) with subsequent failures to demonstrate Root Cause Analysis.
-- **Webhook Triggers:** Each campaign generates a unique trigger URL. Embed it in your GitHub Actions or Jenkins pipeline to fire a simulation automatically on build.
+### Quick Start
+1.  **Start Database:**
+    ```bash
+    docker-compose up -d db
+    ```
+2.  **Backend:**
+    ```bash
+    cd server
+    npm install
+    npx prisma migrate dev
+    npm run dev
+    ```
+3.  **Frontend:**
+    ```bash
+    cd client
+    npm install
+    npm run dev
+    ```
+4.  **Access:** Open `http://localhost:5173`. Use **"Dev Login (Bypass)"** to start without Google credentials.
 
-### 📊 Monitor Dashboard
-- **Real-time Trends:** Visual sparklines for event volume.
-- **Metric Cards:** Track your demo's "performance" with live MTTA/MTTR stats.
-- **API Budgeting:** Monitor API Request usage (RPM) to stay within safe demo limits.
+## ☁️ Deployment (AWS)
 
-## 🐳 Quick Start (Docker)
+This repository includes a CloudFormation template (`deploy/aws-cfn.yaml`) that deploys the entire stack to an EC2 instance.
 
-The easiest way to run the simulator is via Docker Compose. This spins up the Frontend, Backend, and Database in isolation.
+- **EC2:** hosting Docker containers (Frontend + Backend).
+- **RDS (Optional):** Managed PostgreSQL database for persistence.
+- **Security:** Auto-configures Security Groups for HTTP/SSH access.
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/pd-cbell/pd-noise-generator.git
-cd pd-noise-generator
+## 🔐 Environment Variables
 
-# 2. Start the stack
-docker-compose up --build -d
-
-# 3. Access the UI
-open http://localhost:8080
-```
-
-## ☁️ Deploy to AWS
-
-A CloudFormation template is provided to launch the simulator on a standalone EC2 instance.
-
-1.  Go to the [AWS CloudFormation Console](https://console.aws.amazon.com/cloudformation).
-2.  Create Stack -> Upload a template file.
-3.  Upload `deploy/aws-cfn.yaml`.
-4.  Select an SSH Key Pair and launch.
-5.  Once complete, visit `http://<EC2-Public-IP>:8080`.
-
-## 🛠️ Usage Guide
-
-### 1. Configure
-Go to the **Configure** tab.
-- **Credentials:** Enter your PagerDuty **User API Token** and a **Global Routing Key** (Events v2).
-- **Select Services:** Choose which services should receive noise.
-- **Profiles:** Save your configuration as a Profile to switch between demos easily.
-
-### 2. Campaigns
-Go to the **Campaigns** tab.
-- **Create:** Build a new scenario. Add steps for "Change Events" (deployments) and "Incidents" (alerts).
-- **Webhook:** Copy the Webhook URL to trigger this scenario remotely.
-- **Import:** Use the **Import (Crux)** button to load pre-defined scenarios from JSON.
-
-### 3. Monitor
-Go to the **Monitor** tab.
-- **Control:** Start/Pause the noise generator.
-- **Observe:** Watch incidents trigger, ack, and resolve in real-time.
-
-## 🏗️ Architecture
-
-- **Frontend:** React (Vite) + Tailwind CSS + Zustand.
-- **Backend:** Node.js (Express) + Prisma (PostgreSQL).
-- **Database:** PostgreSQL 15.
+| Variable | Description |
+| :--- | :--- |
+| `DATABASE_URL` | PostgreSQL connection string. |
+| `JWT_SECRET` | Secret key for signing session cookies. |
+| `ENCRYPTION_KEY` | 32-char key for encrypting user API tokens. |
+| `GOOGLE_CLIENT_ID` | OAuth Client ID for Google Sign-In. |
+| `CLIENT_URL` | URL of the frontend (for CORS). |
 
 ## 📜 License
-
 This project is provided as-is for demonstration purposes.
