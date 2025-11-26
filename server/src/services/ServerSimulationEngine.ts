@@ -72,7 +72,7 @@ export class SimulationInstance {
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      apiBase: process.env.PD_API_BASE,
+      apiBase: process.env.PD_API_BASE || 'https://api.pagerduty.com',
     });
     
     // Seed payload registry on creation
