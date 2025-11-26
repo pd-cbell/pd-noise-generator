@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'PagerDuty Noise Simulator - EC2 Deployment'
+Description: 'PagerDuty Noise Simulator - EC2 Deployment with optional RDS PostgreSQL'
 
 Parameters:
   KeyName:
@@ -18,6 +18,44 @@ Parameters:
     Default: t3.medium
     AllowedValues: [t3.small, t3.medium, t3.large, m5.large]
 
+  DatabaseType:
+    Description: Choose 'Local' for EC2-hosted Postgres or 'RDS' for a managed RDS instance.
+    Type: String
+    Default: Local
+    AllowedValues: [Local, RDS]
+
+  DBInstanceType:
+    Description: RDS DB Instance Type (e.g., db.t3.micro)
+    Type: String
+    Default: db.t3.micro
+    AllowedValues: [db.t3.micro, db.t3.small, db.t3.medium, db.t2.micro, db.t2.small, db.t2.medium]
+    ConstraintDescription: must be a valid RDS database instance type.
+  
+  DBAllocatedStorage:
+    Description: The size (in GiB) of the allocated storage for the DB instance.
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 1024
+    ConstraintDescription: must be between 20 and 1024 GiB.
+
+  DBUsername:
+    Description: Username for the RDS database.
+    Type: String
+    Default: pdnsuser
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DBPassword:
+    Description: Password for the RDS database.
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+    NoEcho: true
+    ConstraintDescription: must contain between 8 and 41 characters.
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -28,10 +66,67 @@ Mappings:
       AMI: ami-01dd271720c1ba44f
 
 Resources:
-  SecurityGroup:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-VPC"
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-PublicSubnet"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-IGW"
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-RouteTable"
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref RouteTable
+
+  EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and SSH
+      VpcId: !Ref VPC
+      GroupDescription: Enable HTTP access on port 8080 and SSH access on port 22
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8080
@@ -42,36 +137,103 @@ Resources:
           ToPort: 22
           CidrIp: 0.0.0.0/0
 
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow inbound access to RDS from EC2 instance
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !GetAtt EC2SecurityGroup.GroupId
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDS
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS instance
+      SubnetIds:
+        - !Ref PublicSubnet
+
+  RDSDBInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDS
+    Properties:
+      DBName: pdns_db
+      Engine: postgres
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBInstanceClass: !Ref DBInstanceType
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+      EngineVersion: "15.4" # Specify a consistent Postgres version
+      MultiAZ: "false" # Keep it simple for demo/dev
+
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      SecurityGroups:
-        - !Ref SecurityGroup
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-EC2"
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           dnf update -y
           dnf install -y docker git
-          service docker start
+          systemctl start docker
+          systemctl enable docker
           usermod -a -G docker ec2-user
           
           # Install Docker Compose
-          mkdir -p /usr/local/lib/docker/cli-plugins/
-          curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o /usr/local/lib/docker/cli-plugins/docker-compose
-          chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+          DOCKER_CONFIG=${DOCKER_CONFIG:-/usr/local/lib/docker}
+          mkdir -p $DOCKER_CONFIG/cli-plugins
+          curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) -o $DOCKER_CONFIG/cli-plugins/docker-compose
+          chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
           
-          # Clone and Run
+          # Clone Repo
           cd /home/ec2-user
           git clone ${RepoUrl} noise-generator
           cd noise-generator
           
-          # Start
+          # Prepare environment variables
+          echo "PORT=8080" > .env
+          echo "CLIENT_URL=http://localhost:8080" >> .env
+          echo "JWT_SECRET=${JWT_SECRET_PLACEHOLDER}" >> .env # Placeholder - MUST BE SECURED
+          echo "ENCRYPTION_KEY=${ENCRYPTION_KEY_PLACEHOLDER}" >> .env # Placeholder - MUST BE SECURED
+          
+          if [ "${DatabaseType}" == "RDS" ]; then
+            DB_ENDPOINT="${RDSDBInstance.Endpoint.Address}"
+            DB_PORT="${RDSDBInstance.Endpoint.Port}"
+            echo "DATABASE_URL=postgresql://${DBUsername}:${DBPassword}@${DB_ENDPOINT}:${DB_PORT}/pdns_db" >> .env
+          else
+            echo "DATABASE_URL=postgresql://pdns:pdnspassword@db:5432/pdns_db" >> .env
+          fi
+          
+          # Start Docker Compose
           docker compose up -d
 
+Conditions:
+  CreateRDS: !Equals [!Ref DatabaseType, RDS]
+
 Outputs:
-  URL:
+  AppURL:
     Description: Application URL
     Value: !Sub "http://${EC2Instance.PublicDnsName}:8080"
+    Export:
+      Name: !Sub "${AWS::StackName}-AppURL"
+
+  RDSJDBCConnectionString:
+    Condition: CreateRDS
+    Description: JDBC connection string for the RDS database (if created)
+    Value: !Sub "jdbc:postgresql://${RDSDBInstance.Endpoint.Address}:${RDSDBInstance.Endpoint.Port}/pdns_db"
+    Export:
+      Name: !Sub "${AWS::StackName}-RDSJDBCConnectionString"
