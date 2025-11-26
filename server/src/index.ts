@@ -1,28 +1,6 @@
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-import jwt from 'jsonwebtoken';
-import proxyRouter from './routes/proxy';
-import profilesRouter from './routes/profiles';
-import campaignsRouter from './routes/campaigns';
-import authRouter from './routes/auth';
-import { simulationManager } from './services/ServerSimulationEngine';
+import { SimulationManager } from './services/ServerSimulationEngine'; // Import the class
 
-dotenv.config();
-
-const app = express();
-const server = http.createServer(app);
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
-
-app.use(cors({
-  origin: CLIENT_URL,
-  credentials: true
-}));
-app.use(express.json());
-app.use(cookieParser());
+// ... (other code)
 
 const io = new Server(server, {
   cors: {
@@ -53,6 +31,8 @@ io.use((socket, next) => {
   }
 });
 
+const simulationManager = new SimulationManager(io); // Create the singleton instance
+
 io.on('connection', (socket) => {
   const userId = socket.data.user.userId;
   socket.join(userId);
@@ -63,16 +43,6 @@ io.on('connection', (socket) => {
   if (existingSim && existingSim.state.isRunning) {
       socket.emit('sim_state', existingSim.state);
   }
-
-  // Polling interval to push state to this specific socket
-  // In a real app, we'd emit to the 'room' (userId) from the engine itself
-  // to support multiple tabs.
-  const pushInterval = setInterval(() => {
-      const sim = simulationManager.get(userId);
-      if (sim && sim.state.isRunning) {
-          socket.emit('sim_tick', sim.state);
-      }
-  }, 1000);
 
   socket.on('start_simulation', (data) => {
       const sim = simulationManager.createOrUpdate(userId, data.config, data.credentials);
@@ -87,7 +57,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-      clearInterval(pushInterval);
+      // Clean up resources if necessary
   });
 });
 
