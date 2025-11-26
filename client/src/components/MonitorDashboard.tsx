@@ -1,17 +1,29 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore, IncidentSeverity } from '../store/useStore';
-import { Incident } from '../store/useStore'; 
+import { useStore, IncidentSeverity, Incident } from '../store/useStore'; 
 import { TrendChart } from './TrendChart';
 import { Activity, PauseCircle, PlayCircle, StopCircle, Zap } from 'lucide-react';
+import { useServerSimulation } from '../hooks/useServerSimulation';
 
 export const MonitorDashboard: React.FC = () => {
-  const { 
-    activeIncidents, log, monitorTrend, clearActiveIncidents, addLog, 
-    avgMtta, avgMttr, totalEvents, apiRpm, apiCallsLast60s, droppedEvents,
-    isGenerating, isManaging
-  } = useStore();
+  const { pdSubdomain } = useStore(); // Only need non-sim state from global store
+  const { currentSimState, isSimRunning, ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents } = useServerSimulation();
   
   const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Safely access state from ServerSimulationState
+  const activeIncidents = currentSimState?.activeIncidents || [];
+  const log = (currentSimState?.log as {ts:string, type:string, msg:string}[]) || [];
+  const monitorTrend = currentSimState?.monitorTrend || [];
+  const totalEvents = currentSimState?.totalEvents || 0;
+  
+  // Access metrics from state.metrics
+  const metrics = currentSimState?.metrics || {
+      avgMtta: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      apiRpm: 0,
+      apiCallsLast60s: 0,
+      droppedEvents: 0
+  };
 
   // Auto-scroll for log viewer
   useEffect(() => {
@@ -32,8 +44,7 @@ export const MonitorDashboard: React.FC = () => {
   };
 
   const getStatus = () => {
-    if (isGenerating && isManaging) return { label: 'Running', color: 'text-green-600', icon: PlayCircle };
-    if (!isGenerating && isManaging) return { label: 'Paused', color: 'text-yellow-600', icon: PauseCircle };
+    if (isSimRunning) return { label: 'Running', color: 'text-green-600', icon: PlayCircle };
     return { label: 'Stopped', color: 'text-red-600', icon: StopCircle };
   };
 
@@ -65,9 +76,9 @@ export const MonitorDashboard: React.FC = () => {
                 <p className="text-xs text-gray-400 font-medium">API RPM</p>
                 <div className="flex items-center gap-1 text-indigo-600">
                    <Zap className="w-3 h-3" />
-                   <span className="text-lg font-bold">{apiRpm}</span>
-                   {apiCallsLast60s !== undefined && apiCallsLast60s !== null && (
-                     <span className="ml-1 text-xs text-gray-500 font-medium">({apiCallsLast60s} in 60s)</span>
+                   <span className="text-lg font-bold">{Math.round(metrics.apiRpm)}</span>
+                   {metrics.apiCallsLast60s !== undefined && (
+                     <span className="ml-1 text-xs text-gray-500 font-medium">({metrics.apiCallsLast60s} in 60s)</span>
                    )}
                 </div>
              </div>
@@ -80,20 +91,20 @@ export const MonitorDashboard: React.FC = () => {
           <div className="space-y-2">
             <div className="flex justify-between items-center border-b border-gray-100 pb-1">
                <span className="text-xs font-bold text-gray-700">Global</span>
-               <span className="text-sm font-bold text-gray-900">{formatDuration(avgMtta.global)}</span>
+               <span className="text-sm font-bold text-gray-900">{formatDuration(metrics.avgMtta.global)}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
                <div>
                  <span className="block text-gray-400">Warn</span>
-                 <span className="font-medium text-yellow-700">{formatDuration(avgMtta.warning)}</span>
+                 <span className="font-medium text-yellow-700">{formatDuration(metrics.avgMtta.warning)}</span>
                </div>
                <div>
                  <span className="block text-gray-400">Error</span>
-                 <span className="font-medium text-orange-700">{formatDuration(avgMtta.error)}</span>
+                 <span className="font-medium text-orange-700">{formatDuration(metrics.avgMtta.error)}</span>
                </div>
                <div>
                  <span className="block text-gray-400">Crit</span>
-                 <span className="font-medium text-red-700">{formatDuration(avgMtta.critical)}</span>
+                 <span className="font-medium text-red-700">{formatDuration(metrics.avgMtta.critical)}</span>
                </div>
             </div>
           </div>
@@ -105,20 +116,20 @@ export const MonitorDashboard: React.FC = () => {
           <div className="space-y-2">
             <div className="flex justify-between items-center border-b border-gray-100 pb-1">
                <span className="text-xs font-bold text-gray-700">Global</span>
-               <span className="text-sm font-bold text-gray-900">{formatDuration(avgMttr.global)}</span>
+               <span className="text-sm font-bold text-gray-900">{formatDuration(metrics.avgMttr.global)}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
                <div>
                  <span className="block text-gray-400">Warn</span>
-                 <span className="font-medium text-yellow-700">{formatDuration(avgMttr.warning)}</span>
+                 <span className="font-medium text-yellow-700">{formatDuration(metrics.avgMttr.warning)}</span>
                </div>
                <div>
                  <span className="block text-gray-400">Error</span>
-                 <span className="font-medium text-orange-700">{formatDuration(avgMttr.error)}</span>
+                 <span className="font-medium text-orange-700">{formatDuration(metrics.avgMttr.error)}</span>
                </div>
                <div>
                  <span className="block text-gray-400">Crit</span>
-                 <span className="font-medium text-red-700">{formatDuration(avgMttr.critical)}</span>
+                 <span className="font-medium text-red-700">{formatDuration(metrics.avgMttr.critical)}</span>
                </div>
             </div>
           </div>
@@ -130,7 +141,7 @@ export const MonitorDashboard: React.FC = () => {
            <div className="space-y-3 pt-2">
               <div className="flex justify-between items-center">
                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Dropped Events</span>
-                 <span className={`text-xl font-bold ${droppedEvents > 0 ? 'text-red-600' : 'text-gray-700'}`}>{droppedEvents}</span>
+                 <span className={`text-xl font-bold ${metrics.droppedEvents > 0 ? 'text-red-600' : 'text-gray-700'}`}>{metrics.droppedEvents}</span>
               </div>
               <p className="text-xs text-gray-400">Incidents failed to map after retry (30s).</p>
            </div>
@@ -145,7 +156,7 @@ export const MonitorDashboard: React.FC = () => {
               <h3 className="font-semibold text-gray-800">Live Incident Feed</h3>
               <div className="flex gap-2">
                 <button
-                  onClick={clearActiveIncidents}
+                  onClick={() => clearActiveIncidents()} 
                   disabled={!activeIncidentCount}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     !activeIncidentCount
@@ -153,10 +164,10 @@ export const MonitorDashboard: React.FC = () => {
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
-                  Clear List (Local)
+                  Clear List (Server)
                 </button>
                 <button
-                  onClick={() => useStore.getState().resolveAllIncidents()}
+                  onClick={() => resolveAllIncidents()}
                   disabled={!activeIncidentCount}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
                     !activeIncidentCount
@@ -164,7 +175,7 @@ export const MonitorDashboard: React.FC = () => {
                       : 'bg-red-600 text-white hover:bg-red-700'
                   }`}
                 >
-                  Resolve All (API)
+                  Resolve All (Server)
                 </button>
               </div>
             </div>
@@ -200,7 +211,7 @@ export const MonitorDashboard: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {incident.incidentId ? (
-                            <a href={`https://${useStore.getState().pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                            <a href={`https://${pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                               {incident.incidentId}
                             </a>
                           ) : (
@@ -210,14 +221,14 @@ export const MonitorDashboard: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(incident.startedAt).toLocaleTimeString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                            <button 
-                             onClick={() => useStore.getState().ackIncident(incident.dedupKey)}
+                             onClick={() => ackIncident(incident.dedupKey)}
                              disabled={!incident.incidentId || incident.acked}
                              className={`mr-3 font-medium ${!incident.incidentId || incident.acked ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-900'}`}
                            >
                              {incident.acked ? 'Acked' : 'Ack'}
                            </button>
                            <button 
-                             onClick={() => useStore.getState().resolveIncident(incident.dedupKey)}
+                             onClick={() => resolveIncident(incident.dedupKey)}
                              disabled={!incident.incidentId}
                              className={`font-medium ${!incident.incidentId ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
                            >
@@ -256,4 +267,3 @@ export const MonitorDashboard: React.FC = () => {
     </div>
   );
 };
-
