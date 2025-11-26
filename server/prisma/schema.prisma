@@ -24,6 +24,7 @@ model Campaign {
   name        String
   description String?
   source      String?        // Optional: to track origin (e.g., filename)
+  integrationKey String?     // Campaign-level Incident Routing Key
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   items       CampaignItem[]

@@ -1,7 +1,46 @@
 import { Router } from 'express';
 import prisma from '../prisma';
+import { CampaignExecutor } from '../services/CampaignExecutor';
 
 const router = Router();
+
+// POST /api/campaigns/:id/trigger - Webhook trigger
+router.post('/:id/trigger', async (req, res) => {
+  try {
+    const campaignId = req.params.id;
+    
+    // Fetch campaign first to check for stored credentials
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      include: { items: { orderBy: { order: 'asc' } } },
+    });
+
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign not found" });
+    }
+
+    // Extract credentials from headers, body, or stored campaign
+    const globalRoutingKey = (req.headers['x-pd-routing-key'] as string) || req.body.globalRoutingKey;
+    const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
+
+    // Fire and forget (Async execution)
+    const executor = new CampaignExecutor({
+      globalRoutingKey,
+      changeRoutingKey
+    });
+    
+    executor.run(campaign).catch(err => console.error(`[Webhook] Execution failed for ${campaignId}:`, err));
+
+    res.status(202).json({ 
+      message: "Campaign execution started", 
+      campaign: campaign.name,
+      steps: campaign.items.length 
+    });
+
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to trigger campaign", details: error.message });
+  }
+});
 
 // GET /api/campaigns - List all campaigns with items
 router.get('/', async (req, res) => {
@@ -19,13 +58,14 @@ router.get('/', async (req, res) => {
 // POST /api/campaigns - Create a new campaign
 router.post('/', async (req, res) => {
   try {
-    const { name, description, source, items } = req.body;
+    const { name, description, source, integrationKey, items } = req.body;
     
     const campaign = await prisma.campaign.create({
       data: {
         name,
         description,
         source,
+        integrationKey,
         items: {
           create: (items || []).map((item: any, idx: number) => ({
             order: idx,
@@ -66,14 +106,14 @@ router.get('/:id', async (req, res) => {
 // PUT /api/campaigns/:id - Update a campaign
 router.put('/:id', async (req, res) => {
   try {
-    const { name, description, source, items } = req.body;
+    const { name, description, source, integrationKey, items } = req.body;
     const campaignId = req.params.id;
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Update Campaign details
       const campaign = await tx.campaign.update({
         where: { id: campaignId },
-        data: { name, description, source },
+        data: { name, description, source, integrationKey },
       });
 
       // 2. Delete existing items

@@ -158,6 +158,27 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
               onChange={(e) => setCampaign({ ...campaign, description: e.target.value })}
             />
           </div>
+          
+          {/* Webhook Configuration */}
+          <div className="pt-4 border-t border-gray-100">
+            <h4 className="text-sm font-semibold text-gray-800 mb-3">Webhook Configuration (Optional)</h4>
+            <div className="grid grid-cols-1 gap-4">
+                <div>
+                    <label htmlFor="campaignIntegrationKey" className="block text-xs font-medium text-gray-500 mb-1">Default Incident Routing Key</label>
+                    <input
+                      id="campaignIntegrationKey"
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      placeholder="Override for all incident steps"
+                      value={campaign.integrationKey || ''}
+                      onChange={(e) => setCampaign({ ...campaign, integrationKey: e.target.value })}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                        Stored securely. Webhooks can trigger this campaign without additional headers.
+                    </p>
+                </div>
+            </div>
+          </div>
         </div>
       </div>
 

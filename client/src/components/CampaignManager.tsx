@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { useStore, Service } from '../store/useStore';
-import { Loader2 } from 'lucide-react'; // For loading indicators
+import { Loader2, Terminal, Copy, Check } from 'lucide-react';
 
 export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | 'new') => void }> = ({ onEditCampaign }) => {
   const {
@@ -9,6 +9,7 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
     importedCampaigns, loadImportedCampaigns,
     triggerImportedCampaign, addLog,
     services, // From ConfigurationState
+    apiToken, globalRoutingKey
   } = useStore();
 
   // Load payload adapters and imported campaigns on mount
@@ -16,6 +17,14 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
     loadPayloadAdapters();
     loadImportedCampaigns();
   }, [loadPayloadAdapters, loadImportedCampaigns]);
+
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const handleCopyCurl = (id: string, cmd: string) => {
+    navigator.clipboard.writeText(cmd);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Calculate change coverage stats
   const changeCoverage = useMemo(() => {
@@ -177,29 +186,65 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
         {importedCampaigns.length === 0 ? (
           <p className="text-gray-500">No imported campaigns found in /templates folder.</p>
         ) : (
-          <div className="space-y-4 max-h-60 overflow-y-auto pr-2">
-            {importedCampaigns.map((campaign) => (
-              <div key={campaign.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-md border border-gray-200">
-                <div>
-                  <p className="font-medium text-gray-900">{campaign.name}</p>
-                  <p className="text-xs text-gray-600">{campaign.description} (from {campaign.source})</p>
+          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+            {importedCampaigns.map((campaign) => {
+              // Construct curl command dynamically
+              const host = window.location.origin;
+              let curlCmd = "";
+              
+              if (campaign.integrationKey) {
+                  curlCmd = `curl -X POST ${host}/api/campaigns/${campaign.id}/trigger`;
+              } else {
+                  curlCmd = `curl -X POST ${host}/api/campaigns/${campaign.id}/trigger \
+  -H "x-pd-routing-key: ${globalRoutingKey || '$PD_ROUTING_KEY'}" \
+  -H "x-pd-change-routing-key: ${campaignConfig.importedChangeRoutingKey || '$PD_CHANGE_ROUTING_KEY'}"`;
+              }
+
+              return (
+                <div key={campaign.id} className="flex flex-col bg-gray-50 p-4 rounded-md border border-gray-200 gap-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-gray-900">{campaign.name}</p>
+                      <p className="text-xs text-gray-600">{campaign.description} (from {campaign.source})</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onEditCampaign(campaign.id)}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => triggerImportedCampaign(campaign)}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition-colors"
+                      >
+                        Trigger Now
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Webhook Section */}
+                  <div className="bg-gray-900 rounded p-3 relative group">
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2 text-gray-400 text-xs uppercase tracking-wider font-semibold">
+                            <Terminal className="w-3 h-3" />
+                            Webhook Trigger
+                        </div>
+                         <button
+                            onClick={() => handleCopyCurl(campaign.id, curlCmd)}
+                            className="text-gray-400 hover:text-white transition-colors"
+                            title="Copy to clipboard"
+                        >
+                            {copiedId === campaign.id ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                        </button>
+                    </div>
+                    <pre className="text-xs text-green-400 font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                        {curlCmd}
+                    </pre>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onEditCampaign(campaign.id)}
-                    className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => triggerImportedCampaign(campaign)}
-                    className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition-colors"
-                  >
-                    Trigger Now
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
