@@ -82,6 +82,7 @@ export class SimulationInstance {
   start() {
     if (this.state.isRunning) return;
     this.state.isRunning = true;
+    console.log('ServerSimulationEngine: Starting simulation for user', this.userId);
     this.timer = setInterval(() => this.tick(), 1000);
     this.addLog("Simulation started (Headless Mode)", 'info');
     this.emitState();
@@ -307,6 +308,7 @@ export class SimulationInstance {
 
   // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---
   public async triggerIncident(service: Service, failureContext: any = null) {
+    console.log('ServerSimulationEngine: Attempting to trigger incident for service', service.name);
     const { globalRoutingKey } = this.credentials;
     const { severityWeights, burstProbability } = this.config;
 
@@ -444,6 +446,8 @@ export class SimulationInstance {
   }
 
   private emitState() {
+    const room = this.io.sockets.adapter.rooms.get(this.userId);
+    console.log('Emitting tick to', this.userId, 'Clients:', room ? room.size : 0);
     this.io.to(this.userId).emit('sim_tick', this.state);
   }
 }
@@ -461,6 +465,7 @@ export class SimulationManager {
   }
 
   createOrUpdate(userId: string, config: SimulationConfig, credentials: any) {
+    console.log(`SimulationManager: createOrUpdate for ${userId}`, { hasCreds: !!credentials, hasKey: !!credentials?.globalRoutingKey });
     let instance = this.instances.get(userId);
     if (instance) {
         instance.config = config; // Update config if already running
