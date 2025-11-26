@@ -47,10 +47,12 @@ export interface PayloadAdapter {
 
 export interface CampaignItem {
   id: string;
+  stepName?: string;
   payloadString: string;
   eventAction: string;
   eventType: string;
   dedupKey: string | null;
+  integrationKey?: string;
   delaySeconds: number;
   times: number;
   intervalSeconds: number;

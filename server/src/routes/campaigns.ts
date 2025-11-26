@@ -29,10 +29,12 @@ router.post('/', async (req, res) => {
         items: {
           create: (items || []).map((item: any, idx: number) => ({
             order: idx,
+            stepName: item.stepName,
             payload: item.payload || {},
             eventAction: item.eventAction || 'trigger',
             eventType: item.eventType || 'alert',
             dedupKey: item.dedupKey,
+            integrationKey: item.integrationKey,
             delaySeconds: Number(item.delaySeconds) || 0,
             repeatCount: Number(item.repeatCount) || 1,
             intervalSeconds: Number(item.intervalSeconds) || 0,
@@ -85,10 +87,12 @@ router.put('/:id', async (req, res) => {
           data: items.map((item: any, idx: number) => ({
             campaignId,
             order: idx,
+            stepName: item.stepName,
             payload: item.payload || {}, 
             eventAction: item.eventAction || 'trigger',
             eventType: item.eventType || 'alert', 
             dedupKey: item.dedupKey,
+            integrationKey: item.integrationKey,
             delaySeconds: Number(item.delaySeconds) || 0,
             repeatCount: Number(item.repeatCount) || 1,
             intervalSeconds: Number(item.intervalSeconds) || 0,

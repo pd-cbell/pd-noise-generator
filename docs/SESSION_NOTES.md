@@ -1,3 +1,54 @@
+# Session Notes (v1.6.1 Complete)
+
+**Date:** 2025-11-26
+**Facilitator:** Gemini Agent
+
+## Workstream v1.6.1 – Campaign Editor UX & Precision
+
+### Goals
+- Improve the usability of the Campaign Editor for long scenarios (collapsible steps).
+- Allow named steps for better readability.
+- Support per-step integration keys for Change Events (replacing global overrides).
+- Add modern JSON editing conveniences (prettify).
+
+### Completed Tasks
+- **Database:**
+    - Added `stepName` and `integrationKey` to `CampaignItem` model.
+    - Applied migration `add_campaign_item_fields`.
+- **Frontend (CampaignEditor):**
+    - Implemented collapsible cards for steps.
+    - Added "Step Name" input field.
+    - Added "Routing Key" input field (conditional: only when type = 'change').
+    - Added "Prettify JSON" button to the payload editor.
+- **Backend (API/Logic):**
+    - Updated `campaigns.ts` (POST/PUT) to persist new fields.
+    - Updated `triggerImportedCampaign` (Store) to use the per-step key if present.
+
+---
+
+# Session Notes (v1.6 Complete)
+
+**Date:** 2025-11-26
+**Facilitator:** Gemini Agent
+
+## Workstream v1.6 – High Fidelity & Control
+
+### Goals
+- Enable full CRUD for Campaigns via UI.
+- Simulate Event Compression via "Bursts".
+- Provide real-time API throughput visibility.
+
+### Completed Tasks
+- **API RPM:** Implemented `apiCallsLast60s` and rolling RPM calculation in `useStore.ts`.
+- **Event Bursts:** Implemented burst logic in `triggerIncident` (randomized follow-up events with same `dedup_key`).
+- **Campaign Editor:** 
+    - Built `CampaignEditor.tsx` and `CampaignManager.tsx`.
+    - Added `PUT /api/campaigns/:id` to `server/src/routes/campaigns.ts` to support saving edits.
+    - Verified full create/edit/delete flow.
+- **UI:** Bumped version to v1.6.
+
+---
+
 # Session Notes (v1.5 Migration)
 
 **Date:** 2025-11-25

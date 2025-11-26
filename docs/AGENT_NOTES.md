@@ -33,11 +33,16 @@ These notes help future pairing sessions or automation agents quickly orient the
 
 ## Roadmap
 
-### v1.6 - High Fidelity & Control (Next)
+### v1.6.1 - Campaign Editor UX (Complete)
+- **Collapsible Steps:** Improve UI for long campaigns.
+- **Named Steps:** Add `stepName` to schema.
+- **Per-Step Routing:** Add `integrationKey` to schema for Change events.
+- **JSON Tools:** Prettify/Validate JSON in editor.
+
+### v1.6 - High Fidelity & Control (Complete)
 - **API RPM Enhancement:** Show current RPM + "Last 60s" total count.
-- **Event Bursts:** Implement logic to send repeated events (same dedup_key) to demonstrate Event Compression/Intelligence.
-- **Campaign Wiring:** Finalize backend connection for firing complex campaigns and change events.
-- **Campaign Editor:** UI for creating and editing campaigns/payloads in the DB.
+- **Event Bursts:** Logic to send repeated events (same dedup_key).
+- **Campaign Wiring:** Backend PUT endpoint added; Campaign Editor fully functional.
 
 ### v1.7 - Identity & Platform
 - **Authentication:** Google OAuth integration.
@@ -45,10 +50,10 @@ These notes help future pairing sessions or automation agents quickly orient the
 - **UI Refactor:** Move "Org & Credentials" from Configure tab to a Header Dropdown/Profile Menu.
 
 ## Key Files
-- `client/src/store/useStore.ts`: The brain. Holds all configuration, metrics, and actions (`ackIncident`, `triggerIncident`).
-- `client/src/services/SimulationEngine.ts`: The heart. Manages the `setTimeout` loops for generation and `setInterval` for evaluation.
-- `client/src/components/MonitorDashboard.tsx`: The face. Visualizes active incidents, logs, and detailed metric cards.
-- `server/src/routes/proxy.ts`: The gateway. Handles PagerDuty API interactions to avoid CORS and manage auth headers.
+- `client/src/store/useStore.ts`: The brain. Holds all configuration, metrics, and actions.
+- `client/src/components/CampaignEditor.tsx`: UI for creating/editing campaigns.
+- `server/src/routes/campaigns.ts`: Backend CRUD for campaigns.
+- `server/src/routes/proxy.ts`: The gateway. Handles PagerDuty API interactions.
 
 ## Common Pitfalls
 - **Metric Calculation:** MTTA/MTTR are rolling averages updated in-memory. A page reload resets them (by design, for "session" stats).

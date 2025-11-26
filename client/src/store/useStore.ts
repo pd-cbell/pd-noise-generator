@@ -450,10 +450,12 @@ export const useStore = create<AppState>()(
             source: c.source,
             items: c.items.map((i: any) => ({
               id: i.id,
+              stepName: i.stepName,
               payloadString: JSON.stringify(i.payload), // Convert back to string for compatibility
               eventAction: i.eventAction,
               eventType: i.eventType,
               dedupKey: i.dedupKey,
+              integrationKey: i.integrationKey,
               delaySeconds: i.delaySeconds,
               times: i.repeatCount, // Map DB 'repeatCount' to frontend 'times'
               intervalSeconds: i.intervalSeconds,

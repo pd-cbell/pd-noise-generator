@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useStore, ImportedCampaign, CampaignItem } from '../store/useStore';
-import { Trash2, Save } from 'lucide-react'; // Icons
+import { Trash2, Save, ChevronDown, ChevronUp, Braces, Code } from 'lucide-react';
 
 interface CampaignEditorProps {
   campaignId: string | 'new';
@@ -12,12 +12,14 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
   const [campaign, setCampaign] = useState<ImportedCampaign | null>(null);
   const [isNew, setIsNew] = useState(campaignId === 'new');
   const [isLoading, setIsLoading] = useState(false);
+  const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (campaignId === 'new') {
       setIsNew(true);
+      const newId = crypto.randomUUID();
       setCampaign({
-        id: 'new', // Placeholder ID
+        id: 'new',
         name: 'New Campaign',
         description: '',
         source: 'User Created',
@@ -30,25 +32,32 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
         setCampaign(existingCampaign);
       } else {
         addLog(`Campaign with ID ${campaignId} not found.`, 'error');
-        onClose(); // Close editor if campaign not found
+        onClose();
       }
     }
   }, [campaignId, importedCampaigns, addLog, onClose]);
+
+  const toggleStep = (id: string) => {
+    const newExpanded = new Set(expandedSteps);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedSteps(newExpanded);
+  };
 
   const handleSave = async () => {
     if (!campaign) return;
     setIsLoading(true);
     try {
+      const { id, source, ...dataToSave } = campaign;
       if (isNew) {
-        // Exclude 'id' and 'source' for creation
-        const { id, source, ...dataToSave } = campaign;
         await createCampaign(dataToSave);
       } else {
-        // Exclude 'id' and 'source' for update
-        const { id, source, ...dataToSave } = campaign;
         await updateCampaign(campaign.id, dataToSave);
       }
-      onClose(); // Close editor after successful save
+      onClose();
     } catch (error: any) {
       addLog(`Error saving campaign: ${error.message}`, 'error');
     } finally {
@@ -57,13 +66,13 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
   };
 
   const handleDelete = async () => {
-    if (!campaign || isNew) return; // Cannot delete unsaved campaign
+    if (!campaign || isNew) return;
     if (!window.confirm(`Are you sure you want to delete campaign "${campaign.name}"?`)) return;
 
     setIsLoading(true);
     try {
       await deleteCampaign(campaign.id);
-      onClose(); // Close editor after successful delete
+      onClose();
     } catch (error: any) {
       addLog(`Error deleting campaign: ${error.message}`, 'error');
     } finally {
@@ -71,25 +80,64 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
     }
   };
 
+  const handlePrettify = (index: number) => {
+    if (!campaign) return;
+    const newItems = [...campaign.items];
+    try {
+      const parsed = JSON.parse(newItems[index].payloadString);
+      newItems[index].payloadString = JSON.stringify(parsed, null, 2);
+      setCampaign({ ...campaign, items: newItems });
+    } catch (e) {
+      addLog("Invalid JSON: Cannot prettify", "error");
+    }
+  };
 
   if (!campaign) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading Campaign...</h2>
-        <p className="text-gray-600">Please wait.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h2>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-4">
-        {isNew ? 'Create New Campaign' : `Edit Campaign: ${campaign.name}`}
-      </h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">
+            {isNew ? 'Create New Campaign' : `Edit Campaign: ${campaign.name}`}
+        </h2>
+        <div className="flex gap-2">
+             {!isNew && (
+              <button
+                onClick={handleDelete}
+                disabled={isLoading}
+                className="flex items-center gap-1 px-3 py-2 rounded-md font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={isLoading}
+              className="flex items-center gap-1 px-3 py-2 rounded-md font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors text-sm"
+            >
+              <Save className="w-4 h-4" />
+              {isLoading ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={isLoading}
+              className="px-3 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors text-sm"
+            >
+              Close
+            </button>
+        </div>
+      </div>
 
       {/* Campaign Details Form */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label htmlFor="campaignName" className="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
             <input
@@ -104,21 +152,10 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
             <label htmlFor="campaignDescription" className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               id="campaignDescription"
-              rows={3}
+              rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
               value={campaign.description}
               onChange={(e) => setCampaign({ ...campaign, description: e.target.value })}
-            />
-          </div>
-          {/* Source is read-only for now */}
-          <div>
-            <label htmlFor="campaignSource" className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-            <input
-              id="campaignSource"
-              type="text"
-              readOnly
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
-              value={campaign.source}
             />
           </div>
         </div>
@@ -130,182 +167,223 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
           <h3 className="text-lg font-semibold text-gray-800">Campaign Steps ({campaign.items.length})</h3>
           <button
             onClick={() => {
-              // Add a new, empty campaign item
               const newItem: CampaignItem = {
-                id: crypto.randomUUID(), // Client-side ID for new item
+                id: crypto.randomUUID(),
+                stepName: '',
                 payloadString: '{}',
                 eventAction: 'trigger',
                 eventType: 'incident',
                 dedupKey: null,
+                integrationKey: '',
                 delaySeconds: 0,
                 times: 1,
                 intervalSeconds: 0,
               };
               setCampaign({ ...campaign, items: [...campaign.items, newItem] });
+              // Auto-expand the new item
+              setExpandedSteps(new Set(expandedSteps).add(newItem.id));
             }}
             className="px-3 py-1 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 transition-colors"
           >
-            Add Step
+            + Add Step
           </button>
         </div>
 
-        {campaign.items.length === 0 ? (
-          <p className="text-gray-500">No steps defined for this campaign. Click "Add Step" to add one.</p>
-        ) : (
-          <div className="space-y-4">
-            {campaign.items.map((item, index) => (
-              <div key={item.id} className="bg-gray-50 p-3 rounded-md border border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                  <h4 className="font-medium text-gray-800">Step {index + 1}</h4>
-                  <button
-                    onClick={() => {
-                      setCampaign({
-                        ...campaign,
-                        items: campaign.items.filter((_, i) => i !== index),
-                      });
-                    }}
-                    className="text-red-600 hover:text-red-800 text-sm"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label htmlFor={`delaySeconds-${item.id}`} className="block text-xs font-medium text-gray-500">Delay (sec)</label>
-                    <input
-                      id={`delaySeconds-${item.id}`}
-                      type="number"
-                      min="0"
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.delaySeconds}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], delaySeconds: Number(e.target.value) };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`eventType-${item.id}`} className="block text-xs font-medium text-gray-500">Event Type</label>
-                    <select
-                      id={`eventType-${item.id}`}
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.eventType}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], eventType: e.target.value as 'incident' | 'change' };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
+        <div className="space-y-3">
+            {campaign.items.map((item, index) => {
+                const isExpanded = expandedSteps.has(item.id);
+                return (
+                  <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    {/* Header */}
+                    <div 
+                        className="bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => toggleStep(item.id)}
                     >
-                      <option value="incident">Incident</option>
-                      <option value="change">Change</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor={`eventAction-${item.id}`} className="block text-xs font-medium text-gray-500">Event Action</label>
-                    <input
-                      id={`eventAction-${item.id}`}
-                      type="text"
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.eventAction}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], eventAction: e.target.value };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`dedupKey-${item.id}`} className="block text-xs font-medium text-gray-500">Dedup Key (Optional)</label>
-                    <input
-                      id={`dedupKey-${item.id}`}
-                      type="text"
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.dedupKey || ''}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], dedupKey: e.target.value || null };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`times-${item.id}`} className="block text-xs font-medium text-gray-500">Repeat Times</label>
-                    <input
-                      id={`times-${item.id}`}
-                      type="number"
-                      min="1"
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.times}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], times: Number(e.target.value) };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={`intervalSeconds-${item.id}`} className="block text-xs font-medium text-gray-500">Interval (sec)</label>
-                    <input
-                      id={`intervalSeconds-${item.id}`}
-                      type="number"
-                      min="0"
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md text-sm"
-                      value={item.intervalSeconds}
-                      onChange={(e) => {
-                        const newItems = [...campaign.items];
-                        newItems[index] = { ...newItems[index], intervalSeconds: Number(e.target.value) };
-                        setCampaign({ ...campaign, items: newItems });
-                      }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor={`payloadString-${item.id}`} className="block text-xs font-medium text-gray-500 mb-1">Payload JSON</label>
-                  <textarea
-                    id={`payloadString-${item.id}`}
-                    rows={8}
-                    className="w-full p-2 border border-gray-300 rounded-md text-sm font-mono"
-                    value={item.payloadString}
-                    onChange={(e) => {
-                      const newItems = [...campaign.items];
-                      newItems[index] = { ...newItems[index], payloadString: e.target.value };
-                      setCampaign({ ...campaign, items: newItems });
-                    }}
-                  ></textarea>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                        <div className="flex items-center gap-3">
+                            <button className="text-gray-500">
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                            <span className="font-semibold text-gray-700">Step {index + 1}</span>
+                            <span className="text-sm text-gray-600 border-l border-gray-300 pl-3">
+                                {item.stepName || <span className="italic text-gray-400">Unnamed Step</span>}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${item.eventType === 'change' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {item.eventType === 'change' ? 'Change Event' : 'Incident'}
+                            </span>
+                             <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                                Delay: {item.delaySeconds}s
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if(window.confirm('Remove this step?')) {
+                                         setCampaign({
+                                            ...campaign,
+                                            items: campaign.items.filter((_, i) => i !== index),
+                                          });
+                                    }
+                                }}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                        </div>
+                    </div>
 
-      <div className="flex justify-end gap-2">
-        {!isNew && (
-          <button
-            onClick={handleDelete}
-            disabled={isLoading}
-            className="flex items-center gap-1 px-4 py-2 rounded-md font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        )}
-        <button
-          onClick={handleSave}
-          disabled={isLoading}
-          className="flex items-center gap-1 px-4 py-2 rounded-md font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors"
-        >
-          <Save className="w-4 h-4" />
-          {isLoading ? 'Saving...' : 'Save'}
-        </button>
-        <button
-          onClick={onClose}
-          disabled={isLoading}
-          className="px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
-        >
-          Close
-        </button>
+                    {/* Body */}
+                    {isExpanded && (
+                        <div className="p-4 bg-white border-t border-gray-200">
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+                                <div className="md:col-span-4">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Step Name</label>
+                                    <input
+                                      type="text"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      placeholder="e.g., Database Latency Spike"
+                                      value={item.stepName || ''}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], stepName: e.target.value };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Event Type</label>
+                                    <select
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.eventType}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], eventType: e.target.value as 'incident' | 'change' };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    >
+                                      <option value="incident">Incident</option>
+                                      <option value="change">Change</option>
+                                    </select>
+                                </div>
+                                 <div className="md:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Delay (sec)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.delaySeconds}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], delaySeconds: Number(e.target.value) };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                                 <div className="md:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Repeats</label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.times}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], times: Number(e.target.value) };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Interval (sec)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.intervalSeconds}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], intervalSeconds: Number(e.target.value) };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Event Action</label>
+                                    <input
+                                      type="text"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.eventAction}
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], eventAction: e.target.value };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-500 mb-1">Dedup Key (Optional)</label>
+                                    <input
+                                      type="text"
+                                      className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm"
+                                      value={item.dedupKey || ''}
+                                      placeholder="Leave empty for auto-generated"
+                                      onChange={(e) => {
+                                        const newItems = [...campaign.items];
+                                        newItems[index] = { ...newItems[index], dedupKey: e.target.value || null };
+                                        setCampaign({ ...campaign, items: newItems });
+                                      }}
+                                    />
+                                </div>
+                            </div>
+
+                            {item.eventType === 'change' && (
+                                <div className="mb-4 p-3 bg-purple-50 rounded-md border border-purple-100">
+                                    <label className="block text-xs font-medium text-purple-800 mb-1">Integration Key (Routing Key) for Change Event</label>
+                                    <input
+                                        type="text"
+                                        className="w-full px-2 py-1.5 border border-purple-300 rounded-md text-sm focus:ring-purple-500 focus:border-purple-500"
+                                        placeholder="Override global routing key (Optional)"
+                                        value={item.integrationKey || ''}
+                                        onChange={(e) => {
+                                            const newItems = [...campaign.items];
+                                            newItems[index] = { ...newItems[index], integrationKey: e.target.value };
+                                            setCampaign({ ...campaign, items: newItems });
+                                        }}
+                                    />
+                                    <p className="text-xs text-purple-600 mt-1">If left blank, the campaign's default change routing key will be used.</p>
+                                </div>
+                            )}
+
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-xs font-medium text-gray-500">Payload JSON</label>
+                                    <button 
+                                        onClick={() => handlePrettify(index)}
+                                        className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-800"
+                                    >
+                                        <Braces className="w-3 h-3" /> Prettify JSON
+                                    </button>
+                                </div>
+                                <textarea
+                                  rows={8}
+                                  className="w-full p-3 border border-gray-300 rounded-md text-sm font-mono bg-slate-50"
+                                  value={item.payloadString}
+                                  onChange={(e) => {
+                                    const newItems = [...campaign.items];
+                                    newItems[index] = { ...newItems[index], payloadString: e.target.value };
+                                    setCampaign({ ...campaign, items: newItems });
+                                  }}
+                                ></textarea>
+                            </div>
+                        </div>
+                    )}
+                  </div>
+                );
+            })}
+        </div>
       </div>
     </div>
   );

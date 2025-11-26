@@ -35,10 +35,12 @@ model CampaignItem {
   campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   order           Int      // To maintain execution sequence
   
+  stepName        String?  // New: Optional name for the step
   payload         Json     // Raw event payload
   eventAction     String   @default("trigger")
   eventType       String   @default("alert") // "alert" or "change"
   dedupKey        String?
+  integrationKey  String?  // New: Optional override for change events
   
   delaySeconds    Int      @default(0)
   repeatCount     Int      @default(1) // Renamed from 'times' for clarity
