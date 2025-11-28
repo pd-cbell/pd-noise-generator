@@ -84,7 +84,7 @@ export interface CampaignConfig {
   importedChangeRoutingKey: string;
 }
 
-const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
+export const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
   enabled: true,
   probability: 0.35,
   maxRelated: 3,
