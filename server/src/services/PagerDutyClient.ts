@@ -10,6 +10,8 @@ interface PagerDutyClientConfig {
 export class PagerDutyClient {
   private config: PagerDutyClientConfig;
   private httpAgent?: Agent;
+  private lastRequestTime: number = 0;
+  private readonly minRequestInterval: number = 200; // 5 requests per second max
 
   constructor(config: PagerDutyClientConfig) {
     this.config = {
@@ -22,7 +24,18 @@ export class PagerDutyClient {
     // }
   }
 
+  private async throttle() {
+    const now = Date.now();
+    const timeSinceLast = now - this.lastRequestTime;
+    if (timeSinceLast < this.minRequestInterval) {
+      await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLast));
+    }
+    this.lastRequestTime = Date.now();
+  }
+
   private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams) {
+    await this.throttle(); // Simple throttling
+
     const url = new URL(`${this.config.apiBase}${path}`);
     if (queryParams) {
       queryParams.forEach((value, key) => url.searchParams.append(key, value));
@@ -43,6 +56,12 @@ export class PagerDutyClient {
     };
 
     const res = await fetch(url.toString(), options);
+
+    if (res.status === 429) {
+        // Hit rate limit, simple retry after 2s
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return this.request(method, path, body, queryParams);
+    }
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
@@ -66,12 +85,48 @@ export class PagerDutyClient {
     });
   }
 
+  async manageIncidentsBatch(incidentIds: string[], action: 'acknowledge' | 'resolve') {
+    if (incidentIds.length === 0) return;
+    
+    const chunks = [];
+    const chunkSize = 25; 
+    for (let i = 0; i < incidentIds.length; i += chunkSize) {
+        chunks.push(incidentIds.slice(i, i + chunkSize));
+    }
+
+    for (const chunk of chunks) {
+        const incidents = chunk.map(id => ({
+            id,
+            type: 'incident_reference',
+            status: action === 'acknowledge' ? 'acknowledged' : 'resolved'
+        }));
+        
+        await this.request('PUT', '/incidents', { incidents });
+    }
+  }
+
   async addNote(incidentId: string, content: string) {
     return this.request('POST', `/incidents/${incidentId}/notes`, {
       note: {
         content: content
       }
     });
+  }
+
+  async getUserIdsByEmail(emails: string[]) {
+      // Simple implementation for now, can be optimized with bulk fetch if needed
+      // PD API doesn't support bulk user fetch by email easily without iteration or searching
+      // We will do single lookups but they are cached by the caller (ServerSimulationEngine)
+      // Or we can implement a search? 'query' param searches name/email.
+      return Promise.all(emails.map(async email => {
+          try {
+              const params = new URLSearchParams({ query: email, limit: '1' });
+              const res = await this.request('GET', '/users', undefined, params);
+              return res.users?.[0]?.id || null;
+          } catch (e) {
+              return null;
+          }
+      }));
   }
 
   // --- Events API V2 (Unauthenticated, uses routing key) ---

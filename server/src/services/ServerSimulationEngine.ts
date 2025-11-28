@@ -41,6 +41,10 @@ export class SimulationInstance {
   private timer: NodeJS.Timeout | null = null;
   private pdClient: PagerDutyClient;
   private io: SocketIOServer; // Socket.io server instance for emitting updates
+  
+  // Queues for batching API calls
+  private pendingAcks: Set<string> = new Set();
+  private pendingResolves: Set<string> = new Set();
 
   constructor(userId: string, config: SimulationConfig, credentials: any, io: SocketIOServer) {
     this.userId = userId;
@@ -92,6 +96,7 @@ export class SimulationInstance {
     this.state.isRunning = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    console.log('ServerSimulationEngine: Stopping simulation for user', this.userId);
     this.addLog("Simulation stopped", 'info');
     this.emitState();
   }
@@ -101,36 +106,32 @@ export class SimulationInstance {
     const incident = this.state.activeIncidents.find(i => i.dedupKey === dedupKey);
     if (!incident || !incident.incidentId || incident.acked) return;
 
-    try {
-      await this.pdClient.manageIncident(incident.incidentId, 'acknowledge');
-      this.updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
-      
-      const timeToAck = Date.now() - incident.startedAt;
-      this.updateMetricsOnAck(incident.severity, timeToAck);
-
-      this.addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
-      this.emitState();
-    } catch (e: any) {
-      this.addLog(`Failed to ack incident ${incident.incidentId}: ${e.message}`, 'error');
-    }
+    // Optimistic update
+    this.updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
+    const timeToAck = Date.now() - incident.startedAt;
+    this.updateMetricsOnAck(incident.severity, timeToAck);
+    this.addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
+    
+    // Queue for batch processing
+    this.pendingAcks.add(incident.incidentId);
+    
+    this.emitState();
   }
 
   async resolveIncident(dedupKey: string) {
     const incident = this.state.activeIncidents.find(i => i.dedupKey === dedupKey);
     if (!incident || !incident.incidentId) return;
 
-    try {
-      await this.pdClient.manageIncident(incident.incidentId, 'resolve');
-      
-      const timeToResolve = Date.now() - incident.startedAt;
-      this.updateMetricsOnResolve(incident.severity, timeToResolve);
+    // Optimistic update
+    const timeToResolve = Date.now() - incident.startedAt;
+    this.updateMetricsOnResolve(incident.severity, timeToResolve);
+    this.removeIncident(dedupKey);
+    this.addLog(`Resolved incident ${incident.incidentId}`, 'info');
 
-      this.removeIncident(dedupKey);
-      this.addLog(`Resolved incident ${incident.incidentId}`, 'info');
-      this.emitState();
-    } catch (e: any) {
-      this.addLog(`Failed to resolve incident ${incident.incidentId}: ${e.message}`, 'error');
-    }
+    // Queue for batch processing
+    this.pendingResolves.add(incident.incidentId);
+
+    this.emitState();
   }
 
   clearActiveIncidents() {
@@ -141,12 +142,12 @@ export class SimulationInstance {
 
   async resolveAllIncidents() {
     this.addLog(`Resolving all ${this.state.activeIncidents.length} active incidents (Server-side)...`, 'info');
-    const incidentsToResolve = [...this.state.activeIncidents]; // Resolve a snapshot
-    for (const inc of incidentsToResolve) {
-      if (inc.incidentId) {
-        await this.resolveIncident(inc.dedupKey);
-      }
-    }
+    // Queue all for resolution
+    this.state.activeIncidents.forEach(inc => {
+        if (inc.incidentId) this.pendingResolves.add(inc.incidentId);
+    });
+    // Clear local list immediately
+    this.state.activeIncidents = [];
     this.emitState();
   }
 
@@ -214,8 +215,22 @@ export class SimulationInstance {
   private async tick() {
     if (!this.state.isRunning) return;
 
+    // console.log('ServerSimulationEngine: Tick', this.userId); 
+
     const now = Date.now();
     this.updateApiMetrics(); // Update API metrics every tick
+
+    // --- Batch Processing ---
+    if (this.pendingAcks.size > 0) {
+        const ids = Array.from(this.pendingAcks);
+        this.pendingAcks.clear();
+        this.pdClient.manageIncidentsBatch(ids, 'acknowledge').catch(e => this.addLog(`Batch Ack failed: ${e.message}`, 'error'));
+    }
+    if (this.pendingResolves.size > 0) {
+        const ids = Array.from(this.pendingResolves);
+        this.pendingResolves.clear();
+        this.pdClient.manageIncidentsBatch(ids, 'resolve').catch(e => this.addLog(`Batch Resolve failed: ${e.message}`, 'error'));
+    }
 
     // --- Incident Generation (Poisson process) ---
     const { ratePerMinute, selectedServices, severityWeights, burstProbability } = this.config;
@@ -266,14 +281,14 @@ export class SimulationInstance {
 
       // Auto-Resolve
       if (inc.resolveAt && now >= inc.resolveAt) {
-        await this.resolveIncident(inc.dedupKey);
+        await this.resolveIncident(inc.dedupKey); // Batched
         continue;
       }
 
       // Auto-Heal (Warnings only)
       if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
-        await this.pdClient.addNote(inc.incidentId, "Auto-healed by simulator (Warning suppression)");
-        await this.resolveIncident(inc.dedupKey); // Resolve via API
+        this.pdClient.addNote(inc.incidentId, "Auto-healed by simulator (Warning suppression)").catch(() => {});
+        await this.resolveIncident(inc.dedupKey); // Batched
         continue;
       }
 
