@@ -14,7 +14,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 leading-tight">PD Noise Simulator</h1>
-          <p className="text-xs text-gray-500 font-medium">v1.7.1 (Gemini Edition)</p>
+          <p className="text-xs text-gray-500 font-medium">v1.6 (Gemini Edition)</p>
         </div>
       </div>
 
