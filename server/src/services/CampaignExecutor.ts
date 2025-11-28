@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { Campaign, CampaignItem } from '@prisma/client';
+import { TemplateParser } from '../utils/TemplateParser';
 
 interface ExecutionConfig {
   globalRoutingKey?: string;
@@ -42,7 +43,8 @@ export class CampaignExecutor {
   }
 
   private async executeStep(item: CampaignItem, campaign: Campaign) {
-    const payload = item.payload as any;
+    const rawPayload = item.payload as any;
+    const payload = TemplateParser.parseObject(rawPayload);
     
     if (item.eventType === 'incident') {
       // Priority: Campaign Default > Webhook Header > Error
@@ -55,7 +57,7 @@ export class CampaignExecutor {
       const body = {
         routing_key: routingKey,
         event_action: item.eventAction || 'trigger',
-        dedup_key: item.dedupKey || undefined, // PD assigns if undefined
+        dedup_key: item.dedupKey ? TemplateParser.parse(item.dedupKey) : undefined, // Also parse dedupKey if present
         payload: {
           ...payload,
           source: payload.source || 'pd-noise-simulator-webhook',

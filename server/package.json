@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@faker-js/faker": "^10.1.0",
     "@prisma/client": "^5.17.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

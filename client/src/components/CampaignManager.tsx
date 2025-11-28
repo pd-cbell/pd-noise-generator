@@ -1,16 +1,20 @@
-import React, { useEffect, useMemo } from 'react';
-import { useStore, Service } from '../store/useStore';
-import { Loader2, Terminal, Copy, Check } from 'lucide-react';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useStore, Service, DEFAULT_CAMPAIGN_CONFIG } from '../store/useStore';
+import { api } from '../services/api';
+import { Loader2, Terminal, Copy, Check, Upload } from 'lucide-react';
 
 export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | 'new') => void }> = ({ onEditCampaign }) => {
   const {
-    campaignConfig, setCampaignConfig,
+    campaignConfig = DEFAULT_CAMPAIGN_CONFIG, setCampaignConfig,
     payloadAdapters, loadPayloadAdapters,
-    importedCampaigns, loadImportedCampaigns,
+    importedCampaigns = [], // Default to empty array
+    loadImportedCampaigns,
     triggerImportedCampaign, addLog,
-    services, // From ConfigurationState
+    services = [], // Default to empty array
     apiToken, globalRoutingKey
   } = useStore();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load payload adapters and imported campaigns on mount
   useEffect(() => {
@@ -26,8 +30,36 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        const json = JSON.parse(content);
+        await api.importCampaigns(json);
+        addLog("Successfully imported campaigns.", "info");
+        loadImportedCampaigns();
+        
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      } catch (err: any) {
+        addLog(`Failed to import campaign: ${err.message}`, 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // Calculate change coverage stats
   const changeCoverage = useMemo(() => {
+    if (!services) return { included: 0, includedWithChange: 0, totalWithChange: 0 };
+    
     const includedServices = services.filter((svc: Service) => svc.include);
     const includedWithChange = includedServices.filter((svc: Service) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
     const totalWithChange = services.filter((svc: Service) => Array.isArray(svc.changeIntegrations) && svc.changeIntegrations.length > 0).length;
@@ -175,19 +207,35 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
       {/* Imported Campaigns */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Imported Campaign Bundles ({importedCampaigns.length})</h3>
-          <button
-            onClick={() => onEditCampaign('new')}
-            className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
-          >
-            Create New Campaign
-          </button>
+          <h3 className="text-lg font-semibold text-gray-800">Imported Campaign Bundles ({(importedCampaigns || []).length})</h3>
+          <div className="flex gap-2">
+            <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept=".json" 
+                onChange={handleFileChange}
+            />
+            <button
+              onClick={handleImportClick}
+              className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              Import (Crux)
+            </button>
+            <button
+              onClick={() => onEditCampaign('new')}
+              className="px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
+            >
+              Create New Campaign
+            </button>
+          </div>
         </div>
-        {importedCampaigns.length === 0 ? (
+        {(importedCampaigns || []).length === 0 ? (
           <p className="text-gray-500">No imported campaigns found in /templates folder.</p>
         ) : (
           <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-            {importedCampaigns.map((campaign) => {
+            {(importedCampaigns || []).map((campaign) => {
               // Construct curl command dynamically
               const host = window.location.origin;
               let curlCmd = "";

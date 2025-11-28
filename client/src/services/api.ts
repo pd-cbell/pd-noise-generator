@@ -168,4 +168,11 @@ export const api = {
     fetchFromProxy(`/api/campaigns/${id}`, {
       method: 'DELETE',
     }),
+
+  importCampaigns: (json: any) =>
+    fetchFromProxy('/api/campaigns/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(json),
+    }),
 };

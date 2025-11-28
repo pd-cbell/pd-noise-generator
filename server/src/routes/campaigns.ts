@@ -44,6 +44,57 @@ router.post('/:id/trigger', async (req, res) => {
 // Apply auth middleware to all subsequent routes (CRUD)
 router.use(authenticateUser);
 
+// POST /api/campaigns/import - Import Crux campaigns
+router.post('/import', async (req: any, res: Response) => {
+  const { userId } = (req as AuthRequest).user!;
+  const groups = Array.isArray(req.body) ? req.body : [];
+  
+  if (groups.length === 0) {
+      return res.status(400).json({ error: "No event groups found in payload" });
+  }
+
+  let importedCount = 0;
+  const errors: string[] = [];
+
+  for (const entry of groups) {
+      const group = entry.event_group || entry;
+      const items = Array.isArray(group?.event_group_items) ? group.event_group_items : [];
+      
+      if (!items.length) continue;
+
+      const campaignData = {
+          name: group.name || `Imported Campaign ${Date.now()}`,
+          description: group.description || "Imported from Crux",
+          source: "Crux Import",
+          userId,
+          items: {
+              create: items.map((item: any, idx: number) => ({
+                  stepName: `Step ${idx + 1}`,
+                  payload: JSON.parse(item.payload || '{}'), // Ensure it's stored as JSON object
+                  eventAction: item.event_action || 'trigger',
+                  eventType: item.event_type === 'change' ? 'change' : 'alert',
+                  dedupKey: item.dedup_key || null,
+                  delaySeconds: Number(item.delay_seconds) || 0,
+                  repeatCount: Number(item.times) || 1,
+                  intervalSeconds: Number(item.interval_seconds) || 0,
+              }))
+          }
+      };
+
+      try {
+          await prisma.campaign.create({ data: campaignData });
+          importedCount++;
+      } catch (e: any) {
+          errors.push(`Failed to import "${campaignData.name}": ${e.message}`);
+      }
+  }
+
+  res.json({ 
+      message: `Successfully imported ${importedCount} campaigns.`, 
+      errors: errors.length > 0 ? errors : undefined 
+  });
+});
+
 // GET /api/campaigns - List all campaigns for the logged-in user
 router.get('/', async (req: any, res: Response) => {
   const { userId } = (req as AuthRequest).user!;

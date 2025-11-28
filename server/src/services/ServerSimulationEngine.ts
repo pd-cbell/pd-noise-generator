@@ -6,6 +6,7 @@ import {
 } from '../types';
 import { PagerDutyClient } from './PagerDutyClient';
 import { payloadGenerator, payloadRegistry } from '../utils/payloads';
+import { TemplateParser } from '../utils/TemplateParser';
 
 // --- Shared Helper Functions ---
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -338,10 +339,13 @@ export class SimulationInstance {
       sourceMix: this.config.sourceMix,
     });
 
-    if (payload.custom_details) {
-      payload.custom_details.service_name = service.name;
+    // Dynamic Payload Processing
+    const parsedPayload = TemplateParser.parseObject(payload);
+
+    if (parsedPayload.custom_details) {
+      parsedPayload.custom_details.service_name = service.name;
     } else {
-      payload.custom_details = { service_name: service.name };
+      parsedPayload.custom_details = { service_name: service.name };
     }
 
     const severity: IncidentSeverity = (() => {
@@ -365,12 +369,12 @@ export class SimulationInstance {
       event_action: 'trigger',
       dedup_key: dedupKey,
       payload: {
-        ...payload,
+        ...parsedPayload,
         severity,
-        source: payload.source || 'pd-noise-simulator',
-        component: payload.component || service.name,
+        source: parsedPayload.source || 'pd-noise-simulator',
+        component: parsedPayload.component || service.name,
         custom_details: {
-          ...payload.custom_details,
+          ...parsedPayload.custom_details,
           generator: 'pd-noise-simulator'
         }
       }
@@ -411,10 +415,10 @@ export class SimulationInstance {
           resolveAt: now + resolveDelay,
           autoHealAt: autoHealDelay ? now + autoHealDelay : null,
           autoHealScheduled: shouldAutoHeal,
-          observabilitySource: payload.source || 'unknown',
+          observabilitySource: parsedPayload.source || 'unknown',
           failureId: failureContext?.id || null,
           failureSummary: failureContext?.summary || null,
-          noteContext: payload.noteTemplates || [],
+          noteContext: parsedPayload.noteTemplates || [],
           syncedFromPd: false
         };
         this.addIncident(newIncident);
