@@ -20,14 +20,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    ports:
+      - "3001:3001"
     environment:
       PORT: 3001
-      DATABASE_URL: postgres://pdns:pdnspassword@db:5432/pdns_db
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       # PD_API_BASE defaults to https://api.pagerduty.com in code if missing
     restart: always
 
   web:
-    build: ./client
+    build:
+      context: ./client
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID}
     depends_on:
       - api
     ports:

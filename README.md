@@ -51,6 +51,11 @@ This repository includes a CloudFormation template (`deploy/aws-cfn.yaml`) that 
 - **RDS (Optional):** Managed PostgreSQL database for persistence.
 - **Security:** Auto-configures Security Groups for HTTP/SSH access.
 
+**Required Parameters:**
+- `JwtSecret`: A secure random string.
+- `EncryptionKey`: A 32-character secure random string.
+- `GoogleClientId`: Your Google OAuth Client ID (configure Authorized Origins for the EC2 public IP).
+
 ## 🔐 Environment Variables
 
 | Variable | Description |

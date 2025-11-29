@@ -3,8 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { useStore } from '../store/useStore';
 
-// TODO: Move API_BASE to a shared config
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 interface ServerSimulationState {
   isRunning: boolean;

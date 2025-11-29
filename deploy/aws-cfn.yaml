@@ -56,6 +56,23 @@ Parameters:
     NoEcho: true
     ConstraintDescription: must contain between 8 and 41 characters.
 
+  JwtSecret:
+    Description: Secret key for signing session JWTs (long random string).
+    Type: String
+    NoEcho: true
+
+  EncryptionKey:
+    Description: 32-character random string for encrypting API tokens.
+    Type: String
+    MinLength: 32
+    MaxLength: 32
+    NoEcho: true
+    ConstraintDescription: must be exactly 32 characters.
+
+  GoogleClientId:
+    Description: Google OAuth Client ID for authentication.
+    Type: String
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -207,8 +224,10 @@ Resources:
           # Prepare environment variables
           echo "PORT=8080" > .env
           echo "CLIENT_URL=http://localhost:8080" >> .env
-          echo "JWT_SECRET=${JWT_SECRET_PLACEHOLDER}" >> .env # Placeholder - MUST BE SECURED
-          echo "ENCRYPTION_KEY=${ENCRYPTION_KEY_PLACEHOLDER}" >> .env # Placeholder - MUST BE SECURED
+          echo "JWT_SECRET=${JwtSecret}" >> .env
+          echo "ENCRYPTION_KEY=${EncryptionKey}" >> .env
+          echo "GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
+          echo "VITE_GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
           
           if [ "${DatabaseType}" == "RDS" ]; then
             DB_ENDPOINT="${RDSDBInstance.Endpoint.Address}"
