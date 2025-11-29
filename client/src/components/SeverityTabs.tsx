@@ -83,13 +83,16 @@ export const SeverityTabs: React.FC = () => {
 
         {/* Note Probability */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Note Probability (0-1)</label>
+          <div className="flex justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">Note Probability</label>
+            <span className="text-sm font-medium text-gray-900">{(currentConfig.noteProbability * 100).toFixed(0)}%</span>
+          </div>
           <input
-            type="number"
+            type="range"
             step="0.05"
             min="0"
             max="1"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
             value={currentConfig.noteProbability}
             onChange={(e) => handleSliderChange('noteProbability', Number(e.target.value))}
           />
@@ -97,13 +100,16 @@ export const SeverityTabs: React.FC = () => {
 
         {/* Responder Probability */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Responder Probability (0-1)</label>
+          <div className="flex justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">Responder Probability</label>
+            <span className="text-sm font-medium text-gray-900">{(currentConfig.responderProbability * 100).toFixed(0)}%</span>
+          </div>
           <input
-            type="number"
+            type="range"
             step="0.05"
             min="0"
             max="1"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
             value={currentConfig.responderProbability}
             onChange={(e) => handleSliderChange('responderProbability', Number(e.target.value))}
           />

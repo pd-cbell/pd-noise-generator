@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 import { Campaign, CampaignItem } from '@prisma/client';
 import { TemplateParser } from '../utils/TemplateParser';
+import { SimulationInstance } from './ServerSimulationEngine';
 
 interface ExecutionConfig {
   globalRoutingKey?: string;
@@ -9,13 +10,17 @@ interface ExecutionConfig {
 
 export class CampaignExecutor {
   private config: ExecutionConfig;
+  private simInstance?: SimulationInstance;
 
-  constructor(config: ExecutionConfig) {
+  constructor(config: ExecutionConfig, simInstance?: SimulationInstance) {
     this.config = config;
+    this.simInstance = simInstance;
   }
 
   async run(campaign: Campaign & { items: CampaignItem[] }) {
-    console.log(`[Executor] Starting campaign "${campaign.name}" via Webhook.`);
+    const msg = `[Executor] Starting campaign "${campaign.name}" via Webhook.`;
+    console.log(msg);
+    if (this.simInstance) this.simInstance.addLog(msg, 'info');
     
     // Sort items by order just in case
     const items = campaign.items.sort((a, b) => a.order - b.order);
@@ -35,11 +40,15 @@ export class CampaignExecutor {
         try {
           await this.executeStep(item, campaign);
         } catch (error: any) {
-          console.error(`[Executor] Step "${item.stepName || item.id}" failed:`, error.message);
+          const errMsg = `[Executor] Step "${item.stepName || item.id}" failed: ${error.message}`;
+          console.error(errMsg);
+          if (this.simInstance) this.simInstance.addLog(errMsg, 'error');
         }
       }
     }
-    console.log(`[Executor] Campaign "${campaign.name}" completed.`);
+    const doneMsg = `[Executor] Campaign "${campaign.name}" completed.`;
+    console.log(doneMsg);
+    if (this.simInstance) this.simInstance.addLog(doneMsg, 'info');
   }
 
   private async executeStep(item: CampaignItem, campaign: Campaign) {
@@ -65,6 +74,10 @@ export class CampaignExecutor {
       };
 
       await this.sendEvent('https://events.pagerduty.com/v2/enqueue', body);
+      if (this.simInstance) {
+          this.simInstance.state.totalEvents++;
+          this.simInstance.addLog(`Campaign: Fired incident step "${item.stepName}"`, 'info');
+      }
       
     } else if (item.eventType === 'change') {
       // Priority: Item Override > Webhook Header > Error
@@ -83,6 +96,10 @@ export class CampaignExecutor {
       };
 
       await this.sendEvent('https://events.pagerduty.com/v2/change/enqueue', body);
+      if (this.simInstance) {
+          this.simInstance.state.totalEvents++;
+          this.simInstance.addLog(`Campaign: Fired change step "${item.stepName}"`, 'info');
+      }
     }
   }
 

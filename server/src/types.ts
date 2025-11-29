@@ -24,6 +24,8 @@ export interface Incident {
   failureSummary: string | null;
   noteContext: string[];
   syncedFromPd: boolean;
+  isMajor?: boolean; // New v1.8
+  prioritySet?: boolean; // New v1.8 to track if priority update was sent
 }
 
 export interface Metrics {
@@ -89,6 +91,10 @@ export interface SimulationConfig {
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
   burstProbability: number;
+  majorIncidentProbability: number;
+  responderAckRate: number;
+  teamFailureProbability: number; // New v1.8.1
+  changeRoutingKey?: string; // New v1.8 for Major Incident changes
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
   selectedServices: Service[]; // Backend needs full service objects to trigger
 }

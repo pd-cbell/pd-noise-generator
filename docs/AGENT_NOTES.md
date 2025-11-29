@@ -1,8 +1,8 @@
-# Agent Notes - v1.7 Replatform
+# Agent Notes - v1.8 Realism
 
-**Branch:** `gemini-replatform`
+**Branch:** `v1.8-realism`
 
-## Status: v1.7.1 Complete - Ready for Testing/Merge
+## Status: v1.8.1 Complete - Ready for Testing/Merge
 
 ### Completed Features
 - **Phase 1.1: Authentication (Google OAuth)**
@@ -27,26 +27,18 @@
 - **Phase 3: Cloud Deployment Enhancements**
     - `deploy/aws-cfn.yaml` updated to support optional RDS PostgreSQL.
 - **v1.7.1 Enhancements:**
-    - **API Stability & Performance (Batched Ops & Rate Limiting):**
-        - `PagerDutyClient.ts`: Implemented `throttle()` for simple rate limiting (200ms interval, 429 retry).
-        - `PagerDutyClient.ts`: Added `manageIncidentsBatch()` for bulk Acknowledge/Resolve.
-        - `ServerSimulationEngine.ts`: Refactored `ackIncident`/`resolveIncident` to queue actions and `tick()` to process these queues using `manageIncidentsBatch`.
-    - **Dynamic Payloads (Faker.js):**
-        - `@faker-js/faker` installed on backend.
-        - `server/src/utils/TemplateParser.ts` created to parse `{{faker...}}` and Crux-style macros.
-        - `ServerSimulationEngine.ts` and `CampaignExecutor.ts` updated to apply `TemplateParser` to incident payloads.
-    - **Server-Side Import (Crux Campaigns):**
-        - `POST /api/campaigns/import` endpoint added to backend.
-        - `api.ts` and `CampaignManager.tsx` updated to use this new endpoint for importing Crux JSON files.
-    - **Fixes:**
-        - Fixed `DEFAULT_CAMPAIGN_CONFIG` export.
-        - Fixed `MonitorDashboard` data consumption after context refactor.
-        - Fixed `useServerSimulation` loading state.
+    - **API Stability & Performance:** Batched Ops & Rate Limiting.
+    - **Dynamic Payloads:** Faker.js integration.
+    - **Server-Side Import:** Crux Campaigns support.
+- **v1.8.1 Enhancements (Simulation Realism):**
+    - **Team Failure Scenarios:** Correlated outages (3-5 incidents) targeting specific teams.
+    - **Major Incidents:** P1/P2 promotions tied to team failures.
+    - **Realistic Personas:** Spoofing actual on-call users for Ack/Resolve actions.
+    - **Imperfect Responders:** Simulated missed acks and escalations.
+    - **UI Polish:** Sliders for probabilities, visual highlighting for Major/Team incidents.
 
 ### Next Steps
-- User Testing of `v1.7.1` features.
-- If stable, merge `gemini-replatform` into `main` and release `v1.7.1`.
-- Begin planning/implementation of `v1.7.2` (Dashboard Visibility & Import Fixes) based on previous plan.
+- **v1.8.1 Release:** Completed and merged to `main`.
 
 ## Configuration & Credentials (for Local Development)
 To test the full authentication flow, you will need to set these environment variables (in `server/.env` and `client/.env` or `client/vite.config.ts` for `VITE_` prefixed ones):

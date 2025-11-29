@@ -72,6 +72,8 @@ export interface Incident {
   failureSummary: string | null;
   noteContext: string[];
   syncedFromPd: boolean;
+  isMajor?: boolean;
+  prioritySet?: boolean; // New v1.8
 }
 
 export interface CampaignConfig {
@@ -198,6 +200,9 @@ export interface ConfigurationState {
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
   burstProbability: number; // New: Probability (0-1) that an incident will have bursts
+  majorIncidentProbability: number; // New v1.8
+  responderAckRate: number; // New v1.8
+  teamFailureProbability: number; // New v1.8.1
 
   // Per-Severity Simulation Settings
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
@@ -263,6 +268,9 @@ export const useStore = create<AppState>()(
       resumeExistingEnabled: true,
       sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
       burstProbability: 0.5,
+      majorIncidentProbability: 0.2, // Default 20% of team failures are Major
+      responderAckRate: 0.9,
+      teamFailureProbability: 0.01,
 
       // Per-Severity Simulation Defaults
       severityConfigs: DEFAULT_SEVERITY_CONFIGS,
@@ -754,7 +762,9 @@ export const useStore = create<AppState>()(
         }
 
         // Determine Severity
+        const isMajor = failureContext?.isMajor || false;
         const severity = (() => {
+            if (isMajor) return 'critical';
             const rand = Math.random();
             let cumulative = 0;
             for (const [sev, weight] of Object.entries(severityWeights)) {
@@ -781,7 +791,8 @@ export const useStore = create<AppState>()(
             component: payload.component || service.name,
             custom_details: {
               ...payload.custom_details,
-              generator: 'pd-noise-simulator'
+              generator: 'pd-noise-simulator',
+              sim_is_major: isMajor
             }
           }
         };
@@ -796,10 +807,13 @@ export const useStore = create<AppState>()(
              const now = Date.now();
              const config = severityConfigs[severity];
              
+             // Major incidents take longer to resolve (2x - 5x)
+             const resolveMult = isMajor ? (Math.random() * 3 + 2) : 1;
+
              const ackDelay = (Math.min(config.minAckSec, config.maxAckSec) + Math.random() * Math.abs(config.maxAckSec - config.minAckSec)) * 1000;
-             const resolveDelay = (Math.min(config.minResolveSec, config.maxResolveSec) + Math.random() * Math.abs(config.maxResolveSec - config.minResolveSec)) * 1000;
+             const resolveDelay = (Math.min(config.minResolveSec, config.maxResolveSec) + Math.random() * Math.abs(config.maxResolveSec - config.minResolveSec)) * 1000 * resolveMult;
              
-             const shouldAutoHeal = severity === 'warning' && autoHealConfig.enabled && Math.random() < autoHealConfig.warningProbability;
+             const shouldAutoHeal = !isMajor && severity === 'warning' && autoHealConfig.enabled && Math.random() < autoHealConfig.warningProbability;
              const autoHealDelay = shouldAutoHeal 
                 ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000 
                 : null;
@@ -826,18 +840,19 @@ export const useStore = create<AppState>()(
                failureId: failureContext?.id || null,
                failureSummary: failureContext?.summary || null,
                noteContext: payload.noteTemplates || [],
-               syncedFromPd: false
+               syncedFromPd: false,
+               isMajor: isMajor
              };
              
              get().addIncident(newIncident);
              set((state) => ({ totalEvents: state.totalEvents + 1 }));
-             get().addLog(`Triggered ${severity} incident for ${service.name}`, 'info');
+             get().addLog(isMajor ? `MAJOR INCIDENT TRIGGERED for ${service.name}!` : `Triggered ${severity} incident for ${service.name}`, isMajor ? 'error' : 'info');
           }
 
           // --- Event Burst Logic (Async & Random) ---
-          if (severity !== 'info' && Math.random() < burstProbability) {
-             // Randomize burst count (2 to 7)
-             const burstCount = Math.floor(Math.random() * (7 - 2 + 1)) + 2;
+          if (severity !== 'info' && (isMajor || Math.random() < burstProbability)) {
+             // Randomize burst count (2 to 7) - higher for major
+             const burstCount = isMajor ? Math.floor(Math.random() * (10 - 5 + 1)) + 5 : Math.floor(Math.random() * (7 - 2 + 1)) + 2;
              
              // Non-blocking loop
              (async () => {
@@ -1094,6 +1109,9 @@ export const useStore = create<AppState>()(
         resumeExistingEnabled: state.resumeExistingEnabled,
         sourceMix: state.sourceMix,
         burstProbability: state.burstProbability,
+        majorIncidentProbability: state.majorIncidentProbability,
+        responderAckRate: state.responderAckRate,
+        teamFailureProbability: state.teamFailureProbability,
 
         // Persist Per-Severity Simulation Settings
         severityConfigs: state.severityConfigs,

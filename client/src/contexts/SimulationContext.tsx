@@ -47,6 +47,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         sourceMix: state.sourceMix,
         burstProbability: state.burstProbability,
         severityConfigs: state.severityConfigs,
+        changeRoutingKey: state.campaignConfig.importedChangeRoutingKey,
         selectedServices: state.services.filter(svc => svc.include), 
       };
       socketRef.current.emit('start_simulation', { config: simConfig, credentials });

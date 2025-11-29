@@ -33,7 +33,7 @@ export class PagerDutyClient {
     this.lastRequestTime = Date.now();
   }
 
-  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams) {
+  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>) {
     await this.throttle(); // Simple throttling
 
     const url = new URL(`${this.config.apiBase}${path}`);
@@ -46,6 +46,7 @@ export class PagerDutyClient {
       'Accept': 'application/vnd.pagerduty+json;version=2',
       'Authorization': `Token token=${this.config.apiToken}`,
       'From': this.config.fromEmail,
+      ...headersOverride // Apply overrides
     };
 
     const options: RequestInit = {
@@ -60,7 +61,7 @@ export class PagerDutyClient {
     if (res.status === 429) {
         // Hit rate limit, simple retry after 2s
         await new Promise(resolve => setTimeout(resolve, 2000));
-        return this.request(method, path, body, queryParams);
+        return this.request(method, path, body, queryParams, headersOverride);
     }
 
     if (!res.ok) {
@@ -76,13 +77,24 @@ export class PagerDutyClient {
     return this.request('GET', '/incidents', undefined, params);
   }
 
-  async manageIncident(incidentId: string, action: 'acknowledge' | 'resolve') {
+  async getIncidentsByIds(ids: string[]) {
+    if (ids.length === 0) return { incidents: [] };
+    const params = new URLSearchParams();
+    ids.forEach(id => params.append('incident_ids[]', id));
+    params.append('statuses[]', 'triggered');
+    params.append('statuses[]', 'acknowledged');
+    params.append('statuses[]', 'resolved');
+    return this.request('GET', '/incidents', undefined, params);
+  }
+
+  async manageIncident(incidentId: string, action: 'acknowledge' | 'resolve', fromEmailOverride?: string) {
+    const headers = fromEmailOverride ? { 'From': fromEmailOverride } : undefined;
     return this.request('PUT', `/incidents/${incidentId}`, {
       incident: {
         type: 'incident_reference',
         status: action === 'acknowledge' ? 'acknowledged' : 'resolved'
       }
-    });
+    }, undefined, headers);
   }
 
   async manageIncidentsBatch(incidentIds: string[], action: 'acknowledge' | 'resolve') {
@@ -140,6 +152,22 @@ export class PagerDutyClient {
     });
   }
 
+  async getPriorities() {
+      return this.request('GET', '/priorities');
+  }
+
+  async updateIncidentPriority(incidentId: string, priorityId: string) {
+      return this.request('PUT', `/incidents/${incidentId}`, {
+          incident: {
+              type: 'incident_reference',
+              priority: {
+                  id: priorityId,
+                  type: 'priority_reference'
+              }
+          }
+      });
+  }
+
   async getUserIdsByEmail(emails: string[]) {
       // Simple implementation for now, can be optimized with bulk fetch if needed
       // PD API doesn't support bulk user fetch by email easily without iteration or searching
@@ -154,6 +182,25 @@ export class PagerDutyClient {
               return null;
           }
       }));
+  }
+
+  async getOnCallUsers(serviceId: string) {
+    const params = new URLSearchParams();
+    params.append('service_ids[]', serviceId);
+    params.append('include[]', 'users');
+    // Only get level 1 (first responders) usually? Or all. Default is all.
+    const res = await this.request('GET', '/oncalls', undefined, params);
+    
+    const emails: string[] = [];
+    if (res.oncalls) {
+        res.oncalls.forEach((oc: any) => {
+            if (oc.user && oc.user.email) {
+                emails.push(oc.user.email);
+            }
+        });
+    }
+    // Deduplicate
+    return [...new Set(emails)];
   }
 
   // --- Events API V2 (Unauthenticated, uses routing key) ---

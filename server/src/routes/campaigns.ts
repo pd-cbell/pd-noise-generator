@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../prisma';
 import { CampaignExecutor } from '../services/CampaignExecutor';
 import { authenticateUser, AuthRequest } from '../middleware/auth';
+import { simulationManager } from '../index';
 
 const router = Router();
 
@@ -23,10 +24,13 @@ router.post('/:id/trigger', async (req, res) => {
     const globalRoutingKey = (req.headers['x-pd-routing-key'] as string) || req.body.globalRoutingKey;
     const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
 
+    // Try to find active simulation for this user to log progress
+    const instance = simulationManager.get(campaign.userId);
+
     const executor = new CampaignExecutor({
       globalRoutingKey,
       changeRoutingKey
-    });
+    }, instance);
     
     executor.run(campaign).catch(err => console.error(`[Webhook] Execution failed for ${campaignId}:`, err));
 

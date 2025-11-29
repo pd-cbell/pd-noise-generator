@@ -1,15 +1,14 @@
-# PagerDuty Incident Noise Simulator v1.7.2
+# PagerDuty Incident Noise Simulator v1.8.1
 
-A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now with **Server-Side Execution**, **User Authentication**, and **Persistent Sessions**.
+A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now with **Server-Side Execution**, **User Authentication**, **Persistent Sessions**, and **Advanced Realism**.
 
-![Version](https://img.shields.io/badge/version-1.7.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.8.1-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
-## 🚀 New in v1.7 (Replatform)
-- **Headless Simulation:** The simulation engine runs on the backend. You can close your browser, and noise will continue to generate.
-- **Multi-User Support:** Sign in with Google (or Dev Login). Each user has their own isolated Profiles, Campaigns, and Active Simulations.
-- **Real-Time Dashboard:** Powered by WebSockets (Socket.io) for instant updates on incidents, API usage, and MTTA/MTTR metrics.
-- **Secure Credentials:** PagerDuty API tokens are encrypted at rest (AES-256) and linked to your user profile. No more copy-pasting tokens every session.
-- **Cloud Database:** Ready for AWS RDS deployment via CloudFormation.
+## 🚀 New in v1.8 (Simulation Realism)
+- **Major Incidents:** Randomly promotes incidents to P1/P2 with "War Room" chatter and swarming responders.
+- **Realistic Personas:** Actions (Ack/Resolve) are performed by actual on-call users (spoofed) rather than a generic bot.
+- **Team Failures:** Simulates correlated outages where a specific team experiences multiple incidents and change events simultaneously.
+- **Imperfect Responders:** Simulates missed acknowledgments (fatigue) leading to escalations.
 
 ## ✨ Core Features
 - **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.

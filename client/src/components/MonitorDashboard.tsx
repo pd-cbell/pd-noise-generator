@@ -33,6 +33,7 @@ export const MonitorDashboard: React.FC = () => {
   }, [log]);
 
   const activeIncidentCount = activeIncidents.length;
+  const majorIncidentCount = activeIncidents.filter(i => i.isMajor).length;
 
   const formatDuration = (ms: number) => {
     if (!ms || ms === 0) return '--';
@@ -146,6 +147,10 @@ export const MonitorDashboard: React.FC = () => {
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col">
            <p className="text-sm text-gray-500 font-medium mb-2">Health & Trends</p>
            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Major Incidents</span>
+                 <span className={`text-xl font-bold ${majorIncidentCount > 0 ? 'text-red-600' : 'text-gray-700'}`}>{majorIncidentCount}</span>
+              </div>
               <div className="flex justify-between items-center">
                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Dropped Events</span>
                  <span className={`text-xl font-bold ${metrics.droppedEvents > 0 ? 'text-red-600' : 'text-gray-700'}`}>{metrics.droppedEvents}</span>
@@ -203,47 +208,60 @@ export const MonitorDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {activeIncidents.map((incident: Incident) => (
-                      <tr key={incident.dedupKey}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{incident.serviceName}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            incident.severity === 'critical' ? 'bg-red-100 text-red-800' :
-                            incident.severity === 'error' ? 'bg-orange-100 text-orange-800' :
-                            incident.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {incident.severity}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {incident.incidentId ? (
-                            <a href={`https://${pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                              {incident.incidentId}
-                            </a>
-                          ) : (
-                            <span className="text-gray-400 italic">Pending...</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(incident.startedAt).toLocaleTimeString()}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                           <button 
-                             onClick={() => ackIncident(incident.dedupKey)}
-                             disabled={!incident.incidentId || incident.acked}
-                             className={`mr-3 font-medium ${!incident.incidentId || incident.acked ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-900'}`}
-                           >
-                             {incident.acked ? 'Acked' : 'Ack'}
-                           </button>
-                           <button 
-                             onClick={() => resolveIncident(incident.dedupKey)}
-                             disabled={!incident.incidentId}
-                             className={`font-medium ${!incident.incidentId ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
-                           >
-                             Resolve
-                           </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {activeIncidents.map((incident: Incident) => {
+                      const isTeamFailure = incident.failureSummary?.startsWith("Team Failure");
+                      const rowClass = incident.isMajor 
+                        ? 'bg-red-50 border-l-4 border-red-500' 
+                        : isTeamFailure 
+                          ? 'bg-yellow-50 border-l-4 border-yellow-400' 
+                          : '';
+
+                      return (
+                        <tr key={incident.dedupKey} className={rowClass}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                              {incident.serviceName}
+                              {incident.isMajor && <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">MAJOR</span>}
+                              {!incident.isMajor && isTeamFailure && <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">TEAM</span>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              incident.severity === 'critical' ? 'bg-red-100 text-red-800' :
+                              incident.severity === 'error' ? 'bg-orange-100 text-orange-800' :
+                              incident.severity === 'warning' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {incident.severity}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {incident.incidentId ? (
+                              <a href={`https://${pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                                {incident.incidentId}
+                              </a>
+                            ) : (
+                              <span className="text-gray-400 italic">Pending...</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(incident.startedAt).toLocaleTimeString()}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                             <button 
+                               onClick={() => ackIncident(incident.dedupKey)}
+                               disabled={!incident.incidentId || incident.acked}
+                               className={`mr-3 font-medium ${!incident.incidentId || incident.acked ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-900'}`}
+                             >
+                               {incident.acked ? 'Acked' : 'Ack'}
+                             </button>
+                             <button 
+                               onClick={() => resolveIncident(incident.dedupKey)}
+                               disabled={!incident.incidentId}
+                               className={`font-medium ${!incident.incidentId ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
+                             >
+                               Resolve
+                             </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

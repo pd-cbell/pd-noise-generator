@@ -223,19 +223,86 @@ export const ConfigurationForm: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Event Bursting</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="burstProbability" className="block text-sm font-medium text-gray-700 mb-1">Burst Probability (0-1)</label>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="burstProbability" className="block text-sm font-medium text-gray-700">Burst Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.burstProbability * 100)).toFixed(0)}%</span>
+                </div>
                 <input
                   id="burstProbability"
-                  type="number"
-                  step="0.1"
+                  type="range"
                   min="0"
                   max="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  step="0.1"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
                   value={useStore(state => state.burstProbability)}
                   onChange={(e) => useStore.getState().setSettings({ burstProbability: Number(e.target.value) })}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   If triggered, sends 2-7 events every 10-40s. Stops on resolve.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Realism & Chaos (v1.8) */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Realism & Chaos (v1.8)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="majorIncidentProbability" className="block text-sm font-medium text-gray-700">Major Incident Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.majorIncidentProbability * 100)).toFixed(0)}%</span>
+                </div>
+                <input
+                  id="majorIncidentProbability"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.majorIncidentProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ majorIncidentProbability: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  % of Team Failure scenarios that become Major (P1/P2).
+                </p>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="responderAckRate" className="block text-sm font-medium text-gray-700">Responder Ack Rate</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.responderAckRate * 100)).toFixed(0)}%</span>
+                </div>
+                <input
+                  id="responderAckRate"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.responderAckRate)}
+                  onChange={(e) => useStore.getState().setSettings({ responderAckRate: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Simulates human error. Lower = more missed acks.
+                </p>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="teamFailureProbability" className="block text-sm font-medium text-gray-700">Team Failure Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.teamFailureProbability * 100)).toFixed(1)}%</span>
+                </div>
+                <input
+                  id="teamFailureProbability"
+                  type="range"
+                  min="0"
+                  max="0.05"
+                  step="0.001"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.teamFailureProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ teamFailureProbability: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Prob. of correlated team-wide failure scenarios.
                 </p>
               </div>
             </div>
