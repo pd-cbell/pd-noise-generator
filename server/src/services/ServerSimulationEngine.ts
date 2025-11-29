@@ -510,7 +510,8 @@ export class SimulationInstance {
     }
 
     try {
-        const emails = await this.pdClient.getOnCallUsers(serviceId);
+        // Pass selectedTeamIds to filter on-calls (Persona Restriction)
+        const emails = await this.pdClient.getOnCallUsers(serviceId, this.config.selectedTeamIds);
         this.onCallCache.set(serviceId, { 
             emails, 
             expires: now + 5 * 60 * 1000 // Cache for 5 minutes

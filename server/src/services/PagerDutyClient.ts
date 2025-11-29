@@ -184,10 +184,16 @@ export class PagerDutyClient {
       }));
   }
 
-  async getOnCallUsers(serviceId: string) {
+  async getOnCallUsers(serviceId: string, teamIds?: string[]) {
     const params = new URLSearchParams();
     params.append('service_ids[]', serviceId);
     params.append('include[]', 'users');
+    
+    // Filter by teams if provided
+    if (teamIds && teamIds.length > 0) {
+        teamIds.forEach(tid => params.append('team_ids[]', tid));
+    }
+
     // Only get level 1 (first responders) usually? Or all. Default is all.
     const res = await this.request('GET', '/oncalls', undefined, params);
     

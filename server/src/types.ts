@@ -97,4 +97,5 @@ export interface SimulationConfig {
   changeRoutingKey?: string; // New v1.8 for Major Incident changes
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
   selectedServices: Service[]; // Backend needs full service objects to trigger
+  selectedTeamIds: string[]; // New: Restrict personas to these teams
 }
