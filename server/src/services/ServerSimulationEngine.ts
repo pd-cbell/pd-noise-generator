@@ -234,20 +234,34 @@ export class SimulationInstance {
         const ids = Array.from(this.pendingAcks);
         this.pendingAcks.clear();
         try {
-            const res = await this.pdClient.manageIncidentsBatch(ids, 'acknowledge');
-            if (res && res.incidents) {
-                res.incidents.forEach((pdInc: any) => {
-                    if (pdInc.status === 'resolved') {
-                         const localInc = this.state.activeIncidents.find(i => i.incidentId === pdInc.id);
-                         if (localInc) {
-                             this.removeIncident(localInc.dedupKey);
-                             this.addLog(`Incident ${pdInc.id} was resolved externally. Removed.`, 'info');
-                         }
+            const results = await this.pdClient.manageIncidentsBatch(ids, 'acknowledge');
+            if (results && Array.isArray(results)) {
+                results.forEach((res: any) => {
+                    if (res && res.incidents) {
+                        res.incidents.forEach((pdInc: any) => {
+                             if (pdInc.status === 'resolved') {
+                                  const localInc = this.state.activeIncidents.find(i => i.incidentId === pdInc.id);
+                                  if (localInc) {
+                                      this.removeIncident(localInc.dedupKey);
+                                      this.addLog(`Incident ${pdInc.id} was resolved externally. Removed.`, 'info');
+                                  }
+                             }
+                        });
                     }
                 });
             }
         } catch (e: any) {
              this.addLog(`Batch Ack failed: ${e.message}`, 'error');
+             // Remove incidents if 404/400 (Not Found/Invalid)
+             if (e.message.includes('404') || e.message.includes('400') || e.message.toLowerCase().includes('not found')) {
+                 ids.forEach(id => {
+                     const localInc = this.state.activeIncidents.find(i => i.incidentId === id);
+                     if (localInc) {
+                         this.removeIncident(localInc.dedupKey);
+                     }
+                 });
+                 this.addLog(`Removed ${ids.length} incidents due to API error (Batch Ack Failed)`, 'warn');
+             }
         }
     }
 
@@ -256,10 +270,10 @@ export class SimulationInstance {
         this.pendingResolves.clear();
         try {
             await this.pdClient.manageIncidentsBatch(ids, 'resolve');
-            // Resolution success - already removed optimistically, but check for errors?
+            // Resolution success - already removed optimistically
         } catch (e: any) {
              this.addLog(`Batch Resolve failed: ${e.message}`, 'error');
-             // If 404, maybe remove them? Complex to know which one failed in batch.
+             // They are already removed optimistically, so no action needed if they are gone.
         }
     }
 
@@ -340,34 +354,6 @@ export class SimulationInstance {
         }
       }
 
-  private pdUserId: string | null = null; // Cached PD User ID for the 'fromEmail'
-
-  constructor(userId: string, config: SimulationConfig, credentials: any, io: SocketIOServer) {
-    // ...
-  }
-
-// ... (start/stop/actions methods)
-
-  // ... (internal methods)
-
-  private async ensurePdUserId() {
-      if (this.pdUserId) return this.pdUserId;
-      try {
-          const ids = await this.pdClient.getUserIdsByEmail([this.credentials.fromEmail]);
-          if (ids[0]) {
-              this.pdUserId = ids[0];
-              return this.pdUserId;
-          }
-      } catch (e) {
-          console.error("Failed to resolve PD User ID:", e);
-      }
-      return null;
-  }
-
-  // --- Core Tick Logic ---
-  private async tick() {
-// ... (existing tick logic)
-
       // Request Responder
       if (inc.acked && !inc.responderRequested && Math.random() < severityConfig.responderProbability) {
         this.updateIncident(inc.dedupKey, { responderRequested: true });
@@ -382,8 +368,27 @@ export class SimulationInstance {
         }
       }
     }
-    
-    this.emitState(); 
+
+    this.emitState();
+
+    // Update Trend Data - moved to end to capture final state of this tick
+    this.addMonitorTrendData(this.state.activeIncidents.length);
+  }
+
+  private pdUserId: string | null = null; // Cached PD User ID for the 'fromEmail'
+
+  private async ensurePdUserId() {
+      if (this.pdUserId) return this.pdUserId;
+      try {
+          const ids = await this.pdClient.getUserIdsByEmail([this.credentials.fromEmail]);
+          if (ids[0]) {
+              this.pdUserId = ids[0];
+              return this.pdUserId;
+          }
+      } catch (e) {
+          console.error("Failed to resolve PD User ID:", e);
+      }
+      return null;
   }
 
   // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---

@@ -1,8 +1,8 @@
-# PagerDuty Incident Noise Simulator v1.7
+# PagerDuty Incident Noise Simulator v1.7.2
 
 A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now with **Server-Side Execution**, **User Authentication**, and **Persistent Sessions**.
 
-![Version](https://img.shields.io/badge/version-1.7-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
+![Version](https://img.shields.io/badge/version-1.7.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green)
 
 ## 🚀 New in v1.7 (Replatform)
 - **Headless Simulation:** The simulation engine runs on the backend. You can close your browser, and noise will continue to generate.

@@ -288,3 +288,4 @@ export const MonitorDashboard: React.FC = () => {
       </div>
     </div>
   );
+};

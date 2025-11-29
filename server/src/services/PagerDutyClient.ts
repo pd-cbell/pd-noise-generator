@@ -86,7 +86,7 @@ export class PagerDutyClient {
   }
 
   async manageIncidentsBatch(incidentIds: string[], action: 'acknowledge' | 'resolve') {
-    if (incidentIds.length === 0) return;
+    if (incidentIds.length === 0) return [];
     
     const chunks = [];
     const chunkSize = 25; 
@@ -94,6 +94,7 @@ export class PagerDutyClient {
         chunks.push(incidentIds.slice(i, i + chunkSize));
     }
 
+    const results = [];
     for (const chunk of chunks) {
         const incidents = chunk.map(id => ({
             id,
@@ -101,8 +102,19 @@ export class PagerDutyClient {
             status: action === 'acknowledge' ? 'acknowledged' : 'resolved'
         }));
         
-        await this.request('PUT', '/incidents', { incidents });
+        try {
+            const res = await this.request('PUT', '/incidents', { incidents });
+            results.push(res);
+        } catch (error) {
+            // If a chunk fails, we might want to capture the error but continue other chunks?
+            // For now, let's throw so the caller knows something went wrong, 
+            // or return the error as part of the results?
+            // Roadmap 1.3 implies we need to catch 404/400. The request method throws on error.
+            // We will rethrow here and let the caller handle the specific error, or we could map it.
+            throw error; 
+        }
     }
+    return results;
   }
 
   async requestResponder(incidentId: string, requesterId: string, targetId: string, message: string = "Requesting assistance via Simulator") {
