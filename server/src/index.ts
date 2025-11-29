@@ -80,6 +80,27 @@ io.on('connection', (socket) => {
       socket.emit('sim_stopped');
   });
 
+  // --- Interaction Events ---
+  socket.on('ack_incident', (dedupKey) => {
+      const sim = simulationManager.get(userId);
+      if (sim) sim.ackIncident(dedupKey);
+  });
+
+  socket.on('resolve_incident', (dedupKey) => {
+      const sim = simulationManager.get(userId);
+      if (sim) sim.resolveIncident(dedupKey);
+  });
+
+  socket.on('clear_incidents', () => {
+      const sim = simulationManager.get(userId);
+      if (sim) sim.clearActiveIncidents();
+  });
+
+  socket.on('resolve_all', () => {
+      const sim = simulationManager.get(userId);
+      if (sim) sim.resolveAllIncidents();
+  });
+
   socket.on('disconnect', () => {
       // Clean up resources if necessary
   });

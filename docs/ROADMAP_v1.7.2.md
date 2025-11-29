@@ -10,6 +10,7 @@ This plan addresses immediate UX and functional issues identified during initial
 - Improve user feedback and reliability for the Crux campaign import feature.
 - Fully enable PagerDuty Responder Requests.
 - Handle external incident updates (resolves/merges) gracefully.
+- Ensure "Clear All" and "Resolve All" buttons function correctly.
 
 ---
 
@@ -37,7 +38,16 @@ This plan addresses immediate UX and functional issues identified during initial
 - **Backend (`ServerSimulationEngine.ts`):**
     - **Response Inspection:** When `ackIncident` (single or batch) receives a response from PagerDuty, inspect the status of the returned incident(s).
     - **Reconciliation:** If an incident in our `activeIncidents` list returns with `status: 'resolved'` (and we didn't just initiate a resolve), immediately remove it from our active list.
-    - **Error Handling:** If an API call returns 404 (Merged/Deleted) or 400 (Already Resolved), catch that specific error and remove the incident from the active list to stop further attempts.
+    - **Error Handling:** If an API call returns 404 (Incident Not Found, potentially Merged/Deleted) or 400 (e.g., "Incident is already resolved"), catch that specific error and remove the incident from the active list to stop further attempts.
+
+### 1.4 Fix "Clear All" and "Resolve All" Buttons
+- **Issue:** The "Clear List (Server)" and "Resolve All (Server)" buttons on the Monitor Dashboard do not function.
+- **Cause Analysis:** These actions must trigger server-side logic to correctly manipulate the `SimulationInstance` state and PagerDuty.
+- **Frontend (`MonitorDashboard.tsx`):**
+    - **Logic:** Ensure the `clearActiveIncidents` and `resolveAllIncidents` functions from `useServerSimulation()` are correctly invoked via socket events.
+- **Backend (`ServerSimulationEngine.ts`):**
+    - **`clearActiveIncidents()`:** Verify this method correctly clears `this.state.activeIncidents` and emits the updated state.
+    - **`resolveAllIncidents()`:** Verify this method correctly queues all active incidents for resolution and clears `this.state.activeIncidents` locally. Ensure the batch API calls for resolution are being sent and handled.
 
 ---
 
@@ -47,16 +57,16 @@ This plan addresses immediate UX and functional issues identified during initial
 - **Issue:** The current backend import process is silent on the frontend.
 - **Frontend (`CampaignManager.tsx`):**
     - **Loading State:** Implement a local loading state for the import button, showing a spinner while `api.importCampaigns` is in progress.
-    - **Toast/Alert Feedback:** Use `addLog` (client-side Zustand) for prominent notifications (success/error/progress). Consider using `window.alert` for critical feedback, or a dedicated toast component if one is already available or easy to integrate.
+    - **Toast/Alert Feedback:** Use `addLog` (client-side Zustand) for prominent notifications (success/error/progress).
     - **Error Handling:** Ensure `try/catch` around `api.importCampaigns` clearly communicates failures to the user.
 
 ### 2.2 Fully Enable Responder Requests
 - **Issue:** Responder requests are currently skipped on the server side.
 - **Backend (`PagerDutyClient.ts`):**
-    - Add `requestResponder(incidentId: string, requesterId: string, message: string)` method. This requires a `userId` as `requesterId`.
+    - Add `requestResponder(incidentId: string, requesterId: string, message: string)` method.
 - **Backend (`ServerSimulationEngine.ts`):**
     - **User ID Cache:** Implement a mechanism to resolve a `fromEmail` to a PagerDuty User ID (using `pdClient.getUsersByEmail`) once and cache it for the `SimulationInstance`. This happens when the simulation starts or `fromEmail` changes.
-    - **Logic:** Uncomment and implement the `requestResponder` logic in `tick()`, using the resolved `requesterId` from the cache. Handle potential failures gracefully.
+    - **Logic:** Implement the `requestResponder` logic in `tick()`, using the resolved `requesterId` from the cache. Handle potential failures gracefully.
 
 ---
 
@@ -65,6 +75,7 @@ This plan addresses immediate UX and functional issues identified during initial
 - System log in Monitor tab is filterable by log level.
 - Crux import provides visual feedback (loading, success/error).
 - PagerDuty Responder Requests are fully functional.
-- Simulator gracefully handles externally resolved incidents.
+- Simulator gracefully handles externally resolved/merged incidents.
+- "Clear All" and "Resolve All" buttons correctly trigger server-side actions.
 
 This plan aims to polish the user experience and enable all intended features for a robust v1.7.2 release.

@@ -105,6 +105,21 @@ export class PagerDutyClient {
     }
   }
 
+  async requestResponder(incidentId: string, requesterId: string, targetId: string, message: string = "Requesting assistance via Simulator") {
+    return this.request('POST', `/incidents/${incidentId}/responder_requests`, {
+      requester_id: requesterId,
+      message,
+      responder_request_targets: [
+        {
+          responder_request_target: {
+            id: targetId,
+            type: 'user_reference'
+          }
+        }
+      ]
+    });
+  }
+
   async addNote(incidentId: string, content: string) {
     return this.request('POST', `/incidents/${incidentId}/notes`, {
       note: {

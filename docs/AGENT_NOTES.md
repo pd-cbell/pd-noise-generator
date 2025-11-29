@@ -2,14 +2,14 @@
 
 **Branch:** `gemini-replatform`
 
-## Status: v1.7.1 Complete - Dynamic Payloads, Reliable Operations & Imports
+## Status: v1.7.1 Complete - Ready for Testing/Merge
 
-### Completed
+### Completed Features
 - **Phase 1.1: Authentication (Google OAuth)**
     - `User` model with Google ID.
     - `/auth/google` backend flow with JWT sessions.
     - Frontend `AuthContext` and `Login` component.
-    - **Development Login Bypass** (`POST /auth/dev-login`) for local testing.
+    - **Development Login Bypass** (`POST /auth/dev-login`) for easy local testing.
 - **Phase 1.2: Multi-User Data Scoping**
     - `Profile` and `Campaign` models scoped to `userId`.
     - `authenticateUser` middleware secures API routes.
@@ -38,9 +38,15 @@
     - **Server-Side Import (Crux Campaigns):**
         - `POST /api/campaigns/import` endpoint added to backend.
         - `api.ts` and `CampaignManager.tsx` updated to use this new endpoint for importing Crux JSON files.
+    - **Fixes:**
+        - Fixed `DEFAULT_CAMPAIGN_CONFIG` export.
+        - Fixed `MonitorDashboard` data consumption after context refactor.
+        - Fixed `useServerSimulation` loading state.
 
-### Next Major Phase
-- **Merge `gemini-replatform` into `main` and release `v1.7.1`.**
+### Next Steps
+- User Testing of `v1.7.1` features.
+- If stable, merge `gemini-replatform` into `main` and release `v1.7.1`.
+- Begin planning/implementation of `v1.7.2` (Dashboard Visibility & Import Fixes) based on previous plan.
 
 ## Configuration & Credentials (for Local Development)
 To test the full authentication flow, you will need to set these environment variables (in `server/.env` and `client/.env` or `client/vite.config.ts` for `VITE_` prefixed ones):

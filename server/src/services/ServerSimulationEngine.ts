@@ -212,11 +212,19 @@ export class SimulationInstance {
     this.state.metrics.apiRpm = callsInLast5s * (60 / 5); // Scale to RPM
   }
 
+  private addMonitorTrendData(count: number) {
+    const nowTs = Date.now();
+    const windowStart = nowTs - TREND_WINDOW_MS;
+    this.state.monitorTrend = this.state.monitorTrend.filter((point) => point.ts >= windowStart);
+    this.state.monitorTrend.push({ ts: nowTs, count });
+  }
+
   // --- Core Tick Logic (Adapted from client/src/store/useStore.ts) ---
   private async tick() {
     if (!this.state.isRunning) return;
 
-    // console.log('ServerSimulationEngine: Tick', this.userId); 
+    // Update Trend Data
+    this.addMonitorTrendData(this.state.activeIncidents.length);
 
     const now = Date.now();
     this.updateApiMetrics(); // Update API metrics every tick
@@ -225,12 +233,34 @@ export class SimulationInstance {
     if (this.pendingAcks.size > 0) {
         const ids = Array.from(this.pendingAcks);
         this.pendingAcks.clear();
-        this.pdClient.manageIncidentsBatch(ids, 'acknowledge').catch(e => this.addLog(`Batch Ack failed: ${e.message}`, 'error'));
+        try {
+            const res = await this.pdClient.manageIncidentsBatch(ids, 'acknowledge');
+            if (res && res.incidents) {
+                res.incidents.forEach((pdInc: any) => {
+                    if (pdInc.status === 'resolved') {
+                         const localInc = this.state.activeIncidents.find(i => i.incidentId === pdInc.id);
+                         if (localInc) {
+                             this.removeIncident(localInc.dedupKey);
+                             this.addLog(`Incident ${pdInc.id} was resolved externally. Removed.`, 'info');
+                         }
+                    }
+                });
+            }
+        } catch (e: any) {
+             this.addLog(`Batch Ack failed: ${e.message}`, 'error');
+        }
     }
+
     if (this.pendingResolves.size > 0) {
         const ids = Array.from(this.pendingResolves);
         this.pendingResolves.clear();
-        this.pdClient.manageIncidentsBatch(ids, 'resolve').catch(e => this.addLog(`Batch Resolve failed: ${e.message}`, 'error'));
+        try {
+            await this.pdClient.manageIncidentsBatch(ids, 'resolve');
+            // Resolution success - already removed optimistically, but check for errors?
+        } catch (e: any) {
+             this.addLog(`Batch Resolve failed: ${e.message}`, 'error');
+             // If 404, maybe remove them? Complex to know which one failed in batch.
+        }
     }
 
     // --- Incident Generation (Poisson process) ---
@@ -310,16 +340,50 @@ export class SimulationInstance {
         }
       }
 
+  private pdUserId: string | null = null; // Cached PD User ID for the 'fromEmail'
+
+  constructor(userId: string, config: SimulationConfig, credentials: any, io: SocketIOServer) {
+    // ...
+  }
+
+// ... (start/stop/actions methods)
+
+  // ... (internal methods)
+
+  private async ensurePdUserId() {
+      if (this.pdUserId) return this.pdUserId;
+      try {
+          const ids = await this.pdClient.getUserIdsByEmail([this.credentials.fromEmail]);
+          if (ids[0]) {
+              this.pdUserId = ids[0];
+              return this.pdUserId;
+          }
+      } catch (e) {
+          console.error("Failed to resolve PD User ID:", e);
+      }
+      return null;
+  }
+
+  // --- Core Tick Logic ---
+  private async tick() {
+// ... (existing tick logic)
+
       // Request Responder
       if (inc.acked && !inc.responderRequested && Math.random() < severityConfig.responderProbability) {
-        // This requires PD User API token to find user ID first.
-        // For now, we'll skip actual responder requests on server side to simplify
         this.updateIncident(inc.dedupKey, { responderRequested: true });
-        this.addLog(`Simulating responder request for ${inc.incidentId} (API call skipped)`, 'info');
+        
+        const userId = await this.ensurePdUserId();
+        if (userId) {
+            this.pdClient.requestResponder(inc.incidentId, userId, userId)
+                .then(() => this.addLog(`Requested responder (self) for ${inc.incidentId}`, 'info'))
+                .catch(e => this.addLog(`Failed to request responder: ${e.message}`, 'error'));
+        } else {
+            this.addLog(`Skipped responder request (User ID not found for ${this.credentials.fromEmail})`, 'warn');
+        }
       }
     }
     
-    this.emitState(); // Emit state after every tick
+    this.emitState(); 
   }
 
   // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---

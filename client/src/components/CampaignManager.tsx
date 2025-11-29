@@ -23,6 +23,7 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
   }, [loadPayloadAdapters, loadImportedCampaigns]);
 
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
+  const [isImporting, setIsImporting] = React.useState(false);
 
   const handleCopyCurl = (id: string, cmd: string) => {
     navigator.clipboard.writeText(cmd);
@@ -40,17 +41,28 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
 
     const reader = new FileReader();
     reader.onload = async (event) => {
+      setIsImporting(true);
       try {
         const content = event.target?.result as string;
         const json = JSON.parse(content);
-        await api.importCampaigns(json);
+        const result = await api.importCampaigns(json);
+        
         addLog("Successfully imported campaigns.", "info");
+        if (result.errors) {
+            alert(`Imported with some errors:\n${result.errors.join('\n')}`);
+        } else {
+            alert("Successfully imported campaigns!");
+        }
+        
         loadImportedCampaigns();
         
         // Reset input
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (err: any) {
         addLog(`Failed to import campaign: ${err.message}`, 'error');
+        alert(`Failed to import campaign: ${err.message}`);
+      } finally {
+        setIsImporting(false);
       }
     };
     reader.readAsText(file);
@@ -218,10 +230,11 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
             />
             <button
               onClick={handleImportClick}
-              className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 transition-colors"
+              disabled={isImporting}
+              className={`flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-700 border border-gray-300 rounded-md text-sm hover:bg-gray-200 transition-colors ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <Upload className="w-4 h-4" />
-              Import (Crux)
+              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {isImporting ? 'Importing...' : 'Import (Crux)'}
             </button>
             <button
               onClick={() => onEditCampaign('new')}
