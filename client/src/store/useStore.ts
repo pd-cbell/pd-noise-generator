@@ -1028,16 +1028,21 @@ export const useStore = create<AppState>()(
       createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
         try {
           // Transform payloadString back to payload JSON object for the backend
+          // And map 'times' to 'repeatCount'
           const apiPayload = {
             ...campaignData,
             items: campaignData.items.map(item => {
               let payload = {};
               try {
-                payload = JSON.parse(item.payloadString);
+                payload = JSON.parse(item.payloadString || '{}');
               } catch (e) {
                 console.error("Failed to parse payloadString for item", item.id);
               }
-              return { ...item, payload };
+              return { 
+                  ...item, 
+                  payload,
+                  repeatCount: item.times || 1 // Map frontend 'times' to backend 'repeatCount'
+              };
             })
           };
 
@@ -1054,16 +1059,21 @@ export const useStore = create<AppState>()(
       updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
         try {
           // Transform payloadString back to payload JSON object for the backend
+          // And map 'times' to 'repeatCount'
           const apiPayload = {
             ...campaignData,
             items: campaignData.items?.map(item => {
               let payload = {};
               try {
-                payload = JSON.parse(item.payloadString);
+                payload = JSON.parse(item.payloadString || '{}');
               } catch (e) {
                 console.error("Failed to parse payloadString for item", item.id);
               }
-              return { ...item, payload };
+              return { 
+                  ...item, 
+                  payload,
+                  repeatCount: item.times || 1 // Map frontend 'times' to backend 'repeatCount'
+              };
             })
           };
 

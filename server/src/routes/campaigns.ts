@@ -51,7 +51,14 @@ router.use(authenticateUser);
 // POST /api/campaigns/import - Import Crux campaigns
 router.post('/import', async (req: any, res: Response) => {
   const { userId } = (req as AuthRequest).user!;
-  const groups = Array.isArray(req.body) ? req.body : [];
+  
+  let groups = [];
+  if (Array.isArray(req.body)) {
+      groups = req.body;
+  } else if (req.body && typeof req.body === 'object') {
+      // Handle single object (either wrapped in event_group or just the group itself)
+      groups = [req.body];
+  }
   
   if (groups.length === 0) {
       return res.status(400).json({ error: "No event groups found in payload" });

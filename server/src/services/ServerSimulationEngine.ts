@@ -713,7 +713,7 @@ export class SimulationInstance {
         this.addLog(isMajor ? `MAJOR INCIDENT TRIGGERED for ${service.name}!` : `Triggered ${severity} incident for ${service.name}`, isMajor ? 'error' : 'info');
       
         if (isMajor) {
-            this.triggerRelatedChangeEvents(service.name);
+            this.triggerRelatedChangeEvents([service]);
         }
       }
 
@@ -757,32 +757,52 @@ export class SimulationInstance {
     }
   }
 
-  private async triggerRelatedChangeEvents(serviceName: string) {
-      const key = this.config.changeRoutingKey;
-      if (!key) return;
-      
-      const count = getRandomInt(2, 3);
-      for(let i=0; i<count; i++) {
-          await new Promise(r => setTimeout(r, 500 * (i + 1))); 
+  private async triggerRelatedChangeEvents(targetServices: Service[]) {
+      // Pick 1-3 random services from the target list to fire change events on
+      const count = Math.min(targetServices.length, getRandomInt(1, 3));
+      const selectedServices = targetServices.sort(() => 0.5 - Math.random()).slice(0, count);
+
+      for (const service of selectedServices) {
+          // Determine Routing Key: Priority = Service Integration > Global Config
+          let routingKey = this.config.changeRoutingKey;
+          
+          if (service.changeIntegrations && service.changeIntegrations.length > 0) {
+              // Use the first available integration key
+              // Frontend maps it to { integrationKey: ... }
+              const integration = service.changeIntegrations.find((i: any) => i.integrationKey);
+              if (integration) {
+                  routingKey = integration.integrationKey;
+              }
+          }
+
+          if (!routingKey) {
+              this.addLog(`Skipped change event for ${service.name}: No Change Integration Key found.`, 'warn');
+              continue;
+          }
+          
           const body = {
-              routing_key: key,
+              routing_key: routingKey,
               payload: {
-                  summary: `Recent Deploy: ${serviceName} v${getRandomInt(1,9)}.${getRandomInt(0,9)}`,
+                  summary: `Recent Deploy: ${service.name} v${getRandomInt(1,9)}.${getRandomInt(0,9)}`,
                   timestamp: new Date().toISOString(),
                   source: 'CI/CD Pipeline',
                   custom_details: {
-                      service: serviceName,
+                      service: service.name,
                       build_id: getRandomInt(1000, 9999),
                       triggered_by: 'Major Incident Simulation'
                   }
               }
           };
+
+          // Add random delay for realism
+          await new Promise(r => setTimeout(r, getRandomInt(500, 2000)));
+
           this.pdClient.triggerChangeEvent(body)
             .then(() => {
                 this.state.totalEvents++;
-                this.addLog(`Sent related change event for ${serviceName}`, 'info');
+                this.addLog(`Sent related change event for ${service.name}`, 'info');
             })
-            .catch(e => this.addLog(`Failed change event: ${e.message}`, 'warn'));
+            .catch(e => this.addLog(`Failed change event for ${service.name}: ${e.message}`, 'warn'));
       }
   }
 
@@ -849,9 +869,8 @@ export class SimulationInstance {
       }
   
       // Trigger Change Events
-      if (this.config.changeRoutingKey) {
-          this.triggerRelatedChangeEvents(targetTeam.name);
-      }
+      // Pass the list of affected services so we can route changes correctly
+      this.triggerRelatedChangeEvents(targetServices);
   }
 
   private emitState() {

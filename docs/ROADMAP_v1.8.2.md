@@ -40,7 +40,21 @@ This release focuses on refining the "Major Incident" behavior to be less determ
     - Log when a merge event occurs: "Merged 3 incidents into [Incident ID] (Team Failure)."
     - Ensure merged incidents (that disappear from PD active list) are removed from the local simulator list gracefully.
 
+## Phase 4: Fix Change Events
+- **Issue:** Change events are not being sent during team failures because the engine relies on a global `changeRoutingKey` which is often unset, ignoring service-specific integrations.
+- **Fix:**
+    - Refactor `triggerRelatedChangeEvents` to accept a `Service` object.
+    - Logic: 
+        1. Look for a valid integration key in `service.changeIntegrations`.
+        2. If found, use it.
+        3. If not, fall back to `config.changeRoutingKey`.
+    - Update `triggerTeamFailureScenario` to pass the target service(s) to this method.
+
 ## Deliverables
 - [ ] Major incidents use P1/P2/P3 distribution.
 - [ ] Team Failure incidents are merged into a single parent.
 - [ ] Notes are added explaining the merge.
+- [ ] Change events are correctly sent to service-specific integrations during failures.
+
+## Known Issues / Bug Bash (Post 1.8.2 Development)
+- [ ] **Failure Campaign Editor and Import not working:** Investigate and fix issues preventing proper creation, editing, and importing of campaigns.
