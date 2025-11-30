@@ -49,6 +49,7 @@ export class SimulationInstance {
   private pendingResolves: Set<string> = new Set();
   private priorities: any[] = []; // Cache for Priority IDs
   private onCallCache = new Map<string, { emails: string[], expires: number }>();
+  private pendingMerges: { targetDedupKey: string; sourceDedupKeys: string[]; createdAt: number; note: string }[] = [];
 
   constructor(userId: string, config: SimulationConfig, credentials: any, io: SocketIOServer) {
     this.userId = userId;
@@ -348,6 +349,56 @@ export class SimulationInstance {
              this.addLog(`Batch Resolve failed: ${e.message}`, 'error');
         }
     }
+    
+    // --- Process Pending Merges (v1.8.2) ---
+    this.pendingMerges = this.pendingMerges.filter(merge => {
+        const now = Date.now();
+        // Safety timeout (e.g., 2 minutes) - discard if never mapped
+        if (now - merge.createdAt > 120000) return false;
+
+        // Find Target Incident ID
+        const targetInc = this.state.activeIncidents.find(i => i.dedupKey === merge.targetDedupKey);
+        if (!targetInc || !targetInc.incidentId) return true; // Keep waiting
+
+        // Check Source Incident IDs
+        const sourceIds: string[] = [];
+        let allSourcesFound = true;
+        
+        for (const sourceKey of merge.sourceDedupKeys) {
+            const sourceInc = this.state.activeIncidents.find(i => i.dedupKey === sourceKey);
+            if (sourceInc && sourceInc.incidentId) {
+                sourceIds.push(sourceInc.incidentId);
+            } else {
+                // If source incident is gone (e.g. resolved externally), we can't merge it. 
+                // But we should wait a bit more if it just hasn't been created/mapped yet.
+                // If 60s passed, maybe we just merge what we have?
+                if (now - merge.createdAt < 60000) {
+                     allSourcesFound = false;
+                     break;
+                }
+                // If > 60s, proceed with partial merge (skipping missing source)
+            }
+        }
+
+        if (!allSourcesFound) return true; // Keep waiting
+
+        if (sourceIds.length === 0) return false; // Nothing to merge (sources missing)
+
+        // Execute Merge
+        this.pdClient.mergeIncidents(targetInc.incidentId, sourceIds)
+            .then(() => {
+                this.addLog(`Merged ${sourceIds.length} incidents into ${targetInc.incidentId} (Team Failure Grouping)`, 'info');
+                this.pdClient.addNote(targetInc.incidentId!, merge.note).catch(() => {});
+                
+                // Remove merged source incidents from local state
+                merge.sourceDedupKeys.forEach(key => this.removeIncident(key));
+            })
+            .catch(e => {
+                this.addLog(`Merge failed: ${e.message}`, 'error');
+            });
+        
+        return false; // Remove from queue
+    });
 
     // --- Incident Generation (Poisson process) ---
     const { ratePerMinute, selectedServices, severityWeights, burstProbability, teamFailureProbability } = this.config;
@@ -440,13 +491,20 @@ export class SimulationInstance {
 
       // Major Incident Priority Promotion
       if (inc.isMajor && !inc.prioritySet && inc.incidentId) {
-          const pId = await this.ensurePriorityId('P1') || await this.ensurePriorityId('P2');
+          // v1.8.2: Weighted Priority Distribution
+          // P1: 30%, P2: 50%, P3: 20%
+          const rand = Math.random();
+          let pLabel = 'P2';
+          if (rand < 0.3) pLabel = 'P1';
+          else if (rand > 0.8) pLabel = 'P3';
+
+          const pId = await this.ensurePriorityId(pLabel);
           if (pId) {
               // Optimistically set flag to prevent retry loop while waiting for promise
               this.updateIncident(inc.dedupKey, { prioritySet: true }); 
               this.pdClient.updateIncidentPriority(inc.incidentId, pId)
                   .then(() => {
-                      this.addLog(`Promoted ${inc.incidentId} to Major Priority`, 'warn');
+                      this.addLog(`Promoted ${inc.incidentId} to Major Priority (${pLabel})`, 'warn');
                   })
                   .catch(e => {
                       this.addLog(`Failed to set priority: ${e.message}`, 'error');
@@ -586,7 +644,7 @@ export class SimulationInstance {
       // Suppress info alerts from active tracking, but send them to PD
     }
 
-    const dedupKey = failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
+    const dedupKey = failureContext?.preGeneratedDedupKey || failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
 
     const baseEventBody = {
       routing_key: globalRoutingKey,
@@ -762,16 +820,33 @@ export class SimulationInstance {
       const targetServices = targetTeam.services.sort(() => 0.5 - Math.random()).slice(0, count);
   
       // Trigger Incidents
+      const incidentDedupKeys: string[] = [];
+      
       targetServices.forEach((svc, idx) => {
+          const dedupKey = crypto.randomUUID(); // Generate upfront for tracking
+          incidentDedupKeys.push(dedupKey);
+          
           const delay = idx * getRandomInt(2000, 5000);
           setTimeout(async () => {
+               // Pass dedupKey explicitly
                await this.triggerIncident(svc, { 
                    id: failureId, 
                    summary: `Team Failure: ${targetTeam.name} - Systematic Outage`,
-                   isMajor: isMajorScenario
+                   isMajor: isMajorScenario,
+                   preGeneratedDedupKey: dedupKey // Pass this down!
                });
           }, delay);
       });
+      
+      // Queue for merging (if > 1 incident)
+      if (incidentDedupKeys.length > 1) {
+          this.pendingMerges.push({
+              targetDedupKey: incidentDedupKeys[0],
+              sourceDedupKeys: incidentDedupKeys.slice(1),
+              createdAt: Date.now(),
+              note: `Intelligent Grouping: Merged ${incidentDedupKeys.length - 1} related incidents from Team Failure Scenario (${targetTeam.name}).`
+          });
+      }
   
       // Trigger Change Events
       if (this.config.changeRoutingKey) {

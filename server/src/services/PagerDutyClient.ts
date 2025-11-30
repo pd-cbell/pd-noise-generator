@@ -129,6 +129,19 @@ export class PagerDutyClient {
     return results;
   }
 
+  async mergeIncidents(targetIncidentId: string, sourceIncidentIds: string[]) {
+    if (sourceIncidentIds.length === 0) return;
+    
+    const source_incidents = sourceIncidentIds.map(id => ({
+        id,
+        type: 'incident_reference'
+    }));
+
+    return this.request('PUT', `/incidents/${targetIncidentId}/merge`, {
+        source_incidents
+    });
+  }
+
   async requestResponder(incidentId: string, requesterId: string, targetId: string, message: string = "Requesting assistance via Simulator") {
     return this.request('POST', `/incidents/${incidentId}/responder_requests`, {
       requester_id: requesterId,
