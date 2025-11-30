@@ -80,6 +80,7 @@ router.post('/import', async (req: any, res: Response) => {
           userId,
           items: {
               create: items.map((item: any, idx: number) => ({
+                  order: idx,
                   stepName: `Step ${idx + 1}`,
                   payload: JSON.parse(item.payload || '{}'), // Ensure it's stored as JSON object
                   eventAction: item.event_action || 'trigger',
