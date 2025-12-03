@@ -178,14 +178,23 @@ export const api = {
     }),
 
   // --- Director Mode (Admin) ---
-  generateTemplates: (topic: string, count: number) =>
+  generateTemplates: (topic: string, count: number, scenario: string) =>
       fetchFromProxy('/api/admin/generate-templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic, count }),
+          body: JSON.stringify({ topic, count, scenario }),
       }),
 
   getTemplates: () => fetchFromProxy('/api/admin/templates'),
+  
+  getScenarios: () => fetchFromProxy('/api/admin/scenarios'),
+  
+  setScenario: (scenario: string) =>
+      fetchFromProxy('/api/simulation/scenario', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenario }),
+      }),
 
   triggerTemplate: (templateId: string) =>
       fetchFromProxy('/api/simulation/trigger', {

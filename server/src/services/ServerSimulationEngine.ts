@@ -9,6 +9,7 @@ import { payloadGenerator, payloadRegistry } from '../utils/payloads';
 import { TemplateParser } from '../utils/TemplateParser';
 import prisma from '../prisma';
 import { aiService } from './AiService';
+import { integrationService } from './IntegrationService';
 
 // --- Shared Helper Functions ---
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -35,6 +36,7 @@ interface SimulationState {
   _apiCallTimestamps: number[];
   _lastRpmCheck: number;
   _lastPollCheck: number; // New v1.8
+  activeScenario: string; // New v2.0
 }
 
 export class SimulationInstance {
@@ -65,6 +67,7 @@ export class SimulationInstance {
       totalEvents: 0,
       log: [],
       monitorTrend: [],
+      activeScenario: 'General', // Default
       metrics: {
         avgMtta: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
         avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
@@ -177,6 +180,12 @@ export class SimulationInstance {
     this.state.activeIncidents = [];
     this.addLog("Cleared active incidents list locally", 'info');
     this.emitState();
+  }
+
+  setScenario(scenario: string) {
+      this.state.activeScenario = scenario;
+      this.addLog(`Switched active scenario to "${scenario}"`, 'info');
+      this.emitState();
   }
 
   async resolveAllIncidents() {
@@ -628,21 +637,30 @@ export class SimulationInstance {
 
     // Generate Payload (Cached AI or Static)
     let rawPayload: any = null;
+    let slackMessage: string | null = null;
     let usedAi = false;
 
     // 1. Try to fetch a random cached template from the DB
     try {
+        // Filter by active scenario
+        const scenarioFilter = this.state.activeScenario === 'General' ? {} : { scenario: this.state.activeScenario };
+        
         // Optimization: Get count first to pick random offset
-        const templateCount = await prisma.incidentTemplate.count();
+        const templateCount = await prisma.incidentTemplate.count({ where: scenarioFilter });
+        
         if (templateCount > 0) {
             const skip = Math.floor(Math.random() * templateCount);
             const template = await prisma.incidentTemplate.findFirst({
+                where: scenarioFilter,
                 skip: skip
             });
             if (template && template.payload) {
                 rawPayload = template.payload;
+                slackMessage = template.slackMessage;
                 usedAi = true;
             }
+        } else if (this.state.activeScenario !== 'General') {
+             this.addLog(`No templates found for scenario "${this.state.activeScenario}". Falling back to General/Static.`, 'warn');
         }
     } catch (e) {
         console.warn("Failed to fetch cached template:", e);
@@ -694,6 +712,11 @@ export class SimulationInstance {
       this.incrementApiCount();
       const response = await this.pdClient.triggerEvent(baseEventBody);
       let incidentDedupKey = response.dedup_key || dedupKey || 'unknown';
+      
+      // Send Slack Notification (Async)
+      if (slackMessage) {
+          integrationService.sendSlackNotification(slackMessage).catch(() => {});
+      }
 
       if (severity !== 'info') {
         const now = Date.now();
@@ -929,7 +952,23 @@ export class SimulationInstance {
       await this.pdClient.triggerEvent(body);
       this.state.totalEvents++;
       this.addLog(`Director triggered incident: ${payload.summary}`, 'info');
+      
+      // Send Slack Notification if available in template
+      // Note: payload here is just the JSON payload part. 
+      // We need to pass the FULL template object to this function if we want to access slackMessage easily,
+      // OR we rely on the caller passing `slackMessage` inside the payload (which is messy) or separately.
+      // Let's overload the method signature or assume the caller (simulation.ts) handles the lookup?
+      // Actually, `triggerSpecificPayload` receives `template.payload` from `simulation.ts`.
+      // I should update `triggerSpecificPayload` to accept an optional `slackMessage` argument.
+      
       this.emitState();
+  }
+
+  public async triggerTemplate(template: { payload: any; slackMessage?: string | null }) {
+      await this.triggerSpecificPayload(template.payload);
+      if (template.slackMessage) {
+          integrationService.sendSlackNotification(template.slackMessage).catch(console.error);
+      }
   }
 
   private emitState() {

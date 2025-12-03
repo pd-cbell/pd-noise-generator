@@ -74,8 +74,10 @@ model CampaignItem {
 }
 
 model IncidentTemplate {
-  id        String   @id @default(cuid())
-  topic     String   // e.g., "Database", "Network"
-  payload   Json
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  topic        String   // e.g., "Database", "Network"
+  payload      Json
+  slackMessage String?  // New: Context-aware Slack message
+  scenario     String   @default("General") // New: Categorization
+  createdAt    DateTime @default(now())
 }

@@ -21,27 +21,33 @@ export class AiService {
   }
 
   /**
-   * Generates a batch of incident templates.
-   * Returns an array of JSON objects.
+   * Generates a batch of incident templates with Slack context.
+   * Returns an array of objects: { payload: any, slack_message: string }
    */
-  public async generateTemplateBatch(topic: string, count: number): Promise<any[]> {
+  public async generateTemplateBatch(topic: string, count: number): Promise<{ payload: any, slack_message: string }[]> {
     if (!this.model) throw new Error("AI Service not configured");
 
     const prompt = `
-      You are a DevOps simulation engine. Generate an array of ${count} unique, realistic JSON alert payloads for a service experiencing '${topic}'.
-      Vary the error messages, hosts, stack traces, and component names significantly to look like distinct events.
+      You are a DevOps simulation engine. Generate an array of ${count} unique, realistic incident scenarios for a service experiencing '${topic}'.
       
+      For EACH scenario, generate two things:
+      1. A realistic JSON alert payload (Datadog/Splunk/etc style).
+      2. A "War Room" style Slack message that a stressed engineer might post when this incident triggers. It should explicitly mention the error found in the payload.
+
       The output MUST be a valid JSON ARRAY of objects. Each object should follow this structure:
       {
-        "summary": "A short, technical alert summary",
-        "source": "monitoring-tool.com",
-        "component": "component-name",
-        "custom_details": {
-          "error_message": "...",
-          "stack_trace": "...",
-          ... other fields
+        "payload": {
+            "summary": "A short, technical alert summary",
+            "source": "monitoring-tool.com",
+            "component": "component-name",
+            "custom_details": {
+              "error_message": "...",
+              "stack_trace": "...",
+              ... other fields
+            },
+            "noteTemplates": ["Comment 1", "Comment 2"]
         },
-        "noteTemplates": ["Comment 1", "Comment 2"]
+        "slack_message": "Detailed Slack message here..."
       }
 
       Instructions:

@@ -19,13 +19,26 @@ router.post('/trigger', async (req: any, res: any) => {
         const sim = simulationManager.get(userId);
         if (!sim) return res.status(400).json({ error: "Simulation not active. Please start the simulation first." });
 
-        await sim.triggerSpecificPayload(template.payload);
+        await sim.triggerTemplate(template);
 
         res.json({ message: "Triggered", summary: (template.payload as any).summary });
     } catch (error: any) {
         console.error("Trigger failed:", error);
         res.status(500).json({ error: "Failed to trigger template", details: error.message });
     }
+});
+
+router.post('/scenario', async (req: any, res: any) => {
+    const { userId } = (req as AuthRequest).user!;
+    const { scenario } = req.body;
+
+    if (!scenario) return res.status(400).json({ error: "scenario is required" });
+
+    const sim = simulationManager.get(userId);
+    if (!sim) return res.status(400).json({ error: "Simulation not active." });
+
+    sim.setScenario(scenario);
+    res.json({ message: `Active scenario set to '${scenario}'` });
 });
 
 export default router;
