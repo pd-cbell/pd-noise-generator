@@ -241,8 +241,11 @@ export interface ConfigurationState {
 interface AppState extends SimulationState, ConfigurationState {
   profiles: Profile[];
   activeProfileId: string | null;
+  isLoadingProfiles: boolean;
   setActiveProfile: (id: string) => void;
   saveProfile: (profile: Profile) => void;
+  deleteProfile: (id: string) => Promise<void>;
+  fetchProfiles: () => Promise<void>;
   createCampaign: (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => Promise<ImportedCampaign>;
   updateCampaign: (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => Promise<ImportedCampaign>;
   deleteCampaign: (id: string) => Promise<void>;
@@ -979,6 +982,24 @@ export const useStore = create<AppState>()(
         addLog(`Resolving all ${activeIncidents.length} active incidents...`, 'info');
         // Resolve in parallel
         await Promise.all(activeIncidents.map(inc => resolveIncident(inc.dedupKey)));
+      },
+
+      fetchProfiles: async () => {
+        set({ isLoadingProfiles: true });
+        try {
+          const data = await api.getProfiles();
+          const profiles = data.profiles.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            settings: p.settings,
+            updatedAt: new Date(p.updatedAt).getTime()
+          }));
+          set({ profiles, isLoadingProfiles: false });
+        } catch (error: any) {
+          set({ isLoadingProfiles: false });
+          get().addLog(`Failed to fetch profiles: ${error.message}`, 'error');
+        }
       },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),

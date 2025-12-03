@@ -38,6 +38,7 @@ export interface PayloadAdapter {
   group?: string;
   mixKey?: string;
   hidden?: boolean;
+  uiMixOption?: boolean;
   supportsCampaigns?: boolean;
   defaultWeight?: number;
   metrics?: string[]; // For CloudWatch

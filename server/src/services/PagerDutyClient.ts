@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch, { RequestInit } from 'node-fetch';
 import { Agent } from 'http'; // For optional proxy
 
 interface PagerDutyClientConfig {
@@ -33,7 +33,7 @@ export class PagerDutyClient {
     this.lastRequestTime = Date.now();
   }
 
-  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>) {
+  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>): Promise<any> {
     await this.throttle(); // Simple throttling
 
     const url = new URL(`${this.config.apiBase}${path}`);

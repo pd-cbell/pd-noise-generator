@@ -9,6 +9,8 @@ import proxyRouter from './routes/proxy';
 import profilesRouter from './routes/profiles';
 import campaignsRouter from './routes/campaigns';
 import authRouter from './routes/auth';
+import adminRouter from './routes/admin';
+import simulationRouter from './routes/simulation';
 import { SimulationManager } from './services/ServerSimulationEngine';
 
 dotenv.config();
@@ -112,6 +114,8 @@ app.use('/proxy', proxyRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/auth', authRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/simulation', simulationRouter);
 
 app.get('/', (req, res) => {
   res.send('PD Noise Simulator API is running!');

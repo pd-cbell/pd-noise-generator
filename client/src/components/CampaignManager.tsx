@@ -11,7 +11,7 @@ export const CampaignManager: React.FC<{ onEditCampaign: (campaignId: string | '
     loadImportedCampaigns,
     triggerImportedCampaign, addLog,
     services = [], // Default to empty array
-    apiToken, globalRoutingKey
+    globalRoutingKey
   } = useStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);

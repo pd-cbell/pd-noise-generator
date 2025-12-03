@@ -23,6 +23,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
           { id: 'configure', label: 'Configure', icon: Settings },
           { id: 'monitor', label: 'Monitor', icon: Activity },
           { id: 'campaigns', label: 'Campaigns', icon: Users },
+          { id: 'director', label: 'Director', icon: Play },
         ].map((tab) => (
           <button
             key={tab.id}

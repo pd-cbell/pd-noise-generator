@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useStore, ImportedCampaign, CampaignItem } from '../store/useStore';
+import { useStore } from '../store/useStore';
+import { ImportedCampaign, CampaignItem } from '../utils/payloads';
 import { Trash2, Save, ChevronDown, ChevronUp, Braces, Code } from 'lucide-react';
 
 interface CampaignEditorProps {

@@ -38,10 +38,12 @@ export interface PayloadAdapter {
   group?: string;
   mixKey?: string;
   hidden?: boolean;
+  uiMixOption?: boolean;
   supportsCampaigns?: boolean;
   defaultWeight?: number;
   metrics?: string[]; // For CloudWatch
   regions?: string[]; // For CloudWatch
+  vendor?: string; // For display
   build: (service: any, failureMeta?: any) => any; // Need more specific types for service/failureMeta later
 }
 
@@ -63,6 +65,7 @@ export interface ImportedCampaign {
   name: string;
   description: string;
   source: string;
+  integrationKey?: string;
   items: CampaignItem[];
 }
 

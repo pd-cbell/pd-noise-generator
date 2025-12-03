@@ -1,9 +1,9 @@
 import { useStore } from '../store/useStore';
 
 export class SimulationEngine {
-  private fireTimer: NodeJS.Timeout | null = null;
-  private evalTimer: NodeJS.Timeout | null = null;
-  private trendTimer: NodeJS.Timeout | null = null;
+  private fireTimer: any | null = null;
+  private evalTimer: any | null = null;
+  private trendTimer: any | null = null;
 
   start() {
     console.log('[Engine] Starting simulation...');

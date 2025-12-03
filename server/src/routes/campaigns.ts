@@ -25,7 +25,7 @@ router.post('/:id/trigger', async (req, res) => {
     const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
 
     // Try to find active simulation for this user to log progress
-    const instance = simulationManager.get(campaign.userId);
+    const instance = campaign.userId ? simulationManager.get(campaign.userId) : undefined;
 
     const executor = new CampaignExecutor({
       globalRoutingKey,

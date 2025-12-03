@@ -72,3 +72,10 @@ model CampaignItem {
   repeatCount     Int      @default(1) // Renamed from 'times' for clarity
   intervalSeconds Int      @default(0)
 }
+
+model IncidentTemplate {
+  id        String   @id @default(cuid())
+  topic     String   // e.g., "Database", "Network"
+  payload   Json
+  createdAt DateTime @default(now())
+}

@@ -11,6 +11,7 @@ interface ServerSimulationState {
   totalEvents: number;
   log: any[];
   monitorTrend: any[];
+  metrics?: any; // Added metrics
 }
 
 interface SimulationContextType {

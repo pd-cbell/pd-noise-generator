@@ -7,6 +7,8 @@ import {
 import { PagerDutyClient } from './PagerDutyClient';
 import { payloadGenerator, payloadRegistry } from '../utils/payloads';
 import { TemplateParser } from '../utils/TemplateParser';
+import prisma from '../prisma';
+import { aiService } from './AiService';
 
 // --- Shared Helper Functions ---
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -608,24 +610,8 @@ export class SimulationInstance {
       return;
     }
 
-    const { payload } = payloadGenerator.buildEvent({
-      service,
-      failure: failureContext,
-      sourceMix: this.config.sourceMix,
-    });
-
-    // Dynamic Payload Processing
-    const parsedPayload = TemplateParser.parseObject(payload);
-
-    if (parsedPayload.custom_details) {
-      parsedPayload.custom_details.service_name = service.name;
-    } else {
-      parsedPayload.custom_details = { service_name: service.name };
-    }
-
-    // Determine Severity & Major Status
+    // Determine Severity & Major Status EARLY
     // v1.8.1 Change: Major incidents are now primarily driven by Team Failure Scenarios
-    // failureContext.isMajor can be passed by triggerTeamFailureScenario
     const isMajor = failureContext?.isMajor || false;
 
     const severity: IncidentSeverity = (() => {
@@ -639,6 +625,47 @@ export class SimulationInstance {
       }
       return 'info';
     })();
+
+    // Generate Payload (Cached AI or Static)
+    let rawPayload: any = null;
+    let usedAi = false;
+
+    // 1. Try to fetch a random cached template from the DB
+    try {
+        // Optimization: Get count first to pick random offset
+        const templateCount = await prisma.incidentTemplate.count();
+        if (templateCount > 0) {
+            const skip = Math.floor(Math.random() * templateCount);
+            const template = await prisma.incidentTemplate.findFirst({
+                skip: skip
+            });
+            if (template && template.payload) {
+                rawPayload = template.payload;
+                usedAi = true;
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to fetch cached template:", e);
+    }
+
+    // 2. Fallback to Static Templates if no AI template found
+    if (!rawPayload) {
+        const result = payloadGenerator.buildEvent({
+            service,
+            failure: failureContext,
+            sourceMix: this.config.sourceMix,
+        });
+        rawPayload = result.payload;
+    }
+
+    // Dynamic Payload Processing (Parsing Templates)
+    const parsedPayload = TemplateParser.parseObject(rawPayload);
+
+    if (parsedPayload.custom_details) {
+      parsedPayload.custom_details.service_name = service.name;
+    } else {
+      parsedPayload.custom_details = { service_name: service.name };
+    }
 
     if (severity === 'info') {
       // Suppress info alerts from active tracking, but send them to PD
@@ -657,7 +684,7 @@ export class SimulationInstance {
         component: parsedPayload.component || service.name,
         custom_details: {
           ...parsedPayload.custom_details,
-          generator: 'pd-noise-simulator',
+          generator: usedAi ? 'pd-noise-simulator-ai-cached' : 'pd-noise-simulator',
           sim_is_major: isMajor
         }
       }
@@ -871,6 +898,38 @@ export class SimulationInstance {
       // Trigger Change Events
       // Pass the list of affected services so we can route changes correctly
       this.triggerRelatedChangeEvents(targetServices);
+  }
+
+  public async triggerSpecificPayload(payload: any) {
+      const { globalRoutingKey } = this.credentials;
+      if (!globalRoutingKey) throw new Error("No routing key");
+      
+      // Ensure we have a valid dedup key or generate one
+      const dedupKey = payload.dedup_key || crypto.randomUUID();
+      
+      // Ensure severity is set
+      const severity = payload.severity || 'error';
+
+      const body = {
+          routing_key: globalRoutingKey,
+          event_action: 'trigger',
+          dedup_key: dedupKey,
+          payload: {
+              ...payload,
+              severity,
+              source: payload.source || 'pd-noise-simulator',
+              component: payload.component || 'unknown',
+              custom_details: {
+                  ...payload.custom_details,
+                  generator: 'pd-noise-simulator-director'
+              }
+          }
+      };
+
+      await this.pdClient.triggerEvent(body);
+      this.state.totalEvents++;
+      this.addLog(`Director triggered incident: ${payload.summary}`, 'info');
+      this.emitState();
   }
 
   private emitState() {

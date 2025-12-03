@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore';
+import { ImportedCampaign } from '../utils/payloads';
 
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
@@ -175,4 +176,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json),
     }),
+
+  // --- Director Mode (Admin) ---
+  generateTemplates: (topic: string, count: number) =>
+      fetchFromProxy('/api/admin/generate-templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, count }),
+      }),
+
+  getTemplates: () => fetchFromProxy('/api/admin/templates'),
+
+  triggerTemplate: (templateId: string) =>
+      fetchFromProxy('/api/simulation/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ templateId }),
+      }),
 };
