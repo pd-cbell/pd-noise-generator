@@ -93,13 +93,15 @@ model Team {
 }
 
 model Service {
-  id             String            @id @default(uuid())
-  name           String
-  integrationKey String?           // PagerDuty Integration Key
-  teamId         String
-  team           Team              @relation(fields: [teamId], references: [id])
-  templates      PayloadTemplate[]
-  createdAt      DateTime          @default(now())
+  id                   String            @id @default(uuid())
+  name                 String
+  integrationKey       String?           // PagerDuty Integration Key
+  changeIntegrationKey String?           // New: Specific key for Change Events
+  type                 String            @default("technical") // "technical" or "business"
+  teamId               String
+  team                 Team              @relation(fields: [teamId], references: [id])
+  templates            PayloadTemplate[]
+  createdAt            DateTime          @default(now())
 }
 
 model PayloadTemplate {

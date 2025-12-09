@@ -184,11 +184,25 @@ export const api = {
       body: JSON.stringify({ prompt, provider }),
     }),
 
-  agentBuild: (prompt: string, provider: string = 'google', approvedPlan?: string) =>
+  agentBuild: (params: { 
+      prompt: string; 
+      provider?: string; 
+      approvedPlan?: string;
+      services?: any[];
+      eventCount?: number;
+      changeCount?: number;
+  }) =>
     fetchFromProxy('/api/agent/build', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, provider, approvedPlan }),
+      body: JSON.stringify({ 
+          prompt: params.prompt, 
+          provider: params.provider || 'google', 
+          approvedPlan: params.approvedPlan,
+          services: params.services || [],
+          eventCount: params.eventCount,
+          changeCount: params.changeCount
+      }),
     }),
 
   // --- Director ---

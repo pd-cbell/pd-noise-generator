@@ -10,6 +10,10 @@ interface AgentState {
   planSummary?: string;
   finalCampaign?: any;
   provider?: 'google' | 'openai';
+  // New High-Control Fields
+  availableServices?: any[]; 
+  eventCount?: number;
+  changeCount?: number;
 }
 
 // --- Agent Service ---
@@ -88,6 +92,16 @@ export class AgentService {
           })
         : this.getModel(provider, 'smart');
 
+    // Filter services to only basic info to save tokens
+    const servicesJson = JSON.stringify(
+        state.availableServices?.map(s => ({ 
+            name: s.name, 
+            type: s.type || 'technical',
+            integrationKey: s.integrationKey ? 'available' : 'missing',
+            changeIntegrationKey: s.changeIntegrationKey ? 'available' : 'missing'
+        })) || []
+    );
+
     const basePrompt = `
       You are a Chaos Engineering Architect.
       User Request: "${state.userRequest}"
@@ -95,14 +109,23 @@ export class AgentService {
 
       Task: Generate the comprehensive JSON configuration for this campaign.
       
-      Requirements:
-      1. **Multi-Service:** You MUST generate events for at least 2 distinct services (e.g., 'Database' and 'API Gateway'). Use the \`service\` field in each item to distinguish them (string name).
+      **Constraints (High Control):**
+      1. **Service Selection:** You must ONLY generate events for the services listed here: ${servicesJson}. 
+         - Map the narrative steps to these specific services logically (e.g., if the narrative says 'Database fails', assign that event to the service typed 'database' or similar in the list).
+         - Do not invent new service names. Use the exact "name" from the list.
+      2. **Volume:** Generate exactly ${state.eventCount || 10} alert events and ${state.changeCount || 2} change events.
+      3. **Key Usage:** 
+         - For Alerts, assume the standard integration key is used.
+         - For Change Events, you MUST set \`eventType: "change"\`. (Only assign to services that have a 'changeIntegrationKey' available if possible).
+
+      **Narrative Requirements:**
+      1. **Multi-Service:** You MUST generate events for at least 2 distinct services from the list.
       2. **Event Types:**
          - **Alerts:** Standard failures.
-         - **Change Events:** (CRITICAL) You must include at least one 'Change Event' (e.g., 'Deploy Started', 'FinOps Policy Applied', 'Config Sync'). Set \`eventType: "change"\` in the item if applicable.
+         - **Change Events:** (CRITICAL) You must include at least one 'Change Event'.
       3. **Timing:** Calculate \`delaySeconds\` so events fire sequentially with 1-5 minute gaps.
       4. **Payloads:** Use Mustache tokens (\`{{faker.internet.ip}}\`, \`{{faker.date.recent}}\`) for realism.
-      5. **Team Persona:** Ensure the text in the payloads matches the request (e.g., 'Retail', 'Banking').
+      5. **Team Persona:** Ensure the text in the payloads matches the request.
       6. REPETITION: If an event represents a flood or ongoing issue, set "repeatCount" to 2-5.
     `;
 
@@ -198,12 +221,18 @@ export class AgentService {
     return result.planSummary as string;
   }
 
-  public async buildCampaign(prompt: string, approvedPlan?: string, provider: 'google' | 'openai' = 'google'): Promise<any> {
+  public async buildCampaign(params: {
+      prompt: string; 
+      approvedPlan?: string; 
+      provider?: 'google' | 'openai';
+      services?: any[];
+      eventCount?: number;
+      changeCount?: number;
+  }): Promise<any> {
     // If no plan provided, we could optionally run the planner first.
     // But typically the UI passes the plan back. If not, we generate a quick one or skip.
-    // For now, let's assume if no plan is provided, we just ask the builder to infer it.
     
-    const plan = approvedPlan || "Proceed with standard best practices for this scenario.";
+    const plan = params.approvedPlan || "Proceed with standard best practices for this scenario.";
 
     // Workflow: START -> builderNode -> END
     const graph = new StateGraph<AgentState>({
@@ -211,7 +240,10 @@ export class AgentService {
             userRequest: null,
             planSummary: null,
             finalCampaign: null,
-            provider: null
+            provider: null,
+            availableServices: null,
+            eventCount: null,
+            changeCount: null
         }
     })
       .addNode("builder", this.builderNode.bind(this))
@@ -220,7 +252,14 @@ export class AgentService {
 
     const app = graph.compile();
 
-    const result = await app.invoke({ userRequest: prompt, planSummary: plan, provider });
+    const result = await app.invoke({ 
+        userRequest: params.prompt, 
+        planSummary: plan, 
+        provider: params.provider || 'google',
+        availableServices: params.services || [],
+        eventCount: params.eventCount,
+        changeCount: params.changeCount
+    });
     
     if (!result.finalCampaign) throw new Error("No campaign generated");
     return result.finalCampaign;

@@ -341,10 +341,8 @@ export const useStore = create<AppState>()(
 
           while (more) {
             const data = await api.getTeams({ token: apiToken, fromEmail }, 100, offset);
-            // Filter out hidden teams from original App.jsx logic
-            const HIDDEN_TEAM_PREFIXES = ["NOC - ", "SRE - "];
-            const visibleTeams = data.teams.filter((team: Team) => !HIDDEN_TEAM_PREFIXES.some((prefix) => team.name?.startsWith(prefix)));
-            allTeams.push(...visibleTeams);
+            // v2.0: Removed hard filtering. All teams are loaded. Visibility is handled in UI components.
+            allTeams.push(...data.teams);
             
             more = data.more;
             offset += data.limit || 100;
@@ -361,7 +359,11 @@ export const useStore = create<AppState>()(
       fetchServices: async () => {
         set({ isLoadingServices: true });
         try {
-          const { selectedTeamIds, services: currentServices, apiToken, fromEmail } = get();
+          // v2.0: Fetch services for ALL loaded teams to enable Campaign Builder usage
+          // regardless of Noise Simulation selection.
+          const { teams, services: currentServices, apiToken, fromEmail } = get();
+          const targetTeamIds = teams.map(t => t.id);
+
           if (!apiToken) {
             get().addLog('API Token is missing, cannot fetch services.', 'warn');
             set({ isLoadingServices: false });
@@ -374,7 +376,7 @@ export const useStore = create<AppState>()(
           const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
 
           while (more) {
-            const data = await api.getServices(selectedTeamIds, { token: apiToken, fromEmail }, 100, offset);
+            const data = await api.getServices(targetTeamIds, { token: apiToken, fromEmail }, 100, offset);
             
             const batch = data.services.map((svc: any) => {
               const changeIntegrations = (svc.integrations || [])

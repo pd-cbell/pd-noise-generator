@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Loader2, Save } from 'lucide-react'; 
+import { Loader2, Save, Search, Eye, EyeOff } from 'lucide-react'; 
 import { SeverityTabs } from './SeverityTabs'; 
 import { useAuth } from '../contexts/AuthContext';
 
@@ -17,6 +17,48 @@ export const ConfigurationForm: React.FC = () => {
   } = useStore();
 
   const { credentials, updateCredentials } = useAuth();
+  
+  // UI State for filtering
+  const [teamFilterText, setTeamFilterText] = useState('');
+  const [serviceFilterText, setServiceFilterText] = useState('');
+  const [showDemoSlices, setShowDemoSlices] = useState(false);
+
+  // Computed visible teams
+  const visibleTeams = useMemo(() => {
+      return teams.filter(team => {
+          // 1. Name Filter
+          if (teamFilterText && !team.name.toLowerCase().includes(teamFilterText.toLowerCase())) {
+              return false;
+          }
+          // 2. Demo Slice Filter
+          if (!showDemoSlices) {
+              if (team.name.startsWith("NOC - ") || team.name.startsWith("SRE - ")) {
+                  return false;
+              }
+          }
+          return true;
+      });
+  }, [teams, teamFilterText, showDemoSlices]);
+
+  // Computed visible services
+  const visibleServices = useMemo(() => {
+      return services.filter(svc => {
+          // 1. Name Filter
+          if (serviceFilterText && !svc.name.toLowerCase().includes(serviceFilterText.toLowerCase())) {
+              return false;
+          }
+          // 2. Demo Slice Filter (Check service name OR team names)
+          if (!showDemoSlices) {
+              // Check if service belongs to a hidden team or has a hidden name prefix itself
+              const hasVisibleTeam = svc.teams.some(t => !t.name.startsWith("NOC - ") && !t.name.startsWith("SRE - "));
+              // If service has teams, at least one must be visible. If no teams, assume visible unless name matches.
+              if (svc.teams.length > 0 && !hasVisibleTeam) return false;
+              
+              if (svc.name.startsWith("NOC - ") || svc.name.startsWith("SRE - ")) return false;
+          }
+          return true;
+      });
+  }, [services, serviceFilterText, showDemoSlices]);
 
   useEffect(() => {
     if (credentials) {
@@ -356,16 +398,50 @@ export const ConfigurationForm: React.FC = () => {
 
       {/* --- Teams Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Teams ({teams.length})</h2>
-          {teams.length > 0 && (
-            <button 
-              onClick={handleToggleAllTeams}
-              className="text-sm text-green-600 hover:text-green-800 font-medium"
-            >
-              {selectedTeamIds.length === teams.length ? 'Deselect All' : 'Select All'}
-            </button>
-          )}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <h2 className="text-lg font-semibold text-gray-800">Teams ({visibleTeams.length} / {teams.length})</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              {/* Search */}
+              <div className="relative">
+                  <Search className="absolute left-2 top-2 w-4 h-4 text-gray-400" />
+                  <input 
+                      type="text"
+                      placeholder="Filter teams..."
+                      className="w-full sm:w-48 pl-8 pr-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none"
+                      value={teamFilterText}
+                      onChange={(e) => setTeamFilterText(e.target.value)}
+                  />
+              </div>
+
+              {/* Demo Toggle */}
+              <button
+                  onClick={() => setShowDemoSlices(!showDemoSlices)}
+                  className={`flex items-center gap-1 text-[10px] font-medium px-3 py-1.5 rounded transition-colors whitespace-nowrap ${
+                      showDemoSlices ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                  {showDemoSlices ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  {showDemoSlices ? 'Hide Demo Slices' : 'Show Demo Slices'}
+              </button>
+
+              {visibleTeams.length > 0 && (
+                <button 
+                  onClick={() => {
+                      const visibleIds = visibleTeams.map(t => t.id);
+                      const allVisibleSelected = visibleIds.every(id => selectedTeamIds.includes(id));
+                      if (allVisibleSelected) {
+                          setSelectedTeamIds(selectedTeamIds.filter(id => !visibleIds.includes(id)));
+                      } else {
+                          setSelectedTeamIds(Array.from(new Set([...selectedTeamIds, ...visibleIds])));
+                      }
+                  }}
+                  className="text-sm text-green-600 hover:text-green-800 font-medium whitespace-nowrap"
+                >
+                  Select All Visible
+                </button>
+              )}
+          </div>
         </div>
         
         {isTeamsLoading && (
@@ -377,9 +453,12 @@ export const ConfigurationForm: React.FC = () => {
         {!isTeamsLoading && teams.length === 0 && (apiToken && pdSubdomain) && (
           <p className="text-gray-500">No teams found or loaded. Click "Load Teams".</p>
         )}
-        {!isTeamsLoading && teams.length > 0 && (
+        {!isTeamsLoading && visibleTeams.length === 0 && teams.length > 0 && (
+            <p className="text-gray-500 text-sm italic p-4 text-center">No teams match your filter.</p>
+        )}
+        {!isTeamsLoading && visibleTeams.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2 mb-4">
-            {teams.map((team) => (
+            {visibleTeams.map((team) => (
               <label key={team.id} className="inline-flex items-center">
                 <input
                   type="checkbox"
@@ -392,7 +471,7 @@ export const ConfigurationForm: React.FC = () => {
                     setSelectedTeamIds(newSelectedTeamIds);
                   }}
                 />
-                <span className="ml-2 text-gray-700">{team.name}</span>
+                <span className="ml-2 text-gray-700 truncate" title={team.name}>{team.name}</span>
               </label>
             ))}
           </div>
@@ -402,33 +481,50 @@ export const ConfigurationForm: React.FC = () => {
           <div className="pt-4 border-t border-gray-100">
              <button
               onClick={handleLoadServicesAndEPs}
-              disabled={selectedTeamIds.length === 0 || isServicesLoading}
+              disabled={isServicesLoading} // Removed selectedTeamIds.length === 0 check to allow loading ALL
               className={`
                 flex items-center justify-center gap-2 px-6 py-2 rounded-md font-semibold text-white transition-colors
-                ${(selectedTeamIds.length === 0)
-                  ? 'bg-gray-400 cursor-not-allowed'
+                ${isServicesLoading
+                  ? 'bg-indigo-400 cursor-not-allowed'
                   : 'bg-indigo-600 hover:bg-indigo-700'}
               `}
             >
               {isServicesLoading && <Loader2 className="animate-spin h-5 w-5" />}
-              {isServicesLoading ? 'Loading Services & Policies...' : 'Load Services & Policies'}
+              {isServicesLoading ? 'Loading Services & Policies...' : 'Load Services & Policies (All Loaded Teams)'}
             </button>
+            <p className="text-xs text-gray-500 mt-2">
+                Note: This loads services for <strong>all loaded teams</strong> ({teams.length}), enabling them for Campaign usage even if not selected for Noise simulation.
+            </p>
           </div>
         )}
       </div>
 
       {/* --- Services Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Services ({services.length})</h2>
-          {services.length > 0 && (
-            <button 
-              onClick={handleToggleAllServices}
-              className="text-sm text-green-600 hover:text-green-800 font-medium"
-            >
-              {services.every(s => s.include) ? 'Deselect All' : 'Select All'}
-            </button>
-          )}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <h2 className="text-lg font-semibold text-gray-800">Services ({visibleServices.length} / {services.length})</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative">
+                  <Search className="absolute left-2 top-2 w-4 h-4 text-gray-400" />
+                  <input 
+                      type="text"
+                      placeholder="Filter services..."
+                      className="w-full sm:w-48 pl-8 pr-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none"
+                      value={serviceFilterText}
+                      onChange={(e) => setServiceFilterText(e.target.value)}
+                  />
+              </div>
+              
+              {services.length > 0 && (
+                <button 
+                  onClick={handleToggleAllServices}
+                  className="text-sm text-green-600 hover:text-green-800 font-medium whitespace-nowrap"
+                >
+                  {visibleServices.every(s => s.include) ? 'Deselect Visible' : 'Select Visible'}
+                </button>
+              )}
+          </div>
         </div>
 
         {isServicesLoading && (
@@ -443,9 +539,12 @@ export const ConfigurationForm: React.FC = () => {
         {!isServicesLoading && services.length === 0 && selectedTeamIds.length === 0 && (
           <p className="text-gray-500">Select teams above to load services.</p>
         )}
-        {!isServicesLoading && services.length > 0 && (
+        {!isServicesLoading && visibleServices.length === 0 && services.length > 0 && (
+            <p className="text-gray-500 text-sm italic p-4 text-center">No services match your filter.</p>
+        )}
+        {!isServicesLoading && visibleServices.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-60 overflow-y-auto pr-2">
-            {services.map((service) => (
+            {visibleServices.map((service) => (
               <label key={service.id} className="inline-flex items-center">
                 <input
                   type="checkbox"
@@ -453,7 +552,7 @@ export const ConfigurationForm: React.FC = () => {
                   checked={service.include}
                   onChange={(e) => setServiceInclude(service.id, e.target.checked)}
                 />
-                <span className="ml-2 text-gray-700">{service.name}</span>
+                <span className="ml-2 text-gray-700 truncate" title={service.name}>{service.name}</span>
               </label>
             ))}
           </div>
