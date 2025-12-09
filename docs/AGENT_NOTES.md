@@ -1,123 +1,39 @@
-# Agent Notes - v1.8 Realism
+# Agent Notes - v2.0 Agentic Edition
 
-**Branch:** `main` (Release v1.8.2)
+**Branch:** `feature/v2.0-agentic-polish`
 
-## Status: v1.8.2 Complete - Production Ready
+## Status: v2.0 Release Candidate
 
-### Completed Features
-- **Phase 1.1: Authentication (Google OAuth)**
-    - `User` model with Google ID.
-    - `/auth/google` backend flow with JWT sessions.
-    - Frontend `AuthContext` and `Login` component.
-    - **Development Login Bypass** (`POST /auth/dev-login`) for easy local testing.
-- **Phase 1.2: Multi-User Data Scoping**
-    - `Profile` and `Campaign` models scoped to `userId`.
-    - `authenticateUser` middleware secures API routes.
-- **Phase 1.3: Secure User Credentials Storage**
-    - AES-256 encryption (`server/src/utils/crypto.ts`) for PagerDuty API Token, Global Routing Key, From Email.
-    - `PUT /auth/credentials` endpoint.
-    - `ConfigurationForm` updated to allow saving/loading credentials from user profile.
-- **Phase 2.1: Server-Side Simulation Engine (Headless)**
-    - `ServerSimulationEngine.ts` fully implemented (Poisson generation, incident lifecycle, metrics).
-    - `PagerDutyClient.ts` handles backend PagerDuty API interactions.
-- **Phase 2.2: Real-time Communication (WebSockets)**
-    - `Socket.io` integrated on backend with JWT auth.
-    - `SimulationProvider` (Context) and `useServerSimulation` hook created for robust client-server state sync.
-    - `App.tsx`, `Header.tsx`, `MonitorDashboard.tsx` updated to use server-driven simulation state.
-- **Phase 3: Cloud Deployment Enhancements**
-    - `deploy/aws-cfn.yaml` updated to support optional RDS PostgreSQL.
-- **v1.7.1 Enhancements:**
-    - **API Stability & Performance:** Batched Ops & Rate Limiting.
-    - **Dynamic Payloads:** Faker.js integration.
-    - **Server-Side Import:** Crux Campaigns support.
-- **v1.8.1 Enhancements (Simulation Realism):**
-    - **Team Failure Scenarios:** Correlated outages (3-5 incidents) targeting specific teams.
-    - **Realistic Personas:** Spoofing actual on-call users for Ack/Resolve actions.
-    - **Imperfect Responders:** Simulated missed acks and escalations.
-    - **UI Polish:** Sliders for probabilities, visual highlighting for Major/Team incidents.
-- **v1.8.2 Enhancements (Advanced Noise):**
-    - **Intelligent Merging:** Automatically groups Team Failure incidents.
-    - **Priority Variance:** P1/P2/P3 distribution for Major Incidents.
-    - **Contextual Notes:** Auto-notes on merged incidents.
-    - **Change Event Routing:** Fix for service-specific integration keys.
+### Architecture Pivot: "Hybrid" Design
+v2.0 shifts from a pure manual configuration tool to an **AI-Assisted** platform.
+- **Design Time (AI):** Uses `LangGraph` (Gemini/GPT) to construct complex JSON campaigns from natural language.
+- **Run Time (Faker):** Uses local `FakerService` to execute campaigns at high speed (100+ RPM) without LLM latency.
+
+### Key Components
+
+#### 1. Agent Service (`server/src/services/AgentService.ts`)
+- **Framework:** `LangGraph` state machine.
+- **Nodes:**
+    - `plannerNode`: Generates a 4-stage "Golden Demo" narrative (Signal -> Impact -> Triage -> Resolution).
+    - `builderNode`: Generates structured JSON matching the plan.
+- **Providers:** Dual-support for **Gemini** (default: `gemini-2.5-pro` + `gemini-2.5-flash`) and **OpenAI** (default: `gpt-5.1` / `gpt-4o`).
+- **Structured Outputs:** Uses Zod schemas when running on OpenAI to strictly enforce valid campaign JSON.
+
+#### 2. Service Selector (`client/src/components/ServiceSelector.tsx`)
+- Hierarchical UI component grouping services by Team.
+- **Search:** Filters services/teams by name.
+- **Demo Slice Filter:** Toggles visibility of "NOC" and "SRE" admin teams to reduce noise.
+
+#### 3. Data Decoupling
+- **Loading:** `fetchServices` now loads *all* services for available teams.
+- **Simulation:** `ConfigurationForm` selection *only* controls "Background Noise".
+- **Agent:** Can select *any* loaded service as an actor for a campaign.
+
+### Technical Debt / Gotchas
+- **Database:** Ensure migration `20251209172620_add_service_metadata` is applied.
+- **Env Vars:** Requires `GEMINI_API_KEY` or `OPENAI_API_KEY` in `server/.env`.
+- **Model Availability:** `gemini-1.5-pro` is deprecated/unavailable in some regions; we use `gemini-2.5-pro`.
 
 ### Next Steps
-- **v2.0 Planning:** AI-driven Narrative Generation (See `2.0_masterplan.md`).
-
-## Configuration & Credentials (for Local Development)
-To test the full authentication flow, you will need to set these environment variables (in `server/.env` and `client/.env` or `client/vite.config.ts` for `VITE_` prefixed ones):
-
--   **`GOOGLE_CLIENT_ID`**: Your Google OAuth Client ID.
-    -   *Frontend:* `VITE_GOOGLE_CLIENT_ID` (e.g., in `client/.env.local`).
-    -   *Backend:* `GOOGLE_CLIENT_ID` (e.g., in `server/.env`).
--   **`JWT_SECRET`**: A long, random string for signing JWTs.
--   **`ENCRYPTION_KEY`**: A 32-character (256-bit) random string for encrypting user credentials in the database.
-
-## Local Testing Instructions
-
-Follow these steps to run the replatformed application locally:
-
-1.  **Switch to the `gemini-replatform` branch:**
-    ```bash
-    git checkout gemini-replatform
-    ```
-
-2.  **Start the Database (Docker):**
-    ```bash
-    docker-compose up -d db
-    ```
-    *Wait a few seconds for the PostgreSQL container to fully initialize.*
-
-3.  **Setup Environment Variables:**
-    *   **Backend (`server/.env`):**
-        Create or update `server/.env` with `JWT_SECRET` and `ENCRYPTION_KEY`.
-        ```
-        # server/.env
-        JWT_SECRET="your-very-long-and-secret-jwt-key" # Must be strong
-        ENCRYPTION_KEY="your-32-char-encryption-key-here" # Must be 32 chars
-        GOOGLE_CLIENT_ID="your-google-client-id-for-backend-verification" # Required for actual Google Login
-        ```
-    *   **Frontend (`client/.env.local`):**
-        Create `client/.env.local` in the `client/` directory with `VITE_GOOGLE_CLIENT_ID`.
-        ```
-        # client/.env.local
-        VITE_GOOGLE_CLIENT_ID="your-google-client-id-for-frontend-login" # Required for actual Google Login
-        ```
-        *(Note: `VITE_` prefixed variables are automatically exposed to client-side code by Vite.)*
-
-4.  **Run Prisma Migrations (Backend):**
-    ```bash
-    cd server
-    npx prisma migrate dev
-    cd ..
-    ```
-    *(This applies new schema changes (User model) and generates the Prisma client.)*
-
-5.  **Start the Backend API & WebSocket Server (Terminal 1):**
-    ```bash
-    cd server
-    npm run dev
-    ```
-
-6.  **Start the Frontend Development Server (Terminal 2):**
-    ```bash
-    cd client
-    npm run dev
-    ```
-
-7.  **Access the App:**
-    *   Open `http://localhost:5173`.
-    *   You will be greeted by the Login screen.
-    *   **Option A (Full Google Login):** If you've configured `GOOGLE_CLIENT_ID`/`VITE_GOOGLE_CLIENT_ID` with a real Google project and set up authorized JavaScript origins (`http://localhost:5173`), you can click "Sign in with Google".
-    *   **Option B (Bypass for Dev):** Click the **"Dev Login (Bypass)"** button (small text below the Google button). This will log you in as a dummy "Dev User" without Google credentials.
-
-8.  **Test Functionality:**
-    *   Navigate to the **Configure** tab.
-    *   Enter your PagerDuty credentials (API Token, Global Routing Key, From Email).
-    *   Click **"Save to Profile"**. This will encrypt and store them in the database for your logged-in user.
-    *   Refresh the page. Your credentials should be pre-filled from your profile.
-    *   Try **"Load Teams"** and **"Load Services & Policies"**.
-    *   Go to the **Monitor** tab. Click **"Start"**. You should see the simulation status change to "Running" and incidents appear.
-    *   Open a new browser tab/window to `http://localhost:5173`. You should still be logged in, and if a simulation is running, it should re-sync and display its state.
-    *   **Import Crux:** Go to Campaigns tab, click Import, select your Crux JSON file.
-    *   **Dynamic Payloads:** Create a new campaign, add a step with a payload like `{"summary": "Test: {{faker.lorem.words}}", "custom_details": {"user": "{{faker.internet.userName}}"}}`. Trigger it and check PagerDuty.
+- **Persona ChatOps:** Implement the Logic to generate Slack-style chatter based on Team Persona.
+- **Director Mode:** Polish the real-time "Soundboard" for live demos.

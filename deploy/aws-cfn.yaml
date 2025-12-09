@@ -73,6 +73,16 @@ Parameters:
     Description: Google OAuth Client ID for authentication.
     Type: String
 
+  GeminiApiKey:
+    Description: (Optional) Google Gemini API Key for Agentic features.
+    Type: String
+    NoEcho: true
+
+  OpenaiApiKey:
+    Description: (Optional) OpenAI API Key for Agentic features.
+    Type: String
+    NoEcho: true
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -228,6 +238,8 @@ Resources:
           echo "ENCRYPTION_KEY=${EncryptionKey}" >> .env
           echo "GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
           echo "VITE_GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
+          echo "GEMINI_API_KEY=${GeminiApiKey}" >> .env
+          echo "OPENAI_API_KEY=${OpenaiApiKey}" >> .env
           
           if [ "${DatabaseType}" == "RDS" ]; then
             DB_ENDPOINT="${RDSDBInstance.Endpoint.Address}"
@@ -238,7 +250,11 @@ Resources:
           fi
           
           # Start Docker Compose
-          docker compose up -d
+          docker compose up -d --build
+          
+          # Run Migrations (Wait for DB to be ready)
+          sleep 10
+          docker compose exec -T server npx prisma migrate deploy
 
 Conditions:
   CreateRDS: !Equals [!Ref DatabaseType, RDS]
