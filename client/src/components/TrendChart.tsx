@@ -19,15 +19,21 @@ export const TrendChart: React.FC<TrendChartProps> = ({
   const points = useMemo(() => {
     if (data.length < 2) return [];
 
+    // Ensure unique timestamps
+    const uniqueData = Array.from(new Map(data.map(item => [item.ts, item])).values())
+        .sort((a, b) => a.ts - b.ts);
+
+    if (uniqueData.length < 2) return [];
+
     const now = Date.now();
     const windowStart = now - 15 * 60 * 1000; // 15 mins ago
     
     // Determine scales
-    const maxCount = Math.max(...data.map(d => d.count), 5); // Minimum scale of 5
+    const maxCount = Math.max(...uniqueData.map(d => d.count), 5); // Minimum scale of 5
     const minTs = windowStart;
     const maxTs = now;
 
-    return data.map(d => ({
+    return uniqueData.map(d => ({
       x: ((d.ts - minTs) / (maxTs - minTs)) * 100, // Percentage 0-100
       y: 100 - (d.count / maxCount) * 100, // Percentage 0-100 (inverted for SVG)
       count: d.count,
@@ -72,7 +78,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
         {/* Points */}
         {points.map((p, i) => (
           <circle 
-            key={p.ts} 
+            key={i} 
             cx={p.x} 
             cy={p.y} 
             r="3" // Fixed radius

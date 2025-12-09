@@ -4,10 +4,11 @@ import { Trash2, Save, ChevronDown, ChevronUp, Braces, Code } from 'lucide-react
 
 interface CampaignEditorProps {
   campaignId: string | 'new';
+  initialData?: Partial<ImportedCampaign>;
   onClose: () => void;
 }
 
-export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onClose }) => {
+export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, initialData, onClose }) => {
   const { importedCampaigns, addLog, createCampaign, updateCampaign, deleteCampaign } = useStore();
   const [campaign, setCampaign] = useState<ImportedCampaign | null>(null);
   const [isNew, setIsNew] = useState(campaignId === 'new');
@@ -17,13 +18,13 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, onCl
   useEffect(() => {
     if (campaignId === 'new') {
       setIsNew(true);
-      const newId = crypto.randomUUID();
       setCampaign({
         id: 'new',
         name: 'New Campaign',
         description: '',
         source: 'User Created',
         items: [],
+        ...initialData, // Override with initial data if provided
       });
     } else {
       setIsNew(false);

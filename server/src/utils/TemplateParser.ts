@@ -44,7 +44,7 @@ export class TemplateParser {
     
     // 6. List Choice: {{list(a, b, c)}}
     output = output.replace(/\{\{list\((.*?)\)\}\}/g, (_match, content) => {
-        const items = content.split(',').map(s => s.trim());
+        const items = content.split(',').map((s: string) => s.trim());
         return faker.helpers.arrayElement(items);
     });
 

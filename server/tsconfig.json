@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "exclude": ["prisma"]
+  "exclude": ["prisma", "test_*.ts"]
 }

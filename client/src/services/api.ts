@@ -175,4 +175,36 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(json),
     }),
+
+  // --- Agent ---
+  agentProposal: (prompt: string, provider: string = 'google') => 
+    fetchFromProxy('/api/agent/proposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, provider }),
+    }),
+
+  agentBuild: (prompt: string, provider: string = 'google', approvedPlan?: string) =>
+    fetchFromProxy('/api/agent/build', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, provider, approvedPlan }),
+    }),
+
+  // --- Director ---
+  getTaxonomyTree: () => fetchFromProxy('/api/taxonomy/domains'),
+  
+  triggerTemplate: (templateId: string) => 
+    fetchFromProxy('/api/simulation/trigger-template', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ templateId }) 
+    }),
+
+  previewTemplate: (templateId: string) => 
+    fetchFromProxy('/api/simulation/preview-template', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ templateId }) 
+    }),
 };

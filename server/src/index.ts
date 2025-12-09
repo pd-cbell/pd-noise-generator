@@ -1,13 +1,20 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+console.log("Environment Loaded. GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
+
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import proxyRouter from './routes/proxy';
 import profilesRouter from './routes/profiles';
 import campaignsRouter from './routes/campaigns';
+import taxonomyRouter from './routes/taxonomy';
+import agentRouter from './routes/agent';
+import simulationRouter from './routes/simulation';
 import authRouter from './routes/auth';
 import { SimulationManager } from './services/ServerSimulationEngine';
 
@@ -111,6 +118,9 @@ const PORT = process.env.PORT || 3001;
 app.use('/proxy', proxyRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/campaigns', campaignsRouter);
+app.use('/api/taxonomy', taxonomyRouter);
+app.use('/api/agent', agentRouter);
+app.use('/api/simulation', simulationRouter);
 app.use('/auth', authRouter);
 
 app.get('/', (req, res) => {

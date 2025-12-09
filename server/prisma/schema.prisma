@@ -72,3 +72,44 @@ model CampaignItem {
   repeatCount     Int      @default(1) // Renamed from 'times' for clarity
   intervalSeconds Int      @default(0)
 }
+
+// v2.0 Taxonomy Models
+
+model Domain {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  teams     Team[]
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id        String    @id @default(uuid())
+  name      String
+  persona   String?   // e.g., "Stressed, technical, uses emojis"
+  domainId  String
+  domain    Domain    @relation(fields: [domainId], references: [id])
+  services  Service[]
+  createdAt DateTime  @default(now())
+}
+
+model Service {
+  id             String            @id @default(uuid())
+  name           String
+  integrationKey String?           // PagerDuty Integration Key
+  teamId         String
+  team           Team              @relation(fields: [teamId], references: [id])
+  templates      PayloadTemplate[]
+  createdAt      DateTime          @default(now())
+}
+
+model PayloadTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  template    String   // The JSON string containing {{faker...}} tokens
+  slackMessageTemplate String? // ChatOps message template
+  isDraft     Boolean  @default(true)
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  createdAt   DateTime @default(now())
+}

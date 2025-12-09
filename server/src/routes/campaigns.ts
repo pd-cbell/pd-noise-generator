@@ -25,6 +25,10 @@ router.post('/:id/trigger', async (req, res) => {
     const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
 
     // Try to find active simulation for this user to log progress
+    if (!campaign.userId) {
+        // Should not happen with Prisma foreign keys but good for TS
+        return res.status(500).json({ error: "Campaign has no associated user" });
+    }
     const instance = simulationManager.get(campaign.userId);
 
     const executor = new CampaignExecutor({

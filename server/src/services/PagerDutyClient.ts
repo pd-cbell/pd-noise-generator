@@ -33,7 +33,7 @@ export class PagerDutyClient {
     this.lastRequestTime = Date.now();
   }
 
-  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>) {
+  private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>): Promise<any> {
     await this.throttle(); // Simple throttling
 
     const url = new URL(`${this.config.apiBase}${path}`);
@@ -54,9 +54,9 @@ export class PagerDutyClient {
       headers,
       body: body ? JSON.stringify(body) : undefined,
       // agent: this.httpAgent, // Uncomment if using proxy
-    };
+    } as RequestInit; // Cast to satisfy mismatched node-fetch types
 
-    const res = await fetch(url.toString(), options);
+    const res = await fetch(url.toString(), options as any);
 
     if (res.status === 429) {
         // Hit rate limit, simple retry after 2s
@@ -232,7 +232,9 @@ export class PagerDutyClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || `PagerDuty Events API Error: ${res.statusText}`);
+      const errorMsg = errorData.message || (Array.isArray(errorData.errors) ? errorData.errors.join(', ') : JSON.stringify(errorData.errors)) || `PagerDuty Events API Error: ${res.statusText}`;
+      console.error("PD Event API Error Data:", JSON.stringify(errorData, null, 2));
+      throw new Error(errorMsg);
     }
     return res.json();
   }

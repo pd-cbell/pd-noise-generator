@@ -51,10 +51,10 @@ This release focuses on refining the "Major Incident" behavior to be less determ
     - Update `triggerTeamFailureScenario` to pass the target service(s) to this method.
 
 ## Deliverables
-- [ ] Major incidents use P1/P2/P3 distribution.
-- [ ] Team Failure incidents are merged into a single parent.
-- [ ] Notes are added explaining the merge.
-- [ ] Change events are correctly sent to service-specific integrations during failures.
+- [x] Major incidents use P1/P2/P3 distribution.
+- [x] Team Failure incidents are merged into a single parent.
+- [x] Notes are added explaining the merge.
+- [x] Change events are correctly sent to service-specific integrations during failures.
 
 ## Known Issues / Bug Bash (Post 1.8.2 Development)
 - [ ] **Failure Campaign Editor and Import not working:** Investigate and fix issues preventing proper creation, editing, and importing of campaigns.

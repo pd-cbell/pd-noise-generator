@@ -1,8 +1,8 @@
 # Agent Notes - v1.8 Realism
 
-**Branch:** `v1.8-realism`
+**Branch:** `main` (Release v1.8.2)
 
-## Status: v1.8.1 Complete - Ready for Testing/Merge
+## Status: v1.8.2 Complete - Production Ready
 
 ### Completed Features
 - **Phase 1.1: Authentication (Google OAuth)**
@@ -32,13 +32,17 @@
     - **Server-Side Import:** Crux Campaigns support.
 - **v1.8.1 Enhancements (Simulation Realism):**
     - **Team Failure Scenarios:** Correlated outages (3-5 incidents) targeting specific teams.
-    - **Major Incidents:** P1/P2 promotions tied to team failures.
     - **Realistic Personas:** Spoofing actual on-call users for Ack/Resolve actions.
     - **Imperfect Responders:** Simulated missed acks and escalations.
     - **UI Polish:** Sliders for probabilities, visual highlighting for Major/Team incidents.
+- **v1.8.2 Enhancements (Advanced Noise):**
+    - **Intelligent Merging:** Automatically groups Team Failure incidents.
+    - **Priority Variance:** P1/P2/P3 distribution for Major Incidents.
+    - **Contextual Notes:** Auto-notes on merged incidents.
+    - **Change Event Routing:** Fix for service-specific integration keys.
 
 ### Next Steps
-- **v1.8.1 Release:** Completed and merged to `main`.
+- **v2.0 Planning:** AI-driven Narrative Generation (See `2.0_masterplan.md`).
 
 ## Configuration & Credentials (for Local Development)
 To test the full authentication flow, you will need to set these environment variables (in `server/.env` and `client/.env` or `client/vite.config.ts` for `VITE_` prefixed ones):

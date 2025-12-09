@@ -1,3 +1,29 @@
+# Session Notes (v1.8.2 - Release Complete)
+
+**Date:** 2025-12-06
+**Facilitator:** Gemini Agent
+
+## Workstream v1.8.2 – Intelligent Merging & Priority Variance
+
+### Goals
+- Simulate intelligent noise reduction by automatically merging related incidents.
+- Vary the priority of "Major" incidents to mimic real-world triage (not always P1).
+- Ensure change events route correctly during complex failure scenarios.
+
+### Completed Tasks
+- **Intelligent Merging:** Implemented `pendingMerges` queue in `ServerSimulationEngine.ts`. Team Failure scenarios now spawn 3-5 incidents that are automatically merged into a single parent incident after ~60s.
+- **Priority Variance:** Major incidents now follow a weighted distribution: P1 (30%), P2 (50%), P3 (20%).
+- **Change Events:** Fixed `triggerRelatedChangeEvents` to prioritize service-specific `changeIntegrations` keys over the global configuration.
+- **Logging:** Added clear logs for merge actions ("Merged X incidents...") and priority promotion.
+- **Client:** Verified `MonitorDashboard` correctly reflects these updates (merges remove child incidents from view).
+
+### Verification
+- Manual verification of Team Failure scenarios confirmed child incidents appear and then merge.
+- Verified PagerDuty UI shows the "Merged Incidents" count and the simulator-generated note.
+- Confirmed different priorities (P1/P2/P3) appearing for Major incidents.
+
+---
+
 # Session Notes (v1.7.2 - Release Complete)
 
 **Date:** 2025-11-28

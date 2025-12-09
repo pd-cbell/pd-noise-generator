@@ -7,6 +7,8 @@ import {
 import { PagerDutyClient } from './PagerDutyClient';
 import { payloadGenerator, payloadRegistry } from '../utils/payloads';
 import { TemplateParser } from '../utils/TemplateParser';
+import { fakerService } from './FakerService';
+import { integrationService } from './IntegrationService';
 
 // --- Shared Helper Functions ---
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -89,6 +91,16 @@ export class SimulationInstance {
     payloadRegistry.list();
   }
 
+  updateCredentials(credentials: any) {
+    this.credentials = credentials;
+    this.pdClient = new PagerDutyClient({
+      apiToken: credentials.apiToken,
+      fromEmail: credentials.fromEmail,
+      apiBase: process.env.PD_API_BASE || 'https://api.pagerduty.com',
+    });
+    // this.addLog("Credentials updated.", 'info'); // Optional: log internally
+  }
+
   start() {
     if (this.state.isRunning) return;
     this.state.isRunning = true;
@@ -108,6 +120,98 @@ export class SimulationInstance {
   }
 
   // --- Actions that can be called from frontend (via socket) ---
+  
+  // v2.0: Director Mode Trigger
+  public async triggerTemplate(template: { name: string, template: string, slackMessageTemplate?: string | null }, serviceId: string, integrationKey?: string | null) {
+      console.log(`ServerSimulationEngine: Triggering template '${template.name}' for service ${serviceId}`);
+      
+      try {
+          // 1. Render Payload with Faker (Fast & Dumb)
+          const payload = fakerService.generatePayload(template.template) as any;
+          
+          // 2. Determine Routing Key
+          // Use Service-level Integration Key if provided, else Global Key
+          const routingKey = integrationKey || this.credentials.globalRoutingKey;
+          
+          if (!routingKey) {
+              throw new Error("No Integration Key available (Service or Global)");
+          }
+
+          // 3. Prepare PD Event
+          const dedupKey = crypto.randomUUID();
+          const body = {
+              routing_key: routingKey,
+              event_action: 'trigger',
+              dedup_key: dedupKey,
+              payload: {
+                  summary: payload.summary || `Template: ${template.name}`,
+                  source: payload.source || 'pd-noise-simulator-director',
+                  severity: payload.severity || 'error',
+                  component: payload.component || 'unknown',
+                  custom_details: {
+                      ...payload.custom_details,
+                      generator: 'pd-noise-simulator-director',
+                      template_name: template.name
+                  }
+              }
+          };
+
+          // 4. Send to PD
+          this.incrementApiCount();
+          await this.pdClient.triggerEvent(body);
+          
+          // 4b. Send ChatOps (Slack) Message
+          if (template.slackMessageTemplate) {
+              const slackMsg = fakerService.renderString(template.slackMessageTemplate);
+              integrationService.sendSlackMessage(slackMsg).catch(e => 
+                this.addLog(`Failed to send Slack message: ${e.message}`, 'warn')
+              );
+          }
+          
+          // 5. Track locally?
+          // For Director Mode, we generally just want to fire. 
+          // But if we want it in the list, we need an Incident object.
+          // Let's add it to the list for visibility.
+          const now = Date.now();
+          const newIncident: Incident = {
+              dedupKey,
+              serviceId: serviceId,
+              serviceName: 'Director Mode Service', // We assume the UI knows the name, or we fetch it. 
+              // Optimization: We don't have the Service Name here easily unless we fetch. 
+              // For speed, let's use a placeholder or pass it in.
+              startedAt: now,
+              incidentId: null,
+              mapAttempts: 0,
+              nextEvalAt: now + 10000,
+              ackAt: null,
+              autoAckAt: null, // Manual only?
+              acked: false,
+              firstResponderAt: null,
+              responderRequested: false,
+              lastNoteAt: null,
+              severity: payload.severity || 'error',
+              resolveAt: null, // No auto-resolve for manual triggers?
+              autoHealAt: null,
+              autoHealScheduled: false,
+              observabilitySource: payload.source || 'unknown',
+              failureId: null,
+              failureSummary: null,
+              noteContext: [],
+              syncedFromPd: false,
+              isMajor: false
+          };
+          this.addIncident(newIncident);
+          this.state.totalEvents++;
+          this.addLog(`Director Mode: Triggered '${template.name}'`, 'info');
+          this.emitState();
+
+      } catch (e: any) {
+          console.error("Full Trigger Error:", e);
+          this.addLog(`Director Trigger Failed: ${e.message}`, 'error');
+          throw e; // Re-throw to API
+      }
+  }
+
   async ackIncident(dedupKey: string) {
     const incident = this.state.activeIncidents.find(i => i.dedupKey === dedupKey);
     if (!incident || !incident.incidentId || incident.acked) return;
@@ -897,7 +1001,7 @@ export class SimulationManager {
     let instance = this.instances.get(userId);
     if (instance) {
         instance.config = config; // Update config if already running
-        instance.credentials = credentials; // Update credentials
+        instance.updateCredentials(credentials);
     } else {
         instance = new SimulationInstance(userId, config, credentials, this.io);
         this.instances.set(userId, instance);

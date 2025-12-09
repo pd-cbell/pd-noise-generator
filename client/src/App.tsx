@@ -4,15 +4,19 @@ import { ConfigurationForm } from './components/ConfigurationForm';
 import { MonitorDashboard } from './components/MonitorDashboard';
 import { CampaignManager } from './components/CampaignManager';
 import { CampaignEditor } from './components/CampaignEditor';
+import { AgentBuilder } from './components/AgentBuilder';
+import { DirectorDashboard } from './components/DirectorDashboard';
 import { Login } from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import { useServerSimulation } from './hooks/useServerSimulation';
+import { ImportedCampaign } from './store/useStore';
 
 function App() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); // New
   const [activePage, setActivePage] = useState('configure');
   const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
+  const [agentBuiltCampaign, setAgentBuiltCampaign] = useState<Partial<ImportedCampaign> | undefined>(undefined);
   
   // No longer using browser-side simulation engine directly here
 
@@ -24,10 +28,18 @@ function App() {
   const handleEditCampaign = (campaignId: string | 'new') => {
     setActivePage('campaigns'); // Ensure we're on the campaigns tab visually
     setEditingCampaignId(campaignId);
+    setAgentBuiltCampaign(undefined); // Clear previous agent build
   };
 
   const handleCloseEditor = () => {
     setEditingCampaignId(null);
+    setAgentBuiltCampaign(undefined);
+  };
+
+  const handleAgentBuildComplete = (campaignData: Partial<ImportedCampaign>) => {
+    setAgentBuiltCampaign(campaignData);
+    setActivePage('campaigns');
+    setEditingCampaignId('new');
   };
 
   if (isAuthLoading || isSimLoading) { // Check both auth and sim loading
@@ -49,9 +61,15 @@ function App() {
       <main className="flex-1 overflow-auto relative">
         {activePage === 'configure' && <ConfigurationForm />}
         {activePage === 'monitor' && <MonitorDashboard />}
+        {activePage === 'agent' && <AgentBuilder onBuildComplete={handleAgentBuildComplete} />}
+        {activePage === 'director' && <DirectorDashboard />}
         {activePage === 'campaigns' && (
           editingCampaignId ? (
-            <CampaignEditor campaignId={editingCampaignId} onClose={handleCloseEditor} />
+            <CampaignEditor 
+                campaignId={editingCampaignId} 
+                initialData={agentBuiltCampaign}
+                onClose={handleCloseEditor} 
+            />
           ) : (
             <CampaignManager onEditCampaign={handleEditCampaign} />
           )

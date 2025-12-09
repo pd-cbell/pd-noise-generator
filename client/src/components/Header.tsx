@@ -1,5 +1,4 @@
-import React from 'react';
-import { Activity, Settings, Users, Play, Square, Pause } from 'lucide-react';
+import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers } from 'lucide-react';
 import { useStore } from '../store/useStore'; // Still need for global config
 import { useServerSimulation } from '../hooks/useServerSimulation'; // New
 
@@ -14,7 +13,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">PagerDuty Noise Simulator</h1>
-          <p className="text-xs text-gray-500 font-medium">v1.8.2 (Gemini Edition)</p>
+          <p className="text-xs text-gray-500 font-medium">v2.0 (Agent Edition)</p>
         </div>
       </div>
 
@@ -23,6 +22,8 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
           { id: 'configure', label: 'Configure', icon: Settings },
           { id: 'monitor', label: 'Monitor', icon: Activity },
           { id: 'campaigns', label: 'Campaigns', icon: Users },
+          { id: 'agent', label: 'Agent', icon: Bot },
+          { id: 'director', label: 'Director', icon: Layers },
         ].map((tab) => (
           <button
             key={tab.id}

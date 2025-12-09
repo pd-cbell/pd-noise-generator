@@ -40,6 +40,7 @@ export interface PayloadAdapter {
   hidden?: boolean;
   supportsCampaigns?: boolean;
   defaultWeight?: number;
+  uiMixOption?: boolean; // New UI flag
   metrics?: string[]; // For CloudWatch
   regions?: string[]; // For CloudWatch
   build: (service: any, failureMeta?: any) => any; // Need more specific types for service/failureMeta later
