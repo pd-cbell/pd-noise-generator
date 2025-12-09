@@ -488,12 +488,15 @@ export const useStore = create<AppState>()(
           addLog('API Token is missing. Cannot trigger campaign.', 'error');
           return;
         }
-        if (!globalRoutingKey && campaign.items.some(item => item.eventType === 'incident')) {
-          addLog('Global Routing Key is missing. Cannot trigger incident events in campaign.', 'error');
+        const hasIncidents = campaign.items.some(item => item.eventType === 'incident');
+        const hasChanges = campaign.items.some(item => item.eventType === 'change');
+
+        if (!globalRoutingKey && !campaign.integrationKey && hasIncidents) {
+          addLog('No incident routing key available (global or campaign default). Cannot trigger incident events.', 'error');
           return;
         }
-        if (!campaignConfig.importedChangeRoutingKey && campaign.items.some(item => item.eventType === 'change')) {
-          addLog('Imported Change Routing Key is missing. Cannot trigger change events in campaign.', 'error');
+        if (!campaignConfig.importedChangeRoutingKey && !campaign.integrationKey && hasChanges) {
+          addLog('No change routing key available (global imported change or campaign default). Cannot trigger change events.', 'error');
           return;
         }
 
@@ -504,10 +507,16 @@ export const useStore = create<AppState>()(
             try {
               const payload = JSON.parse(item.payloadString);
               let response;
+              const incidentRoutingKey = item.integrationKey || campaign.integrationKey || globalRoutingKey;
+              const changeRoutingKey = item.integrationKey || campaign.integrationKey || campaignConfig.importedChangeRoutingKey;
 
               if (item.eventType === 'incident') {
+                if (!incidentRoutingKey) {
+                  addLog(`Skipped incident step "${item.id}" due to missing routing key.`, 'warn');
+                  return;
+                }
                 const eventBody = {
-                  routing_key: globalRoutingKey,
+                  routing_key: incidentRoutingKey,
                   event_action: item.eventAction || 'trigger',
                   dedup_key: item.dedupKey || crypto.randomUUID(),
                   payload: {
@@ -518,8 +527,12 @@ export const useStore = create<AppState>()(
                 response = await api.triggerEvent(eventBody);
                 addLog(`  -> Fired incident event for "${item.id}" (dedup: ${eventBody.dedup_key.substring(0,8)}).`, 'info');
               } else if (item.eventType === 'change') {
+                if (!changeRoutingKey) {
+                  addLog(`Skipped change step "${item.id}" due to missing change routing key.`, 'warn');
+                  return;
+                }
                 const changeEventBody = {
-                  routing_key: campaignConfig.importedChangeRoutingKey,
+                  routing_key: changeRoutingKey,
                   payload: {
                     ...payload,
                     source: payload.source || 'pd-noise-simulator-campaign',
