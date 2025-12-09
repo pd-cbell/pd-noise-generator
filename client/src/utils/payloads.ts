@@ -63,6 +63,7 @@ export interface ImportedCampaign {
   name: string;
   description: string;
   source: string;
+  integrationKey?: string | null;
   items: CampaignItem[];
 }
 

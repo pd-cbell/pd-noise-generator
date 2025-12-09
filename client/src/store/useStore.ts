@@ -458,6 +458,7 @@ export const useStore = create<AppState>()(
             name: c.name,
             description: c.description,
             source: c.source,
+            integrationKey: c.integrationKey || '',
             items: c.items.map((i: any) => ({
               id: i.id,
               stepName: i.stepName,
@@ -1033,6 +1034,7 @@ export const useStore = create<AppState>()(
           // And map 'times' to 'repeatCount'
           const apiPayload = {
             ...campaignData,
+            integrationKey: campaignData.integrationKey || '',
             items: campaignData.items.map(item => {
               let payload = {};
               try {
@@ -1064,6 +1066,7 @@ export const useStore = create<AppState>()(
           // And map 'times' to 'repeatCount'
           const apiPayload = {
             ...campaignData,
+            integrationKey: campaignData.integrationKey || '',
             items: campaignData.items?.map(item => {
               let payload = {};
               try {

@@ -23,6 +23,7 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
         name: 'New Campaign',
         description: '',
         source: 'User Created',
+        integrationKey: '',
         items: [],
         ...initialData, // Override with initial data if provided
       });
