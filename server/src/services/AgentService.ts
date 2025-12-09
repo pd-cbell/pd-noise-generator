@@ -144,7 +144,13 @@ export class AgentService {
                     repeatCount: z.number().optional().default(1),
                     eventType: z.enum(['incident', 'change']),
                     severity: z.enum(['info', 'warning', 'error', 'critical']).optional(),
-                    payload: z.record(z.string(), z.any()).describe("The PagerDuty event payload (summary, source, custom_details, etc)"),
+                    payload: z.object({
+                        summary: z.string(),
+                        source: z.string(),
+                        custom_details: z.object({
+                            service_name: z.string().describe("MUST match the item's 'service' field exactly for routing"),
+                        }).passthrough()
+                    }).passthrough().describe("The PagerDuty event payload"),
                     slackMessageTemplate: z.string().optional()
                 }))
             });
@@ -157,31 +163,35 @@ export class AgentService {
             const prompt = `
               ${basePrompt}
 
-              **Output Format:**
-              The output must be a valid JSON object matching this structure:
-              { 
-                "name": "Scenario Name", 
-                "description": "Brief description", 
-                "items": [
-                  { 
-                    "stepName": "High Latency Alert",
-                    "service": "Checkout Service",
-                    "delaySeconds": 0, 
-                    "repeatCount": 1, 
-                    "eventType": "incident", 
-                    "severity": "error", 
-                    "payload": { 
-                      "summary": "...", 
-                      "source": "...", 
-                      "custom_details": { ... } 
-                    },
-                    "slackMessageTemplate": "Slack alert..."
-                  }
-                ] 
-              }
+                    7. **Routing:** You MUST include the field \`service_name\` inside the \`payload.custom_details\` object for EVERY event. The value MUST match the \`service\` name exactly.
               
-              Output ONLY the raw JSON. No markdown fences.
-            `;
+                    **Output Format:**
+                    The output must be a valid JSON object matching this structure:
+                    { 
+                      "name": "Scenario Name", 
+                      "description": "Brief description", 
+                      "items": [
+                        { 
+                          "stepName": "High Latency Alert",
+                          "service": "Checkout Service",
+                          "delaySeconds": 0, 
+                          "repeatCount": 1, 
+                          "eventType": "incident", 
+                          "severity": "error", 
+                          "payload": { 
+                            "summary": "...", 
+                            "source": "...", 
+                            "custom_details": {
+                               "service_name": "Checkout Service",
+                               "other_field": "..."
+                            } 
+                          },
+                          "slackMessageTemplate": "Slack alert..."
+                        }
+                      ] 
+                    }
+                    
+                    Output ONLY the raw JSON. No markdown fences.            `;
             
             const response = await model.invoke(prompt);
             let text = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);

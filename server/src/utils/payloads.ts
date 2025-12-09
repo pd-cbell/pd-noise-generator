@@ -1,3 +1,5 @@
+import { SourceMix } from '../types';
+
 // Helper functions copied from original App.jsx
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -78,13 +80,13 @@ export function createPayloadRegistry() {
     get(id: string) {
       return map.get(id) || null;
     },
-    pickByMix(mix: Record<string, number> = {}) {
+    pickByMix(mix: Partial<SourceMix> = {}) {
       const candidates = adapters.filter((adapter) => adapter.group === 'observability' && typeof adapter.build === 'function' && !adapter.hidden);
       if (!candidates.length) return null;
       let total = 0;
       const weighted = candidates.map((adapter) => {
-        const key = adapter.mixKey || adapter.id;
-        const weight = Number(mix?.[key]) || adapter.defaultWeight || 0;
+        const key = (adapter.mixKey || adapter.id) as keyof SourceMix;
+        const weight = Number(mix?.[key] ?? adapter.defaultWeight ?? 0);
         total += weight;
         return { adapter, weight };
       });
@@ -129,14 +131,14 @@ export function createPayloadGenerator(registry: ReturnType<typeof createPayload
   };
   registry.register(fallbackTemplate);
   return {
-    selectTemplate(sourceMix: Record<string, number>, preferredId?: string) {
+    selectTemplate(sourceMix: SourceMix, preferredId?: string) {
       if (preferredId) {
         const adapter = registry.get(preferredId);
         if (adapter) return adapter;
       }
       return registry.pickByMix(sourceMix) || fallbackTemplate;
     },
-    buildEvent({ service, failure, sourceMix, preferredTemplateId }: { service: any; failure?: any; sourceMix: Record<string, number>; preferredTemplateId?: string }) {
+    buildEvent({ service, failure, sourceMix, preferredTemplateId }: { service: any; failure?: any; sourceMix: SourceMix; preferredTemplateId?: string }) {
       const template = this.selectTemplate(sourceMix, preferredTemplateId);
       const payload = template?.build?.(service, failure) || fallbackTemplate.build(service, failure);
       return { template, payload };

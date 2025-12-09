@@ -1,4 +1,20 @@
 export type IncidentSeverity = 'info' | 'warning' | 'error' | 'critical';
+export type SeverityKey = IncidentSeverity | 'global';
+
+export interface SeverityMetrics {
+  global: number;
+  info: number;
+  warning: number;
+  error: number;
+  critical: number;
+}
+
+export interface SeverityWeights {
+  info: number;
+  warning: number;
+  error: number;
+  critical: number;
+}
 
 export interface Incident {
   dedupKey: string;
@@ -29,8 +45,8 @@ export interface Incident {
 }
 
 export interface Metrics {
-  avgMtta: Record<IncidentSeverity | 'global', number>; // milliseconds
-  avgMttr: Record<IncidentSeverity | 'global', number>; // milliseconds
+  avgMtta: SeverityMetrics; // milliseconds
+  avgMttr: SeverityMetrics; // milliseconds
   apiRpm: number;
   apiCallsLast60s: number;
   droppedEvents: number;
@@ -54,6 +70,13 @@ export interface SeverityConfig {
   responderProbability: number;
 }
 
+export interface SeverityConfigMap {
+  info: SeverityConfig;
+  warning: SeverityConfig;
+  error: SeverityConfig;
+  critical: SeverityConfig;
+}
+
 export const DEFAULT_AUTO_HEAL_CONFIG = {
   enabled: true,
   warningProbability: 0.2,
@@ -61,7 +84,7 @@ export const DEFAULT_AUTO_HEAL_CONFIG = {
   maxDelaySec: 90,
 };
 
-export const DEFAULT_SEVERITY_CONFIGS: Record<IncidentSeverity, SeverityConfig> = {
+export const DEFAULT_SEVERITY_CONFIGS: SeverityConfigMap = {
   info: { // Info is suppressed, but included for completeness
     minAckSec: 0, maxAckSec: 0,
     minResolveSec: 0, maxResolveSec: 0,
@@ -84,18 +107,71 @@ export const DEFAULT_SEVERITY_CONFIGS: Record<IncidentSeverity, SeverityConfig> 
   },
 };
 
+export interface SourceMix {
+  cloudwatch: number;
+  datadog: number;
+  newrelic: number;
+  splunk: number;
+  fallback: number;
+}
+
+export const DEFAULT_SOURCE_MIX: SourceMix = {
+  cloudwatch: 0.25,
+  datadog: 0.25,
+  newrelic: 0.25,
+  splunk: 0.25,
+  fallback: 0,
+};
+
+export interface SimulationCredentials {
+  apiToken: string;
+  fromEmail: string;
+  globalRoutingKey: string;
+}
+
+export interface SimulationLogEntry {
+  ts: string;
+  type: 'info' | 'warn' | 'error';
+  msg: string;
+}
+
+export interface MonitorTrendPoint {
+  ts: number;
+  count: number;
+}
+
+export interface SimulationState {
+  isRunning: boolean;
+  activeIncidents: Incident[];
+  totalEvents: number;
+  log: SimulationLogEntry[];
+  monitorTrend: MonitorTrendPoint[];
+  metrics: Metrics;
+  _mttaSums: SeverityMetrics;
+  _mttaCounts: SeverityMetrics;
+  _mttrSums: SeverityMetrics;
+  _mttrCounts: SeverityMetrics;
+  _apiCallTimestamps: number[];
+  _lastRpmCheck: number;
+  _lastPollCheck: number;
+}
+
+export function createEmptySeverityMetrics(): SeverityMetrics {
+  return { global: 0, info: 0, warning: 0, error: 0, critical: 0 };
+}
+
 export interface SimulationConfig {
   ratePerMinute: number;
-  severityWeights: { info: number; warning: number; error: number; critical: number };
+  severityWeights: SeverityWeights;
   autoHealConfig: { enabled: boolean; warningProbability: number; minDelaySec: number; maxDelaySec: number };
   resumeExistingEnabled: boolean;
-  sourceMix: Record<string, number>;
+  sourceMix: SourceMix;
   burstProbability: number;
   majorIncidentProbability: number;
   responderAckRate: number;
   teamFailureProbability: number; // New v1.8.1
   changeRoutingKey?: string; // New v1.8 for Major Incident changes
-  severityConfigs: Record<IncidentSeverity, SeverityConfig>;
+  severityConfigs: SeverityConfigMap;
   selectedServices: Service[]; // Backend needs full service objects to trigger
   selectedTeamIds: string[]; // New: Restrict personas to these teams
 }

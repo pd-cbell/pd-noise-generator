@@ -107,8 +107,9 @@ export const ConfigurationForm: React.FC = () => {
   };
 
   const handleToggleAllServices = () => {
-    const allSelected = services.every(s => s.include);
-    services.forEach(s => setServiceInclude(s.id, !allSelected));
+    if (visibleServices.length === 0) return;
+    const allSelected = visibleServices.every(s => s.include);
+    visibleServices.forEach(s => setServiceInclude(s.id, !allSelected));
   };
 
   const isTeamsLoading = isLoadingTeams;

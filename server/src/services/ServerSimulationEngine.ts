@@ -1,14 +1,23 @@
+import crypto from 'crypto';
 import { Server as SocketIOServer } from 'socket.io'; // Import Socket.io Server type
 import {
-  Incident, SimulationConfig, Metrics,
-  IncidentSeverity, Service, SeverityConfig,
-  DEFAULT_AUTO_HEAL_CONFIG, DEFAULT_SEVERITY_CONFIGS,
+  Incident,
+  SimulationConfig,
+  IncidentSeverity,
+  Service,
+  DEFAULT_SEVERITY_CONFIGS,
+  DEFAULT_SOURCE_MIX,
+  SimulationState,
+  createEmptySeverityMetrics,
+  SimulationCredentials,
+  SourceMix,
 } from '../types';
 import { PagerDutyClient } from './PagerDutyClient';
 import { payloadGenerator, payloadRegistry } from '../utils/payloads';
 import { TemplateParser } from '../utils/TemplateParser';
 import { fakerService } from './FakerService';
 import { integrationService } from './IntegrationService';
+import { serverConfig } from '../config';
 
 // --- Shared Helper Functions ---
 function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -19,43 +28,43 @@ function getRandomInt(min: number, max: number): number {
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
-interface SimulationState {
-  isRunning: boolean;
-  activeIncidents: Incident[];
-  totalEvents: number;
-  log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[];
-  monitorTrend: { ts: number; count: number }[];
-  metrics: Metrics;
-
-  // Internal Counters (not exposed to UI mostly)
-  _mttaSums: Record<IncidentSeverity | 'global', number>;
-  _mttaCounts: Record<IncidentSeverity | 'global', number>;
-  _mttrSums: Record<IncidentSeverity | 'global', number>;
-  _mttrCounts: Record<IncidentSeverity | 'global', number>;
-  _apiCallTimestamps: number[];
-  _lastRpmCheck: number;
-  _lastPollCheck: number; // New v1.8
-}
+type PdPriority = { id: string; name: string };
+type GeneratedPayload = {
+  summary?: string;
+  source?: string;
+  severity?: IncidentSeverity;
+  component?: string;
+  custom_details?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+type FailureContext = {
+  id?: string;
+  summary?: string;
+  isMajor?: boolean;
+  preGeneratedDedupKey?: string;
+  preferredTemplateId?: string;
+  preferredPriorityLabel?: string;
+};
 
 export class SimulationInstance {
   public userId: string;
   public config: SimulationConfig;
-  public credentials: { apiToken: string; fromEmail: string; globalRoutingKey: string };
+  public credentials: SimulationCredentials;
   public state: SimulationState;
   private timer: NodeJS.Timeout | null = null;
   private pdClient: PagerDutyClient;
   private io: SocketIOServer; // Socket.io server instance for emitting updates
   
   // Queues for batching API calls
-  private pendingAcks: Set<string> = new Set();
-  private pendingResolves: Set<string> = new Set();
-  private priorities: any[] = []; // Cache for Priority IDs
-  private onCallCache = new Map<string, { emails: string[], expires: number }>();
+  private pendingAcks: Set<string> = new Set<string>();
+  private pendingResolves: Set<string> = new Set<string>();
+  private priorities: PdPriority[] = []; // Cache for Priority IDs
+  private onCallCache = new Map<string, { emails: string[]; expires: number }>();
   private pendingMerges: { targetDedupKey: string; sourceDedupKeys: string[]; createdAt: number; note: string }[] = [];
 
-  constructor(userId: string, config: SimulationConfig, credentials: any, io: SocketIOServer) {
+  constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
     this.userId = userId;
-    this.config = config;
+    this.config = this.normalizeConfig(config);
     this.credentials = credentials;
     this.io = io;
 
@@ -66,16 +75,16 @@ export class SimulationInstance {
       log: [],
       monitorTrend: [],
       metrics: {
-        avgMtta: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
-        avgMttr: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+        avgMtta: createEmptySeverityMetrics(),
+        avgMttr: createEmptySeverityMetrics(),
         apiRpm: 0,
         apiCallsLast60s: 0,
         droppedEvents: 0,
       },
-      _mttaSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
-      _mttaCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
-      _mttrSums: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
-      _mttrCounts: { global: 0, info: 0, warning: 0, error: 0, critical: 0 },
+      _mttaSums: createEmptySeverityMetrics(),
+      _mttaCounts: createEmptySeverityMetrics(),
+      _mttrSums: createEmptySeverityMetrics(),
+      _mttrCounts: createEmptySeverityMetrics(),
       _apiCallTimestamps: [],
       _lastRpmCheck: 0,
       _lastPollCheck: 0,
@@ -84,21 +93,42 @@ export class SimulationInstance {
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      apiBase: process.env.PD_API_BASE || 'https://api.pagerduty.com',
+      apiBase: serverConfig.pdApiBase,
     });
     
     // Seed payload registry on creation
     payloadRegistry.list();
   }
 
-  updateCredentials(credentials: any) {
+  private normalizeSourceMix(sourceMix: SourceMix | Partial<SourceMix> | undefined): SourceMix {
+    return { ...DEFAULT_SOURCE_MIX, ...(sourceMix || {}) };
+  }
+
+  private normalizeConfig(config: SimulationConfig): SimulationConfig {
+    const filteredServices = (config.selectedServices || []).filter((svc) => svc.include);
+    return {
+      ...config,
+      selectedServices: filteredServices,
+      sourceMix: this.normalizeSourceMix(config.sourceMix),
+      severityConfigs: {
+        ...DEFAULT_SEVERITY_CONFIGS,
+        ...(config.severityConfigs || {}),
+      },
+    };
+  }
+
+  updateCredentials(credentials: SimulationCredentials) {
     this.credentials = credentials;
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      apiBase: process.env.PD_API_BASE || 'https://api.pagerduty.com',
+      apiBase: serverConfig.pdApiBase,
     });
     // this.addLog("Credentials updated.", 'info'); // Optional: log internally
+  }
+
+  updateConfig(config: SimulationConfig) {
+    this.config = this.normalizeConfig(config);
   }
 
   start() {
@@ -127,7 +157,7 @@ export class SimulationInstance {
       
       try {
           // 1. Render Payload with Faker (Fast & Dumb)
-          const payload = fakerService.generatePayload(template.template) as any;
+          const payload = fakerService.generatePayload(template.template) as GeneratedPayload;
           
           // 2. Determine Routing Key
           // Use Service-level Integration Key if provided, else Global Key
@@ -205,9 +235,10 @@ export class SimulationInstance {
           this.addLog(`Director Mode: Triggered '${template.name}'`, 'info');
           this.emitState();
 
-      } catch (e: any) {
+      } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Unknown error';
           console.error("Full Trigger Error:", e);
-          this.addLog(`Director Trigger Failed: ${e.message}`, 'error');
+          this.addLog(`Director Trigger Failed: ${message}`, 'error');
           throw e; // Re-throw to API
       }
   }
@@ -697,12 +728,12 @@ export class SimulationInstance {
           }
       }
       // Find priority starting with label (e.g. "P1")
-      const match = this.priorities.find((p: any) => p.name.startsWith(labelPrefix));
+      const match = this.priorities.find((p) => p.name.startsWith(labelPrefix));
       return match ? match.id : null;
   }
 
   // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---
-  public async triggerIncident(service: Service, failureContext: any = null) {
+  public async triggerIncident(service: Service, failureContext: FailureContext | null = null) {
     console.log('ServerSimulationEngine: Attempting to trigger incident for service', service.name);
     const { globalRoutingKey } = this.credentials;
     const { severityWeights, burstProbability, majorIncidentProbability } = this.config;
@@ -748,7 +779,7 @@ export class SimulationInstance {
       // Suppress info alerts from active tracking, but send them to PD
     }
 
-    const dedupKey = failureContext?.preGeneratedDedupKey || failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
+    const dedupKey = failureContext?.preGeneratedDedupKey ?? (failureContext ? undefined : crypto.randomUUID()); // Allow PD to assign when campaign context exists
 
     const baseEventBody = {
       routing_key: globalRoutingKey,
@@ -996,11 +1027,11 @@ export class SimulationManager {
     return this.instances.get(userId);
   }
 
-  createOrUpdate(userId: string, config: SimulationConfig, credentials: any) {
+  createOrUpdate(userId: string, config: SimulationConfig, credentials: SimulationCredentials) {
     console.log(`SimulationManager: createOrUpdate for ${userId}`, { hasCreds: !!credentials, hasKey: !!credentials?.globalRoutingKey });
     let instance = this.instances.get(userId);
     if (instance) {
-        instance.config = config; // Update config if already running
+        instance.updateConfig(config); // Update config if already running
         instance.updateCredentials(credentials);
     } else {
         instance = new SimulationInstance(userId, config, credentials, this.io);

@@ -4,9 +4,10 @@ import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 import { encrypt, decrypt } from '../utils/crypto';
 import { authenticateUser, AuthRequest } from '../middleware/auth';
+import { serverConfig } from '../config';
 
 const router = Router();
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const client = new OAuth2Client(serverConfig.googleClientId);
 
 router.post('/google', async (req, res) => {
   const { idToken } = req.body;
@@ -15,7 +16,7 @@ router.post('/google', async (req, res) => {
   try {
     const ticket = await client.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: serverConfig.googleClientId,
     });
     const payload = ticket.getPayload();
     if (!payload) throw new Error('Invalid token payload');
@@ -32,13 +33,13 @@ router.post('/google', async (req, res) => {
 
     const sessionToken = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET || 'dev-secret-key-change-me', 
+      serverConfig.jwtSecret, 
       { expiresIn: '7d' }
     );
 
     res.cookie('token', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: serverConfig.isProduction,
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
@@ -60,7 +61,7 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-key-change-me') as any;
+        const decoded = jwt.verify(token, serverConfig.jwtSecret) as { userId: string };
         const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
         if (!user) return res.status(401).json({ error: 'User not found' });
 
@@ -97,7 +98,7 @@ router.get('/me', async (req, res) => {
         });
         
         // DEV ONLY: Bypass Google Auth
-        if (process.env.NODE_ENV !== 'production') {
+        if (!serverConfig.isProduction) {
           router.post('/dev-login', async (req, res) => {
             try {
               const email = 'dev@localhost';
@@ -116,7 +117,7 @@ router.get('/me', async (req, res) => {
         
               const sessionToken = jwt.sign(
                 { userId: user.id, email: user.email },
-                process.env.JWT_SECRET || 'dev-secret-key-change-me', 
+                serverConfig.jwtSecret, 
                 { expiresIn: '7d' }
               );
         

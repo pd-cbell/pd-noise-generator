@@ -1,14 +1,10 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
-console.log("Environment Loaded. GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
-
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import { serverConfig } from './config';
 import proxyRouter from './routes/proxy';
 import profilesRouter from './routes/profiles';
 import campaignsRouter from './routes/campaigns';
@@ -18,11 +14,11 @@ import simulationRouter from './routes/simulation';
 import authRouter from './routes/auth';
 import { SimulationManager } from './services/ServerSimulationEngine';
 
-dotenv.config();
+console.log("Environment Loaded. GEMINI_API_KEY present:", serverConfig.geminiApiKeyPresent);
 
 const app = express();
 const server = http.createServer(app);
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL = serverConfig.clientUrl;
 
 app.use(cors({
   origin: CLIENT_URL,
@@ -43,16 +39,16 @@ io.use((socket, next) => {
   const cookieHeader = socket.handshake.headers.cookie;
   if (!cookieHeader) return next(new Error('Authentication error'));
   
-  const cookies = cookieHeader.split(';').reduce((res, item) => {
+  const cookies = cookieHeader.split(';').reduce<Record<string, string>>((res, item) => {
       const data = item.trim().split('=');
       return { ...res, [data[0]]: data[1] };
-  }, {} as any);
+  }, {});
 
   const token = cookies['token'];
   if (!token) return next(new Error('Authentication error'));
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-key-change-me');
+    const decoded = jwt.verify(token, serverConfig.jwtSecret);
     socket.data.user = decoded;
     next();
   } catch (err) {
@@ -113,7 +109,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = serverConfig.port;
 
 app.use('/proxy', proxyRouter);
 app.use('/api/profiles', profilesRouter);
