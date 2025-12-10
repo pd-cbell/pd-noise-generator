@@ -5,6 +5,11 @@
 ## Summary
 Refined the "Agentic Campaign Builder" to adopt a "PagerDuty Principal Solution Consultant" persona and implemented a robust dual-provider AI architecture (Gemini 2.5 + GPT-5.1) using LangGraph.
 
+## Latest Fixes (Webhook Campaign Execution)
+- Hardened the webhook campaign executor: supports nested payloads with `payload` wrappers, preserves `client`/`client_url`, and adds summary/severity fallbacks to satisfy PD Events API.
+- Routing key resolution now prioritizes step overrides → campaign default → webhook headers/body → env defaults.
+- Added detailed step-level logging so webhook-triggered campaigns surface successes/failures in the sim log and server console.
+
 ## Key Changes
 
 ### 1. Agent Architecture (Server)

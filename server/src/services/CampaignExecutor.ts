@@ -53,7 +53,9 @@ export class CampaignExecutor {
 
   private async executeStep(item: CampaignItem, campaign: Campaign) {
     const rawPayload = item.payload as any;
-    const payload = TemplateParser.parseObject(rawPayload);
+    const parsed = TemplateParser.parseObject(rawPayload || {});
+    const { payload: nestedPayload, client, client_url, ...rest } = parsed as any;
+    const payload = (nestedPayload && typeof nestedPayload === "object") ? nestedPayload : parsed;
     const stepLabel = item.stepName || item.id;
 
     // PagerDuty requires a non-empty summary; add a fallback if missing/blank.
@@ -66,7 +68,8 @@ export class CampaignExecutor {
       ...(payload.custom_details || {}),
       pdns_webhook: true,
       campaign: campaign.name,
-      step: stepLabel
+      step: stepLabel,
+      ...rest
     };
 
     const eventType = (item.eventType || '').toLowerCase();
@@ -90,6 +93,8 @@ export class CampaignExecutor {
         payload: {
           ...payload,
           source: payload.source || 'pd-noise-simulator-webhook',
+          client,
+          client_url,
         }
       };
 

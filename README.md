@@ -15,6 +15,7 @@ A full-stack, multi-user application for generating realistic incident noise aga
 - **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.
 - **Lifecycle Automation:** Auto-Acknowledge and Auto-Resolve incidents based on severity targets.
 - **Campaign Engine:** Design complex failure scenarios (Alerts + Change Events) with a visual editor.
+- **Webhook-Triggered Campaigns:** Import or build campaigns and trigger them via secure webhooks with campaign-level or per-step routing keys.
 - **Zero-Config Webhooks:** Trigger campaigns from CI/CD pipelines using secure, token-less magic links.
 - **Event Bursts:** Simulate "Event Storms" with compressed alert bursts.
 

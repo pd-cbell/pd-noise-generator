@@ -316,3 +316,25 @@
 2. Introduce request caching + debounced responder/note triggers.
 3. Add logging/telemetry so presenters can see when they approach the cap.
 4. Ship in v1.3.4 once validated against a 500 rpm demo run.
+
+---
+
+# Session Notes (Webhook Campaign Execution Fix)
+
+**Date:** 2025-12-09  
+**Facilitator:** Bugbash Task Force
+
+## Goals
+- Ensure webhook-triggered campaigns send all steps reliably with clear feedback.
+
+## Completed Tasks
+- Campaign executor now supports nested `payload` objects (common in imported bundles) and preserves `client`/`client_url`.
+- Added summary and severity fallbacks to satisfy the PD Events API.
+- Routing key resolution order clarified: step override → campaign default → webhook header/body → env defaults.
+- Step-level logging added to the server console and simulation log for webhook runs; executor errors surface clearly.
+
+## Verification
+- Webhook trigger returns 202 and steps log as they send; PD 400s for missing severity/summary are addressed by defaults.
+
+## Next Steps
+- Consider UI surfacing of webhook-triggered campaign history and last-run status.
