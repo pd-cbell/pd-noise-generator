@@ -175,3 +175,40 @@ export interface SimulationConfig {
   selectedServices: Service[]; // Backend needs full service objects to trigger
   selectedTeamIds: string[]; // New: Restrict personas to these teams
 }
+
+// For Phase 4 - Narrative & Session UX (defining Beat now as it's part of GoldenDemo configJson)
+export interface Beat {
+  id: string;
+  title: string;
+  description: string;
+  whatToShowInPagerDuty: string;
+  whatToSay: string;
+  approxTimingSec?: number;
+}
+
+// GoldenDemoConfig is the structure stored inside GoldenDemo.configJson
+export interface GoldenDemoConfig {
+  name: string;
+  description: string;
+  items: any[]; // CampaignItem[] - Loosely typed for now, can be more specific
+  beats?: Beat[]; // Array of narrative beats
+}
+
+// Prisma Client already generates a type for GoldenDemo, but defining an interface
+// here can sometimes be useful for explicit typing in frontend/shared contexts
+// For server-side, using `import { GoldenDemo } from '@prisma/client';` is usually sufficient.
+// However, for consistency and clear definition of its expected content,
+// especially configJson's internal structure, defining it here helps.
+export interface GoldenDemo {
+  id: string;
+  name: string;
+  vertical: string;
+  maturityLevel: string;
+  narrative: string;
+  configJson: GoldenDemoConfig; // Use the specific config structure
+  personaNotes?: string;
+  createdByUserId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+

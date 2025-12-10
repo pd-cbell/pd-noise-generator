@@ -27,6 +27,7 @@ model User {
 
   profiles      Profile[]
   campaigns     Campaign[]
+  goldenDemos   GoldenDemo[] // Inverse relation for GoldenDemo
 }
 
 model Profile {
@@ -114,4 +115,20 @@ model PayloadTemplate {
   serviceId   String
   service     Service  @relation(fields: [serviceId], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model GoldenDemo {
+  id              String    @id @default(uuid())
+  name            String
+  vertical        String
+  maturityLevel   String
+  narrative       String
+  configJson      Json      // Stores the full simulation configuration, including beats
+  personaNotes    String?
+  createdByUserId String
+  user            User      @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([name, createdByUserId]) // Ensure unique name per user
 }

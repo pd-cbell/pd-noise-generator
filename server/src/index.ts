@@ -9,10 +9,14 @@ import proxyRouter from './routes/proxy';
 import profilesRouter from './routes/profiles';
 import campaignsRouter from './routes/campaigns';
 import taxonomyRouter from './routes/taxonomy';
-import agentRouter from './routes/agent';
+import createAgentRouter from './routes/agent'; // Renamed import
 import simulationRouter from './routes/simulation';
 import authRouter from './routes/auth';
+import goldenDemosRouter from './routes/goldenDemos';
 import { SimulationManager } from './services/ServerSimulationEngine';
+import { GoldenDemoService } from './services/GoldenDemoService'; // New import
+import { AgentService } from './services/AgentService'; // New import
+import prisma from './prisma'; // New import for prisma client
 
 console.log("Environment Loaded. GEMINI_API_KEY present:", serverConfig.geminiApiKeyPresent);
 
@@ -59,6 +63,9 @@ io.use((socket, next) => {
 // Create the singleton instance
 const simulationManager = new SimulationManager(io);
 export { simulationManager };
+
+const goldenDemoService = new GoldenDemoService(prisma); // Instantiate GoldenDemoService
+const agentService = new AgentService(goldenDemoService); // Instantiate AgentService with GoldenDemoService
 
 io.on('connection', (socket) => {
   const userId = socket.data.user.userId;
@@ -115,9 +122,10 @@ app.use('/proxy', proxyRouter);
 app.use('/api/profiles', profilesRouter);
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/taxonomy', taxonomyRouter);
-app.use('/api/agent', agentRouter);
+app.use('/api/agent', createAgentRouter(agentService));
 app.use('/api/simulation', simulationRouter);
 app.use('/auth', authRouter);
+app.use('/api/golden-demos', goldenDemosRouter); // New route
 
 app.get('/', (req, res) => {
   res.send('PD Noise Simulator API is running!');

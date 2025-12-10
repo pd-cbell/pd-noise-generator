@@ -3,21 +3,35 @@ import { ChatOpenAI } from "@langchain/openai";
 import { StateGraph, END, START } from "@langchain/langgraph";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { z } from "zod";
+import { GoldenDemoService } from "./GoldenDemoService"; // New import
+import { GoldenDemo } from "@prisma/client"; // New import
 
 // --- State Definition ---
 interface AgentState {
   userRequest: string;
   planSummary?: string;
-  finalCampaign?: any;
+  finalCampaign?: any; // This will become part of GoldenDemo.configJson
+  goldenDemoMetadata?: Partial<GoldenDemo>; // New field to hold GoldenDemo related data
   provider?: 'google' | 'openai';
   // New High-Control Fields
   availableServices?: any[]; 
   eventCount?: number;
   changeCount?: number;
+  // Metadata for GoldenDemo creation
+  goldenDemoName?: string;
+  goldenDemoVertical?: string;
+  goldenDemoMaturityLevel?: string;
+  goldenDemoPersonaNotes?: string;
+  createdByUserId?: string;
 }
 
 // --- Agent Service ---
 export class AgentService {
+  private goldenDemoService: GoldenDemoService;
+
+  constructor(goldenDemoService: GoldenDemoService) {
+    this.goldenDemoService = goldenDemoService;
+  }
   
   private getModel(provider: 'google' | 'openai', type: 'fast' | 'smart') {
       if (provider === 'openai') {
@@ -130,11 +144,16 @@ export class AgentService {
     `;
 
     try {
-        let campaign: any;
+        let goldenDemoOutput: any;
 
-        if (provider === 'openai') {
-            // Use Structured Outputs for robustness
-            const schema = z.object({
+        // Define the schema for the full GoldenDemo output
+        const goldenDemoOutputSchema = z.object({
+            name: z.string().describe("The name of the Golden Demo scenario (e.g., 'Black Friday Checkout Failure')"),
+            vertical: z.string().describe("The industry vertical this demo targets (e.g., 'Retail', 'FinServ', 'Healthcare')"),
+            maturityLevel: z.enum(['Reactive', 'Proactive', 'Preventative']).describe("The PagerDuty Operations Cloud maturity level demonstrated (Reactive, Proactive, Preventative)"),
+            narrative: z.string().describe("The full 4-stage Golden Demo narrative, including Signal, Impact, Triage, and Resolution phases, tailored to the user's request."),
+            personaNotes: z.string().optional().describe("Internal notes for the presenter about personas, key talking points, or setup."),
+            configJson: z.object({ // This will contain the actual campaign structure
                 name: z.string().describe("The name of the campaign"),
                 description: z.string().describe("A brief description of the scenario"),
                 items: z.array(z.object({
@@ -153,10 +172,13 @@ export class AgentService {
                     }).passthrough().describe("The PagerDuty event payload"),
                     slackMessageTemplate: z.string().optional()
                 }))
-            });
+            })
+        });
 
-            const structuredModel = (model as ChatOpenAI).withStructuredOutput(schema);
-            campaign = await structuredModel.invoke(basePrompt);
+        if (provider === 'openai') {
+            // Use Structured Outputs for robustness
+            const structuredModel = (model as ChatOpenAI).withStructuredOutput(goldenDemoOutputSchema);
+            goldenDemoOutput = await structuredModel.invoke(basePrompt);
 
         } else {
             // Google / Prompt Engineering Fallback
@@ -166,40 +188,50 @@ export class AgentService {
                     7. **Routing:** You MUST include the field \`service_name\` inside the \`payload.custom_details\` object for EVERY event. The value MUST match the \`service\` name exactly.
               
                     **Output Format:**
-                    The output must be a valid JSON object matching this structure:
-                    { 
-                      "name": "Scenario Name", 
-                      "description": "Brief description", 
-                      "items": [
-                        { 
-                          "stepName": "High Latency Alert",
-                          "service": "Checkout Service",
-                          "delaySeconds": 0, 
-                          "repeatCount": 1, 
-                          "eventType": "incident", 
-                          "severity": "error", 
-                          "payload": { 
-                            "summary": "...", 
-                            "source": "...", 
-                            "custom_details": {
-                               "service_name": "Checkout Service",
-                               "other_field": "..."
-                            } 
-                          },
-                          "slackMessageTemplate": "Slack alert..."
-                        }
-                      ] 
-                    }
+                    The output must be a valid JSON object matching this exact structure, including all GoldenDemo metadata fields:
+                    ${JSON.stringify(
+                        {
+                            name: "Generated Golden Demo Name",
+                            vertical: "Target Vertical",
+                            maturityLevel: "Reactive|Proactive|Preventative",
+                            narrative: "The detailed 4-stage narrative.",
+                            personaNotes: "Notes for the presenter.",
+                            configJson: { // This is the campaign config
+                                name: "Campaign Name",
+                                description: "Campaign Description",
+                                items: [
+                                    { 
+                                        stepName: "Step Name",
+                                        service: "Service Name",
+                                        delaySeconds: 0, 
+                                        repeatCount: 1, 
+                                        eventType: "incident", 
+                                        severity: "error", 
+                                        payload: { 
+                                            summary: "Summary", 
+                                            source: "Source", 
+                                            custom_details: {
+                                                service_name: "Service Name"
+                                            } 
+                                        },
+                                        slackMessageTemplate: "Slack alert..."
+                                    }
+                                ]
+                            }
+                        }, null, 2)}
                     
                     Output ONLY the raw JSON. No markdown fences.            `;
             
             const response = await model.invoke(prompt);
             let text = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
             text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-            campaign = JSON.parse(text);
+            goldenDemoOutput = JSON.parse(text);
         }
 
-        return { finalCampaign: campaign };
+        // Add createdByUserId from state
+        goldenDemoOutput.createdByUserId = state.createdByUserId;
+
+        return { goldenDemoMetadata: goldenDemoOutput }; // Return the full GoldenDemo object
     } catch (error: any) {
         console.error("Builder Node Failed:", error);
         throw new Error(`Builder failed (${provider}): ${error.message}`);
@@ -238,7 +270,14 @@ export class AgentService {
       services?: any[];
       eventCount?: number;
       changeCount?: number;
-  }): Promise<any> {
+      // GoldenDemo Metadata
+      goldenDemoName: string;
+      vertical: string;
+      maturityLevel: string;
+      narrative: string;
+      personaNotes?: string;
+      createdByUserId: string;
+  }): Promise<GoldenDemo> { // Changed return type to GoldenDemo
     // If no plan provided, we could optionally run the planner first.
     // But typically the UI passes the plan back. If not, we generate a quick one or skip.
     
@@ -250,10 +289,17 @@ export class AgentService {
             userRequest: null,
             planSummary: null,
             finalCampaign: null,
+            goldenDemoMetadata: null, // Ensure this channel is defined
             provider: null,
             availableServices: null,
             eventCount: null,
-            changeCount: null
+            changeCount: null,
+            goldenDemoName: null,
+            goldenDemoVertical: null,
+            goldenDemoMaturityLevel: null,
+            goldenDemoNarrative: null, // Add new channels for narrative
+            goldenDemoPersonaNotes: null,
+            createdByUserId: null,
         }
     })
       .addNode("builder", this.builderNode.bind(this))
@@ -268,12 +314,30 @@ export class AgentService {
         provider: params.provider || 'google',
         availableServices: params.services || [],
         eventCount: params.eventCount,
-        changeCount: params.changeCount
+        changeCount: params.changeCount,
+        goldenDemoName: params.goldenDemoName,
+        goldenDemoVertical: params.vertical,
+        goldenDemoMaturityLevel: params.maturityLevel,
+        goldenDemoNarrative: params.narrative,
+        goldenDemoPersonaNotes: params.personaNotes,
+        createdByUserId: params.createdByUserId,
     });
     
-    if (!result.finalCampaign) throw new Error("No campaign generated");
-    return result.finalCampaign;
+    if (!result.goldenDemoMetadata) throw new Error("No Golden Demo metadata generated");
+
+    // Persist the Golden Demo
+    const createdGoldenDemo = await this.goldenDemoService.createGoldenDemo({
+      name: result.goldenDemoMetadata.name,
+      vertical: result.goldenDemoMetadata.vertical,
+      maturityLevel: result.goldenDemoMetadata.maturityLevel,
+      narrative: result.goldenDemoMetadata.narrative,
+      configJson: result.goldenDemoMetadata.configJson || {},
+      personaNotes: result.goldenDemoMetadata.personaNotes,
+      createdByUserId: result.goldenDemoMetadata.createdByUserId,
+    });
+
+    return createdGoldenDemo;
   }
 }
 
-export const agentService = new AgentService();
+
