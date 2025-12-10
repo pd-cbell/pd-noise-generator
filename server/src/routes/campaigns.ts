@@ -3,6 +3,7 @@ import prisma from '../prisma';
 import { CampaignExecutor } from '../services/CampaignExecutor';
 import { authenticateUser, AuthRequest } from '../middleware/auth';
 import { simulationManager } from '../index';
+import { serverConfig } from '../config';
 
 const router = Router();
 
@@ -21,8 +22,26 @@ router.post('/:id/trigger', async (req, res) => {
       return res.status(404).json({ error: "Campaign not found" });
     }
 
-    const globalRoutingKey = (req.headers['x-pd-routing-key'] as string) || req.body.globalRoutingKey;
-    const changeRoutingKey = (req.headers['x-pd-change-routing-key'] as string) || req.body.changeRoutingKey;
+    const globalRoutingKey =
+      (req.headers['x-pd-routing-key'] as string) ||
+      req.body.globalRoutingKey ||
+      campaign.integrationKey ||
+      serverConfig.pdEventsRoutingKey;
+    const changeRoutingKey =
+      (req.headers['x-pd-change-routing-key'] as string) ||
+      req.body.changeRoutingKey ||
+      campaign.integrationKey ||
+      serverConfig.pdChangeEventsRoutingKey;
+
+    const hasIncidents = campaign.items.some((i) => i.eventType === 'incident');
+    const hasChangeEvents = campaign.items.some((i) => i.eventType === 'change');
+
+    if (hasIncidents && !globalRoutingKey) {
+      return res.status(400).json({ error: "Missing incident routing key (header, body, campaign default, env)" });
+    }
+    if (hasChangeEvents && !changeRoutingKey) {
+      return res.status(400).json({ error: "Missing change routing key (header, body, campaign default, env)" });
+    }
 
     // Try to find active simulation for this user to log progress
     if (!campaign.userId) {
@@ -36,7 +55,12 @@ router.post('/:id/trigger', async (req, res) => {
       changeRoutingKey
     }, instance);
     
-    executor.run(campaign).catch(err => console.error(`[Webhook] Execution failed for ${campaignId}:`, err));
+    executor.run(campaign).catch(err => {
+      console.error(`[Webhook] Execution failed for ${campaignId}:`, err);
+      if (instance) {
+        instance.addLog(`[Webhook] Execution failed for ${campaignId}: ${err.message}`, 'error');
+      }
+    });
 
     res.status(202).json({ 
       message: "Campaign execution started", 

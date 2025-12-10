@@ -54,13 +54,33 @@ export class CampaignExecutor {
   private async executeStep(item: CampaignItem, campaign: Campaign) {
     const rawPayload = item.payload as any;
     const payload = TemplateParser.parseObject(rawPayload);
-    
-    if (item.eventType === 'incident') {
+    const stepLabel = item.stepName || item.id;
+
+    // PagerDuty requires a non-empty summary; add a fallback if missing/blank.
+    const summaryFallback = stepLabel || campaign.name || 'PD Noise Simulator Campaign';
+    if (!payload.summary || String(payload.summary).trim().length === 0) {
+      payload.summary = summaryFallback;
+    }
+    // Add a small marker to help debugging webhook runs.
+    payload.custom_details = {
+      ...(payload.custom_details || {}),
+      pdns_webhook: true,
+      campaign: campaign.name,
+      step: stepLabel
+    };
+
+    const eventType = (item.eventType || '').toLowerCase();
+
+    if (eventType === 'incident' || eventType === 'alert') {
       // Priority: Item override > Campaign default > Webhook header/global
       const routingKey = item.integrationKey || campaign.integrationKey || this.config.globalRoutingKey;
 
       if (!routingKey) {
         throw new Error("Missing routing key for incident event (checked item, campaign default, webhook headers)");
+      }
+      // PagerDuty requires severity for incident events; default to error if missing.
+      if (!payload.severity || String(payload.severity).trim().length === 0) {
+        payload.severity = 'error';
       }
 
       const body = {
@@ -73,13 +93,15 @@ export class CampaignExecutor {
         }
       };
 
+      console.log(`[Executor] Sending incident "${stepLabel}" with key ${routingKey}`);
+      this.simInstance?.addLog(`Campaign: sending incident "${stepLabel}"`, 'info');
       await this.sendEvent('https://events.pagerduty.com/v2/enqueue', body);
       if (this.simInstance) {
           this.simInstance.state.totalEvents++;
-          this.simInstance.addLog(`Campaign: Fired incident step "${item.stepName}"`, 'info');
+          this.simInstance.addLog(`Campaign: Fired incident step "${stepLabel}"`, 'info');
       }
       
-    } else if (item.eventType === 'change') {
+    } else if (eventType === 'change') {
       // Priority: Item override > Campaign default > Webhook header/global
       const routingKey = item.integrationKey || campaign.integrationKey || this.config.changeRoutingKey;
       
@@ -95,11 +117,16 @@ export class CampaignExecutor {
         }
       };
 
+      console.log(`[Executor] Sending change "${stepLabel}" with key ${routingKey}`);
+      this.simInstance?.addLog(`Campaign: sending change "${stepLabel}"`, 'info');
       await this.sendEvent('https://events.pagerduty.com/v2/change/enqueue', body);
       if (this.simInstance) {
           this.simInstance.state.totalEvents++;
-          this.simInstance.addLog(`Campaign: Fired change step "${item.stepName}"`, 'info');
+          this.simInstance.addLog(`Campaign: Fired change step "${stepLabel}"`, 'info');
       }
+    } else {
+      console.warn(`[Executor] Skipping step "${stepLabel}" due to unsupported event type "${item.eventType}"`);
+      this.simInstance?.addLog(`Campaign: skipped step "${stepLabel}" (unsupported type ${item.eventType})`, 'warn');
     }
   }
 

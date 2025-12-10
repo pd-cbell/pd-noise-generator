@@ -21,6 +21,8 @@ export const serverConfig = {
   jwtSecret: resolvedJwtSecret,
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   pdApiBase: process.env.PD_API_BASE || 'https://api.pagerduty.com',
+  pdEventsRoutingKey: process.env.PD_EVENTS_ROUTING_KEY,
+  pdChangeEventsRoutingKey: process.env.PD_CHANGE_EVENTS_ROUTING_KEY,
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   geminiApiKeyPresent: Boolean(process.env.GEMINI_API_KEY),
   openAiApiKeyPresent: Boolean(process.env.OPENAI_API_KEY),
