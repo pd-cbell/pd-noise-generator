@@ -7,64 +7,36 @@ import { CampaignEditor } from './components/CampaignEditor';
 import { AgentBuilder } from './components/AgentBuilder';
 import { DirectorDashboard } from './components/DirectorDashboard';
 import GoldenDemoLibrary from './components/GoldenDemoLibrary'; // New Import
+import { PresenterDashboard } from './components/PresenterDashboard'; // New Import
 import { Login } from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import { useServerSimulation } from './hooks/useServerSimulation';
-import { ImportedCampaign } from './store/useStore';
+import { ImportedCampaign, useStore } from './store/useStore';
 
 function App() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); // New
+  const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); 
+  const { activeSessionId } = useStore(); // Get active session ID
   const [activePage, setActivePage] = useState('configure');
-  const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
-  const [agentBuiltCampaign, setAgentBuiltCampaign] = useState<Partial<ImportedCampaign> | undefined>(undefined);
   
-  // No longer using browser-side simulation engine directly here
+  // Auto-switch to presenter view when a session starts
+  React.useEffect(() => {
+      if (activeSessionId) {
+          setActivePage('presenter');
+      }
+  }, [activeSessionId]);
 
-  const handleNavigate = (page: string) => {
-    setEditingCampaignId(null); // Close editor when navigating away
-    setActivePage(page);
-  };
-
-  const handleEditCampaign = (campaignId: string | 'new') => {
-    setActivePage('campaigns'); // Ensure we're on the campaigns tab visually
-    setEditingCampaignId(campaignId);
-    setAgentBuiltCampaign(undefined); // Clear previous agent build
-  };
-
-  const handleCloseEditor = () => {
-    setEditingCampaignId(null);
-    setAgentBuiltCampaign(undefined);
-  };
-
-  const handleAgentBuildComplete = (campaignData: Partial<ImportedCampaign>) => {
-    setAgentBuiltCampaign(campaignData);
-    setActivePage('campaigns');
-    setEditingCampaignId('new');
-  };
-
-  if (isAuthLoading || isSimLoading) { // Check both auth and sim loading
-    return <div className="h-screen flex items-center justify-center text-gray-500">Loading Session...</div>;
-  }
-
-  if (!user) {
-    return <Login />;
-  }
-
-  return (
-    <div className="h-screen flex flex-col bg-gray-50 font-sans text-gray-900">
-      <Header 
-        activePage={activePage} 
-        onNavigate={handleNavigate} 
-        isSimRunning={isSimRunning} // Pass to Header
-      />
-      
+  const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
+  // ... rest of component
+  
+  // ...
       <main className="flex-1 overflow-auto relative">
         {activePage === 'configure' && <ConfigurationForm />}
         {activePage === 'monitor' && <MonitorDashboard />}
         {activePage === 'agent' && <AgentBuilder onBuildComplete={handleAgentBuildComplete} />}
         {activePage === 'director' && <DirectorDashboard />}
-        {activePage === 'golden-demos' && <GoldenDemoLibrary />} {/* New Golden Demo Library Page */}
+        {activePage === 'golden-demos' && <GoldenDemoLibrary />} 
+        {activePage === 'presenter' && <PresenterDashboard />} {/* New Presenter Page */}
         {activePage === 'campaigns' && (
           editingCampaignId ? (
             <CampaignEditor 

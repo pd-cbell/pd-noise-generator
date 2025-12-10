@@ -16,7 +16,7 @@ interface ServerSimulationState {
 interface SimulationContextType {
   currentSimState: ServerSimulationState | null;
   isSimRunning: boolean;
-  startSimulation: () => void;
+  startSimulation: (overrideConfig?: any) => void; // Updated signature
   stopSimulation: () => void;
   isLoading: boolean;
   ackIncident: (dedupKey: string) => void;
@@ -34,23 +34,35 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isSimRunning, setIsSimRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const startSimulation = useCallback(() => {
+  const startSimulation = useCallback((overrideConfig?: any) => {
     if (socketRef.current && user && credentials) {
       setIsLoading(true);
       const state = useStore.getState();
-      const simConfig = {
+      
+      // Use override config (Golden Demo) or current store config
+      const simConfig = overrideConfig || {
         ratePerMinute: state.ratePerMinute,
         severityWeights: state.severityWeights,
         autoHealConfig: state.autoHealConfig,
         resumeExistingEnabled: state.resumeExistingEnabled,
         sourceMix: state.sourceMix,
         burstProbability: state.burstProbability,
+        majorIncidentProbability: state.majorIncidentProbability,
+        responderAckRate: state.responderAckRate,
+        teamFailureProbability: state.teamFailureProbability,
         severityConfigs: state.severityConfigs,
         changeRoutingKey: state.campaignConfig.importedChangeRoutingKey,
         selectedServices: state.services.filter(svc => svc.include),
-        selectedTeamIds: state.selectedTeamIds, // New: Pass selected teams
+        selectedTeamIds: state.selectedTeamIds, 
       };
-      socketRef.current.emit('start_simulation', { config: simConfig, credentials });
+
+      // Merge pdRegion into credentials
+      const fullCredentials = {
+          ...credentials,
+          pdRegion: state.pdRegion
+      };
+
+      socketRef.current.emit('start_simulation', { config: simConfig, credentials: fullCredentials });
     }
   }, [user, credentials]);
 

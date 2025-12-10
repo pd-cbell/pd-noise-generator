@@ -87,13 +87,11 @@ export class SimulationInstance {
       _mttrCounts: createEmptySeverityMetrics(),
       _apiCallTimestamps: [],
       _lastRpmCheck: 0,
-      _lastPollCheck: 0,
-    };
-
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      apiBase: serverConfig.pdApiBase,
+      pdRegion: credentials.pdRegion, // Pass pdRegion here
+      apiBase: serverConfig.pdApiBase, // This will be overridden by pdRegion in PagerDutyClient constructor
     });
     
     // Seed payload registry on creation
@@ -122,7 +120,8 @@ export class SimulationInstance {
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      apiBase: serverConfig.pdApiBase,
+      pdRegion: credentials.pdRegion, // Pass pdRegion here
+      apiBase: serverConfig.pdApiBase, // This will be overridden by pdRegion in PagerDutyClient constructor
     });
     // this.addLog("Credentials updated.", 'info'); // Optional: log internally
   }
@@ -802,6 +801,18 @@ export class SimulationInstance {
       this.incrementApiCount();
       const response = await this.pdClient.triggerEvent(baseEventBody);
       let incidentDedupKey = response.dedup_key || dedupKey || 'unknown';
+
+      // --- ChatOps Persona Engine (v3.1) ---
+      const primaryTeam = service.teams?.[0]; // Assuming the first team is the primary for simplicity
+      if (parsedPayload.slackMessageTemplate && primaryTeam && primaryTeam.persona) {
+          const slackMessage = fakerService.getPersonaDrivenSlackMessage(
+              parsedPayload.slackMessageTemplate, 
+              primaryTeam.persona
+          );
+          integrationService.sendSlackMessage(slackMessage).catch(e =>
+              this.addLog(`Failed to send persona-driven Slack message: ${e.message}`, 'warn')
+          );
+      }
 
       if (severity !== 'info') {
         const now = Date.now();

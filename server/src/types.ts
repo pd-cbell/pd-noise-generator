@@ -56,7 +56,7 @@ export interface Service {
   id: string;
   name: string;
   html_url?: string;
-  teams: { id: string; name: string }[];
+  teams: { id: string; name: string; persona?: string }[]; // Updated: include persona
   changeIntegrations: any[];
   include: boolean;
 }
@@ -127,6 +127,7 @@ export interface SimulationCredentials {
   apiToken: string;
   fromEmail: string;
   globalRoutingKey: string;
+  pdRegion?: string; // New: PagerDuty region (e.g., "US", "EU")
 }
 
 export interface SimulationLogEntry {

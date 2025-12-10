@@ -156,6 +156,14 @@ export class AgentService {
             configJson: z.object({ // This will contain the actual campaign structure
                 name: z.string().describe("The name of the campaign"),
                 description: z.string().describe("A brief description of the scenario"),
+                beats: z.array(z.object({
+                    id: z.string().describe("Unique ID for the beat"),
+                    title: z.string().describe("Short title of the beat (e.g., 'Signal Detected')"),
+                    description: z.string().describe("Description of what is happening in this stage"),
+                    whatToShowInPagerDuty: z.string().describe("Instruction on what specific screen/tab to show in PagerDuty (e.g., 'Show the Service Directory')"),
+                    whatToSay: z.string().describe("Script for the presenter to say"),
+                    approxTimingSec: z.number().optional()
+                })).describe("3-5 narrative beats for the presenter script"),
                 items: z.array(z.object({
                     stepName: z.string(),
                     service: z.string().describe("The name of the service affected (e.g. 'Checkout API')"),
@@ -186,6 +194,7 @@ export class AgentService {
               ${basePrompt}
 
                     7. **Routing:** You MUST include the field \`service_name\` inside the \`payload.custom_details\` object for EVERY event. The value MUST match the \`service\` name exactly.
+                    8. **Beats:** You MUST generate 3-5 'beats' for the presenter script. Each beat needs a title, description, 'whatToShowInPagerDuty', and 'whatToSay'.
               
                     **Output Format:**
                     The output must be a valid JSON object matching this exact structure, including all GoldenDemo metadata fields:
@@ -199,6 +208,16 @@ export class AgentService {
                             configJson: { // This is the campaign config
                                 name: "Campaign Name",
                                 description: "Campaign Description",
+                                beats: [
+                                    {
+                                        id: "1",
+                                        title: "Signal Detected",
+                                        description: "Initial alert arrives",
+                                        whatToShowInPagerDuty: "Service Activity screen",
+                                        whatToSay: "Here we see the noise...",
+                                        approxTimingSec: 60
+                                    }
+                                ],
                                 items: [
                                     { 
                                         stepName: "Step Name",

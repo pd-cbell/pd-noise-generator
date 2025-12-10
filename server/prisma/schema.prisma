@@ -11,67 +11,87 @@ datasource db {
 }
 
 model User {
+
   id            String    @id @default(cuid())
+
   email         String    @unique
+
   googleId      String    @unique
+
   name          String?
+
   avatarUrl     String?
+
+  pdRegion      String?   @default("US") // New: PagerDuty region for API endpoints (US/EU)
+
   
+
   // Encrypted Credentials
+
   encryptedPagerDutyApiToken String?
+
   encryptedGlobalRoutingKey  String?
+
   encryptedFromEmail         String?
 
+
+
   createdAt     DateTime  @default(now())
+
   updatedAt     DateTime  @updatedAt
 
+
+
   profiles      Profile[]
+
   campaigns     Campaign[]
+
   goldenDemos   GoldenDemo[] // Inverse relation for GoldenDemo
+
 }
 
 model Profile {
   id          String   @id @default(uuid())
   name        String
   description String?
-  settings    Json     // Stores the configuration object
+  settings    Json // Stores the configuration object
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 }
 
 model Campaign {
-  id          String         @id @default(cuid())
-  name        String
-  description String?
-  source      String?        // Optional: to track origin (e.g., filename)
-  integrationKey String?     // Campaign-level Incident Routing Key
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  items       CampaignItem[]
-  
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id])
+  id             String         @id @default(cuid())
+  name           String
+  description    String?
+  source         String? // Optional: to track origin (e.g., filename)
+  integrationKey String? // Campaign-level Incident Routing Key
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  items          CampaignItem[]
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
 }
 
 model CampaignItem {
-  id              String   @id @default(cuid())
-  campaignId      String
-  campaign        Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  order           Int      // To maintain execution sequence
-  
-  stepName        String?  // New: Optional name for the step
-  payload         Json     // Raw event payload
-  eventAction     String   @default("trigger")
-  eventType       String   @default("alert") // "alert" or "change"
-  dedupKey        String?
-  integrationKey  String?  // New: Optional override for change events
-  
-  delaySeconds    Int      @default(0)
-  repeatCount     Int      @default(1) // Renamed from 'times' for clarity
-  intervalSeconds Int      @default(0)
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  order      Int // To maintain execution sequence
+
+  stepName       String? // New: Optional name for the step
+  payload        Json // Raw event payload
+  eventAction    String  @default("trigger")
+  eventType      String  @default("alert") // "alert" or "change"
+  dedupKey       String?
+  integrationKey String? // New: Optional override for change events
+
+  delaySeconds    Int @default(0)
+  repeatCount     Int @default(1) // Renamed from 'times' for clarity
+  intervalSeconds Int @default(0)
 }
 
 // v2.0 Taxonomy Models
@@ -86,7 +106,7 @@ model Domain {
 model Team {
   id        String    @id @default(uuid())
   name      String
-  persona   String?   // e.g., "Stressed, technical, uses emojis"
+  persona   String? // ChatOps tone/persona: e.g., "Anxious", "Professional", "Casual", "Sarcastic"
   domainId  String
   domain    Domain    @relation(fields: [domainId], references: [id])
   services  Service[]
@@ -96,8 +116,8 @@ model Team {
 model Service {
   id                   String            @id @default(uuid())
   name                 String
-  integrationKey       String?           // PagerDuty Integration Key
-  changeIntegrationKey String?           // New: Specific key for Change Events
+  integrationKey       String? // PagerDuty Integration Key
+  changeIntegrationKey String? // New: Specific key for Change Events
   type                 String            @default("technical") // "technical" or "business"
   teamId               String
   team                 Team              @relation(fields: [teamId], references: [id])
@@ -106,15 +126,15 @@ model Service {
 }
 
 model PayloadTemplate {
-  id          String   @id @default(uuid())
-  name        String
-  description String?
-  template    String   // The JSON string containing {{faker...}} tokens
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String?
+  template             String // The JSON string containing {{faker...}} tokens
   slackMessageTemplate String? // ChatOps message template
-  isDraft     Boolean  @default(true)
-  serviceId   String
-  service     Service  @relation(fields: [serviceId], references: [id])
-  createdAt   DateTime @default(now())
+  isDraft              Boolean  @default(true)
+  serviceId            String
+  service              Service  @relation(fields: [serviceId], references: [id])
+  createdAt            DateTime @default(now())
 }
 
 model GoldenDemo {
@@ -127,8 +147,23 @@ model GoldenDemo {
   personaNotes    String?
   createdByUserId String
   user            User      @relation(fields: [createdByUserId], references: [id])
+  sessions        Session[] // Inverse relation for Session
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@unique([name, createdByUserId]) // Ensure unique name per user
+}
+
+model Session {
+  id                  String     @id @default(uuid())
+  goldenDemoId        String
+  goldenDemo          GoldenDemo @relation(fields: [goldenDemoId], references: [id], onDelete: Cascade)
+  name                String?    // e.g., "Demo for Acme Corp"
+  startedAt           DateTime   @default(now())
+  endedAt             DateTime?
+  metricsSnapshotJson Json?      // Stores MTTA, MTTR, Incident Counts at session end
+  notes               String?    // User notes for this specific run
+  createdByUserId     String?    // Optional: link to User who ran it
+  
+  @@index([goldenDemoId])
 }

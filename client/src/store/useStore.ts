@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; // Import the API service
-import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
+import { GoldenDemo, Session } from '../../../server/src/types'; // Import GoldenDemo and Session types
 import { 
   PayloadAdapter, ImportedCampaign, CampaignItem,
   payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
@@ -20,6 +20,7 @@ export interface Team {
   id: string;
   name: string;
   html_url?: string;
+  persona?: string; // New: ChatOps tone/persona
 }
 
 export interface ServiceIntegration {
@@ -191,6 +192,7 @@ export interface ConfigurationState {
   pdSubdomain: string;
   fromEmail: string;
   globalRoutingKey: string;
+  pdRegion: 'US' | 'EU'; // New: PagerDuty region
   selectedTeamIds: string[];
   selectedEPIds: string[];
   
@@ -254,6 +256,11 @@ interface AppState extends SimulationState, ConfigurationState {
   createGoldenDemo: (goldenDemo: Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>) => Promise<GoldenDemo>;
   updateGoldenDemo: (id: string, goldenDemo: Partial<Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>>) => Promise<GoldenDemo>;
   deleteGoldenDemo: (id: string) => Promise<void>;
+
+  // Session State (Phase 4.3)
+  activeSessionId: string | null;
+  startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) => Promise<void>;
+  endSession: (notes?: string) => Promise<void>;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -266,6 +273,7 @@ export const useStore = create<AppState>()(
       pdSubdomain: '',
       fromEmail: '',
       globalRoutingKey: '',
+      pdRegion: 'US', // Default to US
       selectedTeamIds: [],
       selectedEPIds: [],
       
@@ -325,6 +333,9 @@ export const useStore = create<AppState>()(
       // --- Golden Demo Slice Defaults ---
       goldenDemos: [],
       isLoadingGoldenDemos: false,
+
+      // --- Session Slice Defaults ---
+      activeSessionId: null,
 
       // --- Actions ---
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
@@ -509,28 +520,6 @@ export const useStore = create<AppState>()(
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
 
-      // --- Golden Demo Slice Defaults ---
-      goldenDemos: [],
-      isLoadingGoldenDemos: false,
-
-      // --- Actions ---
-      setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
-      setSettings: (settings) => set((state) => ({ ...state, ...settings })),
-      setSeverityConfig: (severity, config) => set((state) => ({
-        severityConfigs: {
-          ...state.severityConfigs,
-          [severity]: { ...state.severityConfigs[severity], ...config }
-        }
-      })),
-      setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
-      setSelectedEPIds: (ids) => set({ selectedEPIds: ids }),
-      setServiceInclude: (serviceId, include) => set((state) => ({
-        services: state.services.map(svc => 
-          svc.id === serviceId ? { ...svc, include } : svc
-        )
-      })),
-      // ... (rest of the existing actions) ...
-
       // --- Golden Demo Actions ---
       fetchGoldenDemos: async (vertical?: string) => {
         set({ isLoadingGoldenDemos: true });
@@ -579,6 +568,31 @@ export const useStore = create<AppState>()(
           throw error;
         }
       },
+
+      // --- Session Actions ---
+      startSession: async (data) => {
+        try {
+          const session = await api.startSession(data);
+          set({ activeSessionId: session.id });
+          get().addLog(`Session "${data.name || session.id}" started.`, 'info');
+        } catch (error: any) {
+          get().addLog(`Failed to start session: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      endSession: async (notes) => {
+        const { activeSessionId } = get();
+        if (!activeSessionId) return;
+        try {
+          await api.endSession(activeSessionId, notes);
+          set({ activeSessionId: null });
+          get().addLog('Session ended.', 'info');
+        } catch (error: any) {
+          get().addLog(`Failed to end session: ${error.message}`, 'error');
+          throw error;
+        }
+      },
     }),
     {
       name: 'pdns-storage', // Unique name for localStorage key
@@ -591,6 +605,7 @@ export const useStore = create<AppState>()(
         pdSubdomain: state.pdSubdomain,
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
+        pdRegion: state.pdRegion, // Persist pdRegion
         selectedTeamIds: state.selectedTeamIds,
         campaignConfig: state.campaignConfig,
         
@@ -611,634 +626,9 @@ export const useStore = create<AppState>()(
         // DO NOT persist goldenDemos or isLoadingGoldenDemos, they are fetched from backend
         // goldenDemos: state.goldenDemos, 
         // isLoadingGoldenDemos: state.isLoadingGoldenDemos,
-      }),
-    }
-  )
-);
-
-      addIncident: (incident) => set((state) => ({
-        activeIncidents: [incident, ...state.activeIncidents],
-      })),
-
-      updateIncident: (dedupKey, updates) => set((state) => ({
-        activeIncidents: state.activeIncidents.map(inc => 
-          inc.dedupKey === dedupKey ? { ...inc, ...updates } : inc
-        ),
-      })),
-
-      removeIncident: (dedupKey) => set((state) => ({
-        activeIncidents: state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey),
-      })),
-      
-      clearActiveIncidents: () => set({ activeIncidents: [] }),
-
-      addMonitorTrendData: (count) => set((state) => {
-        const nowTs = Date.now();
-        const windowStart = nowTs - TREND_WINDOW_MS;
-        const trimmed = state.monitorTrend.filter((point) => point.ts >= windowStart);
-        return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
-      }),
-
-      incrementApiCount: () => set((state) => ({ 
-        _apiCallCount: state._apiCallCount + 1,
-        _apiCallTimestamps: [...state._apiCallTimestamps, Date.now()]
-      })),
-
-      evalTick: async () => {
-        const { isManaging, activeIncidents, updateIncident, removeIncident, addLog, apiToken, fromEmail, severityConfigs, ackIncident, _lastRpmCheck, _apiCallCount, _apiCallTimestamps } = get();
         
-        if (!isManaging) return;
-
-        const now = Date.now();
-
-        // Prune old timestamps and calculate apiCallsLast60s
-        const oneMinuteAgo = now - 60000;
-        const recentTimestamps = _apiCallTimestamps.filter(timestamp => timestamp > oneMinuteAgo);
-        set({ _apiCallTimestamps: recentTimestamps, apiCallsLast60s: recentTimestamps.length });
-
-        // Update RPM every 5 seconds (Current RPM calculation based on last 5s burst)
-        if (now - _lastRpmCheck > 5000) {
-            // If first run, just set ts
-            if (_lastRpmCheck === 0) {
-                set({ _lastRpmCheck: now });
-            } else {
-                const elapsed = now - _lastRpmCheck;
-                const rpm = Math.round(_apiCallCount * (60000 / elapsed));
-                set({ apiRpm: rpm, _apiCallCount: 0, _lastRpmCheck: now });
-            }
-        }
-
-        // Periodic resolution of ID mapping (Rate limited to 2 per tick)
-        if (apiToken) {
-            const pendingCandidates = activeIncidents.filter(inc => 
-                !inc.incidentId &&
-                (
-                    (inc.mapAttempts === 0 && now - inc.startedAt > 10000) || // Attempt 0: Wait 10s
-                    (inc.mapAttempts === 1 && inc.lastMapAttemptAt && now - inc.lastMapAttemptAt > 30000) // Attempt 1: Wait 30s
-                )
-            );
-
-            for (const candidate of pendingCandidates.slice(0, 2)) {
-                try {
-                    const response = await api.getIncidentByDedupKey(candidate.dedupKey, { token: apiToken, fromEmail });
-                    const match = response.incidents?.[0];
-                    
-                    if (match) {
-                        updateIncident(candidate.dedupKey, { incidentId: match.id });
-                    } else {
-                        // Not found
-                        if (candidate.mapAttempts === 0) {
-                            // Retry later
-                            updateIncident(candidate.dedupKey, { mapAttempts: 1, lastMapAttemptAt: now });
-                        } else {
-                            // Drop
-                            removeIncident(candidate.dedupKey);
-                            set((state) => ({ droppedEvents: state.droppedEvents + 1 }));
-                            addLog(`Dropped incident ${candidate.dedupKey.substring(0, 8)} (Suppressed/Grouped)`, 'warn');
-                        }
-                    }
-                } catch (e) { 
-                    // Ignore transient API errors, try again next tick
-                }
-            }
-        }
-
-        // Sync checks for auto-resolve/heal and noise generation
-        for (const inc of activeIncidents) {
-          if (!inc.incidentId) continue;
-          
-          const config = severityConfigs[inc.severity];
-          if (!config) continue;
-
-          // Auto-Resolve Check
-          if (inc.resolveAt && now >= inc.resolveAt) {
-            const timeToResolve = now - inc.startedAt;
-            set((state) => {
-                const sev = inc.severity;
-                const newCounts = { ...state._mttrCounts };
-                const newSums = { ...state._mttrSums };
-                const newAvgs = { ...state.avgMttr };
-
-                newCounts.global++;
-                newSums.global += timeToResolve;
-                newAvgs.global = newSums.global / newCounts.global;
-
-                newCounts[sev]++;
-                newSums[sev] += timeToResolve;
-                newAvgs[sev] = newSums[sev] / newCounts[sev];
-
-                return { _mttrCounts: newCounts, _mttrSums: newSums, avgMttr: newAvgs };
-            });
-
-            removeIncident(inc.dedupKey);
-            addLog(`Auto-resolved incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
-            
-            try {
-                if (apiToken) {
-                    await api.addNote(inc.incidentId, `Auto-resolved by simulator (Duration: ${((now - inc.startedAt)/1000).toFixed(0)}s)`, { token: apiToken, fromEmail });
-                    await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
-                }
-            } catch (e) { /* ignore */ }
-            continue;
-          }
-          
-          // Auto-Heal Check (Warning only)
-          if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
-             const timeToResolve = now - inc.startedAt;
-             set((state) => {
-                const sev = inc.severity;
-                const newCounts = { ...state._mttrCounts };
-                const newSums = { ...state._mttrSums };
-                const newAvgs = { ...state.avgMttr };
-
-                newCounts.global++;
-                newSums.global += timeToResolve;
-                newAvgs.global = newSums.global / newCounts.global;
-
-                newCounts[sev]++;
-                newSums[sev] += timeToResolve;
-                newAvgs[sev] = newSums[sev] / newCounts[sev];
-
-                return { _mttrCounts: newCounts, _mttrSums: newSums, avgMttr: newAvgs };
-            });
-
-             removeIncident(inc.dedupKey);
-             addLog(`Auto-healed warning incident ${inc.dedupKey.substring(0, 8)}...`, 'info');
-             try {
-                if (apiToken) {
-                    await api.addNote(inc.incidentId, "Auto-healed by simulator (Warning suppression)", { token: apiToken, fromEmail });
-                    await api.manageIncident(inc.incidentId, fromEmail, 'resolve', apiToken);
-                }
-             } catch (e) { /* ignore */ }
-             continue;
-          }
-
-          // --- Stochastic Noise ---
-          
-          // Auto-Ack
-          if (!inc.acked && inc.autoAckAt && now >= inc.autoAckAt) {
-            ackIncident(inc.dedupKey);
-          }
-
-          // Add Notes
-          if (inc.acked && (!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < config.noteProbability) {
-             const note = inc.noteContext[Math.floor(Math.random() * inc.noteContext.length)] || "Investigating...";
-             try {
-                 await api.addNote(inc.incidentId, note, { token: apiToken, fromEmail });
-                 updateIncident(inc.dedupKey, { lastNoteAt: now });
-                 addLog(`Added note to ${inc.incidentId}: "${note}"`, 'info');
-             } catch (e) { /* ignore */ }
-          }
-          
-          // Request Responder
-          if (inc.acked && !inc.responderRequested && Math.random() < config.responderProbability) {
-            updateIncident(inc.dedupKey, { responderRequested: true });
-            addLog(`Simulating responder request for ${inc.incidentId}`, 'info');
-          }
-        }
-      },
-
-      triggerIncident: async (service: Service, failureContext: any = null) => {
-        const { sourceMix, globalRoutingKey, severityWeights, autoHealConfig, severityConfigs, burstProbability } = get();
-        
-        if (!globalRoutingKey) {
-          get().addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
-          return;
-        }
-
-        // Generate Payload
-        const { payload } = payloadGenerator.buildEvent({
-          service,
-          failure: failureContext,
-          sourceMix,
-        });
-
-        // Force service name match for routing
-        if (payload.custom_details) {
-          payload.custom_details.service_name = service.name;
-        } else {
-          payload.custom_details = { service_name: service.name };
-        }
-
-        // Determine Severity
-        const isMajor = failureContext?.isMajor || false;
-        const severity = (() => {
-            if (isMajor) return 'critical';
-            const rand = Math.random();
-            let cumulative = 0;
-            for (const [sev, weight] of Object.entries(severityWeights)) {
-                cumulative += weight;
-                if (rand < cumulative) return sev as IncidentSeverity;
-            }
-            return 'info';
-        })();
-
-        if (severity === 'info') {
-            // Suppress info alerts from active tracking, but send them to PD
-        }
-
-        const dedupKey = failureContext ? undefined : crypto.randomUUID(); // Let PD assign for campaigns if desired, or generate
-
-        const baseEventBody = {
-          routing_key: globalRoutingKey,
-          event_action: 'trigger',
-          dedup_key: dedupKey,
-          payload: {
-            ...payload,
-            severity,
-            source: payload.source || 'pd-noise-simulator',
-            component: payload.component || service.name,
-            custom_details: {
-              ...payload.custom_details,
-              generator: 'pd-noise-simulator',
-              sim_is_major: isMajor
-            }
-          }
-        };
-
-        try {
-          // --- Send initial event ---
-          const response = await api.triggerEvent(baseEventBody);
-          let incidentDedupKey = response.dedup_key || dedupKey || 'unknown';
-          
-          if (severity !== 'info') {
-             // Calculate timings based on severity config
-             const now = Date.now();
-             const config = severityConfigs[severity];
-             
-             // Major incidents take longer to resolve (2x - 5x)
-             const resolveMult = isMajor ? (Math.random() * 3 + 2) : 1;
-
-             const ackDelay = (Math.min(config.minAckSec, config.maxAckSec) + Math.random() * Math.abs(config.maxAckSec - config.minAckSec)) * 1000;
-             const resolveDelay = (Math.min(config.minResolveSec, config.maxResolveSec) + Math.random() * Math.abs(config.maxResolveSec - config.minResolveSec)) * 1000 * resolveMult;
-             
-             const shouldAutoHeal = !isMajor && severity === 'warning' && autoHealConfig.enabled && Math.random() < autoHealConfig.warningProbability;
-             const autoHealDelay = shouldAutoHeal 
-                ? (Math.min(autoHealConfig.minDelaySec, autoHealConfig.maxDelaySec) + Math.random() * Math.abs(autoHealConfig.maxDelaySec - autoHealConfig.minDelaySec)) * 1000 
-                : null;
-
-             const newIncident: Incident = {
-               dedupKey: incidentDedupKey,
-               serviceId: service.id,
-               serviceName: service.name,
-               startedAt: now,
-               incidentId: null,
-               mapAttempts: 0,
-               nextEvalAt: now + 10000,
-               ackAt: null,
-               autoAckAt: now + ackDelay,
-               acked: false,
-               firstResponderAt: null,
-               responderRequested: false,
-               lastNoteAt: null,
-               severity,
-               resolveAt: now + resolveDelay,
-               autoHealAt: autoHealDelay ? now + autoHealDelay : null,
-               autoHealScheduled: shouldAutoHeal,
-               observabilitySource: payload.source || 'unknown',
-               failureId: failureContext?.id || null,
-               failureSummary: failureContext?.summary || null,
-               noteContext: payload.noteTemplates || [],
-               syncedFromPd: false,
-               isMajor: isMajor
-             };
-             
-             get().addIncident(newIncident);
-             set((state) => ({ totalEvents: state.totalEvents + 1 }));
-             get().addLog(isMajor ? `MAJOR INCIDENT TRIGGERED for ${service.name}!` : `Triggered ${severity} incident for ${service.name}`, isMajor ? 'error' : 'info');
-          }
-
-          // --- Event Burst Logic (Async & Random) ---
-          if (severity !== 'info' && (isMajor || Math.random() < burstProbability)) {
-             // Randomize burst count (2 to 7) - higher for major
-             const burstCount = isMajor ? Math.floor(Math.random() * (10 - 5 + 1)) + 5 : Math.floor(Math.random() * (7 - 2 + 1)) + 2;
-             
-             // Non-blocking loop
-             (async () => {
-                 for (let i = 1; i < burstCount; i++) {
-                     // Randomize interval (10s to 40s)
-                     const intervalMs = (Math.floor(Math.random() * (40 - 10 + 1)) + 10) * 1000;
-                     await new Promise(r => setTimeout(r, intervalMs));
-                     
-                     // Check liveness: if resolved/removed, stop bursting
-                     const currentIncidents = get().activeIncidents;
-                     if (!currentIncidents.some(inc => inc.dedupKey === incidentDedupKey)) {
-                         return;
-                     }
-
-                     const burstEventBody = {
-                        ...baseEventBody,
-                        dedup_key: incidentDedupKey,
-                        payload: {
-                            ...baseEventBody.payload,
-                            custom_details: {
-                                ...baseEventBody.payload.custom_details,
-                                burst_event_num: i + 1,
-                            }
-                        }
-                      };
-                      
-                      // Fire burst event
-                      await api.triggerEvent(burstEventBody).catch(e => console.error("Burst event failed", e));
-                      set((state) => ({ totalEvents: state.totalEvents + 1 }));
-                      get().addLog(`Sent burst event ${i + 1}/${burstCount} for ${incidentDedupKey.substring(0, 8)}`, 'info');
-                 }
-             })();
-          }
-
-        } catch (error: any) {
-          get().addLog(`Failed to trigger incident: ${error.message}`, 'error');
-        }
-      },
-
-      ackIncident: async (dedupKey: string) => {
-        const { activeIncidents, apiToken, fromEmail, updateIncident, addLog } = get();
-        const incident = activeIncidents.find(i => i.dedupKey === dedupKey);
-        if (!incident || !incident.incidentId || !apiToken) return;
-
-        try {
-          await api.manageIncident(incident.incidentId, fromEmail, 'acknowledge', apiToken);
-          
-          // Update MTTA
-          const now = Date.now();
-          const timeToAck = now - incident.startedAt;
-          set((state) => {
-            const sev = incident.severity;
-            const newCounts = { ...state._mttaCounts };
-            const newSums = { ...state._mttaSums };
-            const newAvgs = { ...state.avgMtta };
-
-            // Update Global
-            newCounts.global++;
-            newSums.global += timeToAck;
-            newAvgs.global = newSums.global / newCounts.global;
-
-            // Update Severity
-            newCounts[sev]++;
-            newSums[sev] += timeToAck;
-            newAvgs[sev] = newSums[sev] / newCounts[sev];
-
-            return {
-              _mttaCounts: newCounts,
-              _mttaSums: newSums,
-              avgMtta: newAvgs
-            };
-          });
-
-          updateIncident(dedupKey, { acked: true, ackAt: now });
-          addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
-        } catch (e: any) {
-          addLog(`Failed to ack incident: ${e.message}`, 'error');
-        }
-      },
-
-      resolveIncident: async (dedupKey: string) => {
-        const { activeIncidents, apiToken, fromEmail, removeIncident, addLog } = get();
-        const incident = activeIncidents.find(i => i.dedupKey === dedupKey);
-        if (!incident || !incident.incidentId || !apiToken) return;
-
-        try {
-          await api.manageIncident(incident.incidentId, fromEmail, 'resolve', apiToken);
-          
-          // Update MTTR
-          const now = Date.now();
-          const timeToResolve = now - incident.startedAt;
-          set((state) => {
-            const sev = incident.severity;
-            const newCounts = { ...state._mttrCounts };
-            const newSums = { ...state._mttrSums };
-            const newAvgs = { ...state.avgMttr };
-
-            // Update Global
-            newCounts.global++;
-            newSums.global += timeToResolve;
-            newAvgs.global = newSums.global / newCounts.global;
-
-            // Update Severity
-            newCounts[sev]++;
-            newSums[sev] += timeToResolve;
-            newAvgs[sev] = newSums[sev] / newCounts[sev];
-
-            return {
-              _mttrCounts: newCounts,
-              _mttrSums: newSums,
-              avgMttr: newAvgs
-            };
-          });
-
-          removeIncident(dedupKey);
-          addLog(`Resolved incident ${incident.incidentId}`, 'info');
-        } catch (e: any) {
-          addLog(`Failed to resolve incident: ${e.message}`, 'error');
-        }
-      },
-
-      resolveAllIncidents: async () => {
-        const { activeIncidents, resolveIncident, addLog } = get();
-        addLog(`Resolving all ${activeIncidents.length} active incidents...`, 'info');
-        // Resolve in parallel
-        await Promise.all(activeIncidents.map(inc => resolveIncident(inc.dedupKey)));
-      },
-
-      setActiveProfile: (id) => set({ activeProfileId: id }),
-      
-      saveProfile: async (profileData) => {
-        const { profiles } = get();
-        const existing = profileData.id ? profiles.find(p => p.id === profileData.id) : null;
-        
-        try {
-          let savedProfile;
-          // Pass only the data the API expects (name, description, settings)
-          const apiPayload = {
-            name: profileData.name,
-            description: profileData.description,
-            settings: profileData.settings,
-          };
-
-          if (existing) {
-            savedProfile = await api.updateProfile(existing.id, apiPayload);
-            get().addLog(`Profile "${savedProfile.name}" updated.`, 'info');
-          } else {
-            savedProfile = await api.createProfile(apiPayload);
-            get().addLog(`Profile "${savedProfile.name}" created.`, 'info');
-          }
-          
-          // Refresh list
-          await get().fetchProfiles();
-          set({ activeProfileId: savedProfile.id });
-        } catch (error: any) {
-          get().addLog(`Failed to save profile: ${error.message}`, 'error');
-        }
-      },
-
-      deleteProfile: async (id) => {
-        try {
-          await api.deleteProfile(id);
-          get().addLog('Profile deleted.', 'info');
-          await get().fetchProfiles();
-          if (get().activeProfileId === id) {
-            set({ activeProfileId: null });
-          }
-        } catch (error: any) {
-          get().addLog(`Failed to delete profile: ${error.message}`, 'error');
-        }
-      },
-
-      createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
-        try {
-          // Transform payloadString back to payload JSON object for the backend
-          // And map 'times' to 'repeatCount'
-          const apiPayload = {
-            ...campaignData,
-            integrationKey: campaignData.integrationKey || '',
-            items: campaignData.items.map(item => {
-              let payload = {};
-              try {
-                payload = JSON.parse(item.payloadString || '{}');
-              } catch (e) {
-                console.error("Failed to parse payloadString for item", item.id);
-              }
-              return { 
-                  ...item, 
-                  payload,
-                  repeatCount: item.times || 1 // Map frontend 'times' to backend 'repeatCount'
-              };
-            })
-          };
-
-          const newCampaign = await api.createCampaign(apiPayload);
-          get().addLog(`Campaign "${newCampaign.name}" created.`, 'info');
-          await get().loadImportedCampaigns(); // Reload all campaigns
-          return newCampaign;
-        } catch (error: any) {
-          get().addLog(`Failed to create campaign: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
-        try {
-          // Transform payloadString back to payload JSON object for the backend
-          // And map 'times' to 'repeatCount'
-          const apiPayload = {
-            ...campaignData,
-            integrationKey: campaignData.integrationKey || '',
-            items: campaignData.items?.map(item => {
-              let payload = {};
-              try {
-                payload = JSON.parse(item.payloadString || '{}');
-              } catch (e) {
-                console.error("Failed to parse payloadString for item", item.id);
-              }
-              return { 
-                  ...item, 
-                  payload,
-                  repeatCount: item.times || 1 // Map frontend 'times' to backend 'repeatCount'
-              };
-            })
-          };
-
-          const updatedCampaign = await api.updateCampaign(id, apiPayload);
-          get().addLog(`Campaign "${updatedCampaign.name}" updated.`, 'info');
-          await get().loadImportedCampaigns(); // Reload all campaigns
-          return updatedCampaign;
-        } catch (error: any) {
-          get().addLog(`Failed to update campaign: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      deleteCampaign: async (id: string) => {
-        try {
-          await api.deleteCampaign(id);
-          get().addLog('Campaign deleted.', 'info');
-          await get().loadImportedCampaigns(); // Reload all campaigns
-        } catch (error: any) {
-          get().addLog(`Failed to delete campaign: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      // --- Golden Demo Actions ---
-      fetchGoldenDemos: async (vertical?: string) => {
-        set({ isLoadingGoldenDemos: true });
-        try {
-          const fetchedDemos = await api.getGoldenDemos(vertical);
-          set({ goldenDemos: fetchedDemos });
-          get().addLog(`Loaded ${fetchedDemos.length} Golden Demos.`, 'info');
-        } catch (error: any) {
-          get().addLog(`Failed to load Golden Demos: ${error.message}`, 'error');
-        } finally {
-          set({ isLoadingGoldenDemos: false });
-        }
-      },
-
-      createGoldenDemo: async (goldenDemoData) => {
-        try {
-          const newDemo = await api.createGoldenDemo(goldenDemoData);
-          get().addLog(`Golden Demo "${newDemo.name}" created.`, 'info');
-          get().fetchGoldenDemos(); // Refresh list
-          return newDemo;
-        } catch (error: any) {
-          get().addLog(`Failed to create Golden Demo: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      updateGoldenDemo: async (id, goldenDemoData) => {
-        try {
-          const updatedDemo = await api.updateGoldenDemo(id, goldenDemoData);
-          get().addLog(`Golden Demo "${updatedDemo.name}" updated.`, 'info');
-          get().fetchGoldenDemos(); // Refresh list
-          return updatedDemo;
-        } catch (error: any) {
-          get().addLog(`Failed to update Golden Demo: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      deleteGoldenDemo: async (id) => {
-        try {
-          await api.deleteGoldenDemo(id);
-          get().addLog('Golden Demo deleted.', 'info');
-          get().fetchGoldenDemos(); // Refresh list
-        } catch (error: any) {
-          get().addLog(`Failed to delete Golden Demo: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-    }),
-    {
-      name: 'pdns-storage', // Unique name for localStorage key
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        // Persist only configuration and profiles, not runtime state like logs or activeIncidents
-        profiles: state.profiles,
-        activeProfileId: state.activeProfileId,
-        apiToken: state.apiToken,
-        pdSubdomain: state.pdSubdomain,
-        fromEmail: state.fromEmail,
-        globalRoutingKey: state.globalRoutingKey,
-        selectedTeamIds: state.selectedTeamIds,
-        campaignConfig: state.campaignConfig,
-        
-        // Persist Simulation Settings
-        ratePerMinute: state.ratePerMinute,
-        severityWeights: state.severityWeights,
-        autoHealConfig: state.autoHealConfig,
-        resumeExistingEnabled: state.resumeExistingEnabled,
-        sourceMix: state.sourceMix,
-        burstProbability: state.burstProbability,
-        majorIncidentProbability: state.majorIncidentProbability,
-        responderAckRate: state.responderAckRate,
-        teamFailureProbability: state.teamFailureProbability,
-
-        // Persist Per-Severity Simulation Settings
-        severityConfigs: state.severityConfigs,
-        
-        // DO NOT persist goldenDemos or isLoadingGoldenDemos, they are fetched from backend
-        // goldenDemos: state.goldenDemos, 
-        // isLoadingGoldenDemos: state.isLoadingGoldenDemos,
+        // DO NOT persist session state
+        // activeSessionId: state.activeSessionId,
       }),
     }
   )

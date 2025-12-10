@@ -5,6 +5,7 @@ interface PagerDutyClientConfig {
   apiToken: string;
   fromEmail: string;
   apiBase?: string;
+  pdRegion?: string; // New: PagerDuty Region
 }
 
 export class PagerDutyClient {
@@ -14,8 +15,13 @@ export class PagerDutyClient {
   private readonly minRequestInterval: number = 200; // 5 requests per second max
 
   constructor(config: PagerDutyClientConfig) {
+    let apiBase = 'https://api.pagerduty.com';
+    if (config.pdRegion === 'EU') {
+        apiBase = 'https://api.eu.pagerduty.com';
+    }
+
     this.config = {
-      apiBase: 'https://api.pagerduty.com',
+      apiBase: apiBase, // Use determined apiBase
       ...config
     };
     // If we ever need proxy

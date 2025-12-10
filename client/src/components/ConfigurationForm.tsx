@@ -132,6 +132,18 @@ export const ConfigurationForm: React.FC = () => {
              />
           </div>
           <div>
+             <label htmlFor="pdRegion" className="block text-sm font-medium text-gray-700 mb-1">PagerDuty Region</label>
+             <select
+               id="pdRegion"
+               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+               value={useStore(state => state.pdRegion)}
+               onChange={(e) => setCredentials({ pdRegion: e.target.value as 'US' | 'EU' })}
+             >
+               <option value="US">US (api.pagerduty.com)</option>
+               <option value="EU">EU (api.eu.pagerduty.com)</option>
+             </select>
+          </div>
+          <div>
              <label htmlFor="apiToken" className="block text-sm font-medium text-gray-700 mb-1">REST API Token</label>
              <input 
                id="apiToken"

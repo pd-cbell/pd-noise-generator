@@ -3,6 +3,34 @@ import { faker } from '@faker-js/faker';
 export class FakerService {
   
   /**
+   * Generates a Slack message, potentially enhanced by a persona, and renders faker tokens.
+   */
+  public getPersonaDrivenSlackMessage(templateString: string, persona: string | null = null): string {
+    let message = templateString;
+
+    if (persona) {
+      switch (persona.toLowerCase()) {
+        case 'anxious':
+          message = `*Urgent!* :fearful: ${message} I'm really worried about this. Can someone *please* look?`;
+          break;
+        case 'professional':
+          message = `*Incident Update*: ${message} Please investigate and provide an ETA.`;
+          break;
+        case 'casual':
+          message = `Hey team, ${message} Looks like something's up. Anyone free to check it out? :man-shrugging:`;
+          break;
+        case 'sarcastic':
+          message = `*Surprise, surprise*! :eyeroll: ${message} Because we *totally* needed another one of these.`;
+          break;
+        default:
+          // Use original message if persona is unknown
+          break;
+      }
+    }
+    return this.renderString(message);
+  }
+
+  /**
    * Renders a string with {{faker...}} tokens.
    */
   public renderString(templateString: string): string {

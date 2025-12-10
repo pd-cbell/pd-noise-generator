@@ -271,6 +271,24 @@ export const api = {
       method: 'DELETE',
     }),
 
+  // --- Sessions ---
+  startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) =>
+    fetchFromProxy('/api/sessions/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+
+  endSession: (id: string, notes?: string) =>
+    fetchFromProxy(`/api/sessions/${id}/end`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
+    }),
+
+  getSessions: (goldenDemoId?: string) =>
+    fetchFromProxy(`/api/sessions${goldenDemoId ? `?goldenDemoId=${goldenDemoId}` : ''}`),
+
   // --- Director ---
   getTaxonomyTree: () => fetchFromProxy('/api/taxonomy/domains'),
   
