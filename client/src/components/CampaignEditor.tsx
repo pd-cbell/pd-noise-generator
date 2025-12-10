@@ -17,6 +17,9 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Only hydrate once per session to avoid clobbering in-progress edits during sim ticks
+    if (campaign) return;
+
     if (campaignId === 'new') {
       setIsNew(true);
       setCampaign({
@@ -28,17 +31,19 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
         items: [],
         ...initialData, // Override with initial data if provided
       });
-    } else {
-      setIsNew(false);
-      const existingCampaign = importedCampaigns.find(c => c.id === campaignId);
-      if (existingCampaign) {
-        setCampaign(existingCampaign);
-      } else {
-        addLog(`Campaign with ID ${campaignId} not found.`, 'error');
-        onClose();
-      }
+      return;
     }
-  }, [campaignId, importedCampaigns, addLog, onClose]);
+
+    setIsNew(false);
+    const existingCampaign = importedCampaigns.find(c => c.id === campaignId);
+    if (existingCampaign) {
+      setCampaign(existingCampaign);
+    } else {
+      addLog(`Campaign with ID ${campaignId} not found.`, 'error');
+      onClose();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId, importedCampaigns]);
 
   const toggleStep = (id: string) => {
     const newExpanded = new Set(expandedSteps);
