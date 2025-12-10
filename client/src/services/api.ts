@@ -164,6 +164,17 @@ export const api = {
       body: JSON.stringify(campaign),
     }),
 
+  triggerCampaign: (id: string, opts?: { routingKey?: string | null; changeRoutingKey?: string | null }) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (opts?.routingKey) headers['x-pd-routing-key'] = opts.routingKey;
+    if (opts?.changeRoutingKey) headers['x-pd-change-routing-key'] = opts.changeRoutingKey;
+
+    return fetchFromProxy(`/api/campaigns/${id}/trigger`, {
+      method: 'POST',
+      headers,
+    });
+  },
+
   deleteCampaign: (id: string) =>
     fetchFromProxy(`/api/campaigns/${id}`, {
       method: 'DELETE',

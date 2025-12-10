@@ -481,87 +481,19 @@ export const useStore = create<AppState>()(
       },
 
       triggerImportedCampaign: async (campaign: ImportedCampaign) => {
-        const { addLog, apiToken, globalRoutingKey, campaignConfig, setLastChangeEvent } = get();
-        addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps).`, 'info');
+        const { addLog, globalRoutingKey, campaignConfig } = get();
+        addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps) via webhook.`, 'info');
 
-        if (!apiToken) {
-          addLog('API Token is missing. Cannot trigger campaign.', 'error');
-          return;
+        const routingKey = campaign.integrationKey || globalRoutingKey || undefined;
+        const changeRoutingKey = campaign.integrationKey || campaignConfig.importedChangeRoutingKey || undefined;
+
+        try {
+          await api.triggerCampaign(campaign.id, { routingKey, changeRoutingKey });
+          addLog(`Webhook accepted for "${campaign.name}".`, 'info');
+        } catch (error: any) {
+          addLog(`Failed to trigger campaign "${campaign.name}": ${error.message}`, 'error');
+          throw error;
         }
-        const hasIncidents = campaign.items.some(item => item.eventType === 'incident');
-        const hasChanges = campaign.items.some(item => item.eventType === 'change');
-
-        if (!globalRoutingKey && !campaign.integrationKey && hasIncidents) {
-          addLog('No incident routing key available (global or campaign default). Cannot trigger incident events.', 'error');
-          return;
-        }
-        if (!campaignConfig.importedChangeRoutingKey && !campaign.integrationKey && hasChanges) {
-          addLog('No change routing key available (global imported change or campaign default). Cannot trigger change events.', 'error');
-          return;
-        }
-
-        for (const item of campaign.items) {
-          await new Promise(resolve => setTimeout(resolve, item.delaySeconds * 1000)); // Delay between campaign items
-
-          const fireEvent = async () => {
-            try {
-              const payload = JSON.parse(item.payloadString);
-              let response;
-              const incidentRoutingKey = item.integrationKey || campaign.integrationKey || globalRoutingKey;
-              const changeRoutingKey = item.integrationKey || campaign.integrationKey || campaignConfig.importedChangeRoutingKey;
-
-              if (item.eventType === 'incident') {
-                if (!incidentRoutingKey) {
-                  addLog(`Skipped incident step "${item.id}" due to missing routing key.`, 'warn');
-                  return;
-                }
-                const eventBody = {
-                  routing_key: incidentRoutingKey,
-                  event_action: item.eventAction || 'trigger',
-                  dedup_key: item.dedupKey || crypto.randomUUID(),
-                  payload: {
-                    ...payload,
-                    source: payload.source || 'pd-noise-simulator-campaign',
-                  }
-                };
-                response = await api.triggerEvent(eventBody);
-                addLog(`  -> Fired incident event for "${item.id}" (dedup: ${eventBody.dedup_key.substring(0,8)}).`, 'info');
-              } else if (item.eventType === 'change') {
-                if (!changeRoutingKey) {
-                  addLog(`Skipped change step "${item.id}" due to missing change routing key.`, 'warn');
-                  return;
-                }
-                const changeEventBody = {
-                  routing_key: changeRoutingKey,
-                  payload: {
-                    ...payload,
-                    source: payload.source || 'pd-noise-simulator-campaign',
-                  }
-                };
-                response = await api.triggerChangeEvent(changeEventBody);
-                addLog(`  -> Fired change event for "${item.id}".`, 'info');
-                // Store last change event for potential display on monitor
-                setLastChangeEvent({ 
-                  ts: Date.now(), 
-                  serviceName: payload.custom_details?.service_name || "Unknown", 
-                  failureSummary: payload.summary || payload.custom_details?.summary || "Campaign Change" 
-                });
-              }
-              set((state) => ({ totalEvents: state.totalEvents + 1 }));
-            } catch (error: any) {
-              addLog(`  -> Failed to fire event for "${item.id}": ${error.message}`, 'error');
-            }
-          };
-
-          // Fire the event/change event 'times' number of times with 'intervalSeconds' delay
-          for (let i = 0; i < (item.times || 1); i++) {
-            if (i > 0) {
-              await new Promise(resolve => setTimeout(resolve, item.intervalSeconds * 1000));
-            }
-            await fireEvent();
-          }
-        }
-        addLog(`Campaign "${campaign.name}" dispatched.`, 'info');
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
       

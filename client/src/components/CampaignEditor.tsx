@@ -14,6 +14,7 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
   const [isNew, setIsNew] = useState(campaignId === 'new');
   const [isLoading, setIsLoading] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (campaignId === 'new') {
@@ -47,6 +48,27 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
       newExpanded.add(id);
     }
     setExpandedSteps(newExpanded);
+  };
+
+  const handleDragStart = (id: string) => {
+    setDraggingId(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (targetId: string) => {
+    if (!campaign || !draggingId || draggingId === targetId) return;
+    const items = [...campaign.items];
+    const fromIdx = items.findIndex(i => i.id === draggingId);
+    const toIdx = items.findIndex(i => i.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    const [moved] = items.splice(fromIdx, 1);
+    items.splice(toIdx, 0, moved);
+    setCampaign({ ...campaign, items });
+    setDraggingId(null);
   };
 
   const handleSave = async () => {
@@ -221,6 +243,10 @@ export const CampaignEditor: React.FC<CampaignEditorProps> = ({ campaignId, init
                     <div 
                         className="bg-gray-50 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
                         onClick={() => toggleStep(item.id)}
+                        draggable
+                        onDragStart={() => handleDragStart(item.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={() => handleDrop(item.id)}
                     >
                         <div className="flex items-center gap-3">
                             <button className="text-gray-500">
