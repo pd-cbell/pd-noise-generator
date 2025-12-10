@@ -17,6 +17,16 @@ export class CampaignExecutor {
     this.simInstance = simInstance;
   }
 
+  private async runRepeats(item: CampaignItem, campaign: Campaign) {
+    const repeats = Math.max(1, item.repeatCount || 1);
+    for (let i = 0; i < repeats; i++) {
+      if (i > 0 && item.intervalSeconds > 0) {
+        await this.delay(item.intervalSeconds * 1000);
+      }
+      await this.executeStep(item, campaign);
+    }
+  }
+
   async run(campaign: Campaign & { items: CampaignItem[] }) {
     const msg = `[Executor] Starting campaign "${campaign.name}" via Webhook.`;
     console.log(msg);
@@ -31,20 +41,12 @@ export class CampaignExecutor {
         await this.delay(item.delaySeconds * 1000);
       }
 
-      // Repeat Loop
-      for (let i = 0; i < item.repeatCount; i++) {
-        if (i > 0 && item.intervalSeconds > 0) {
-          await this.delay(item.intervalSeconds * 1000);
-        }
-
-        try {
-          await this.executeStep(item, campaign);
-        } catch (error: any) {
-          const errMsg = `[Executor] Step "${item.stepName || item.id}" failed: ${error.message}`;
-          console.error(errMsg);
-          if (this.simInstance) this.simInstance.addLog(errMsg, 'error');
-        }
-      }
+      // Kick off repeats asynchronously so subsequent steps can start after their own delays.
+      this.runRepeats(item, campaign).catch((error) => {
+        const errMsg = `[Executor] Step "${item.stepName || item.id}" failed: ${error.message}`;
+        console.error(errMsg);
+        if (this.simInstance) this.simInstance.addLog(errMsg, 'error');
+      });
     }
     const doneMsg = `[Executor] Campaign "${campaign.name}" completed.`;
     console.log(doneMsg);
