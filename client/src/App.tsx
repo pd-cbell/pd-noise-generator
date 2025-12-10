@@ -6,6 +6,7 @@ import { CampaignManager } from './components/CampaignManager';
 import { CampaignEditor } from './components/CampaignEditor';
 import { AgentBuilder } from './components/AgentBuilder';
 import { DirectorDashboard } from './components/DirectorDashboard';
+import GoldenDemoLibrary from './components/GoldenDemoLibrary'; // New Import
 import { Login } from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import { useServerSimulation } from './hooks/useServerSimulation';
@@ -63,6 +64,7 @@ function App() {
         {activePage === 'monitor' && <MonitorDashboard />}
         {activePage === 'agent' && <AgentBuilder onBuildComplete={handleAgentBuildComplete} />}
         {activePage === 'director' && <DirectorDashboard />}
+        {activePage === 'golden-demos' && <GoldenDemoLibrary />} {/* New Golden Demo Library Page */}
         {activePage === 'campaigns' && (
           editingCampaignId ? (
             <CampaignEditor 

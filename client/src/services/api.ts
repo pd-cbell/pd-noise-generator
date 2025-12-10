@@ -195,25 +195,80 @@ export const api = {
       body: JSON.stringify({ prompt, provider }),
     }),
 
-  agentBuild: (params: { 
-      prompt: string; 
-      provider?: string; 
-      approvedPlan?: string;
-      services?: any[];
-      eventCount?: number;
-      changeCount?: number;
+    export interface AgentBuildParams { 
+        prompt: string; 
+        provider?: string; 
+        approvedPlan?: string;
+        services?: any[];
+        eventCount?: number;
+        changeCount?: number;
+        // GoldenDemo Metadata
+        goldenDemoName: string;
+        vertical: string;
+        maturityLevel: string;
+        narrative: string;
+        personaNotes?: string;
+        createdByUserId: string;
+    }
+  
+    agentBuild: (params: AgentBuildParams) =>
+      fetchFromProxy('/api/agent/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            prompt: params.prompt, 
+            provider: params.provider || 'google', 
+            approvedPlan: params.approvedPlan,
+            services: params.services || [],
+            eventCount: params.eventCount,
+            changeCount: params.changeCount,
+            // GoldenDemo Metadata
+            goldenDemoName: params.goldenDemoName,
+            vertical: params.vertical,
+            maturityLevel: params.maturityLevel,
+            narrative: params.narrative,
+            personaNotes: params.personaNotes,
+            createdByUserId: params.createdByUserId,
+        }),
+      }),
+  // --- Golden Demos ---
+  getGoldenDemos: (vertical?: string) =>
+    fetchFromProxy(`/api/golden-demos${vertical ? `?vertical=${vertical}` : ''}`),
+
+  getGoldenDemo: (id: string) =>
+    fetchFromProxy(`/api/golden-demos/${id}`),
+
+  createGoldenDemo: (goldenDemo: {
+    name: string;
+    vertical: string;
+    maturityLevel: string;
+    narrative: string;
+    configJson: any; // Using any for now, will refine with types.ts GoldenDemoConfig
+    personaNotes?: string;
   }) =>
-    fetchFromProxy('/api/agent/build', {
+    fetchFromProxy('/api/golden-demos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-          prompt: params.prompt, 
-          provider: params.provider || 'google', 
-          approvedPlan: params.approvedPlan,
-          services: params.services || [],
-          eventCount: params.eventCount,
-          changeCount: params.changeCount
-      }),
+      body: JSON.stringify(goldenDemo),
+    }),
+
+  updateGoldenDemo: (id: string, goldenDemo: {
+    name?: string;
+    vertical?: string;
+    maturityLevel?: string;
+    narrative?: string;
+    configJson?: any;
+    personaNotes?: string;
+  }) =>
+    fetchFromProxy(`/api/golden-demos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(goldenDemo),
+    }),
+
+  deleteGoldenDemo: (id: string) =>
+    fetchFromProxy(`/api/golden-demos/${id}`, {
+      method: 'DELETE',
     }),
 
   // --- Director ---

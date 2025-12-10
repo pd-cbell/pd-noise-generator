@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; // Import the API service
+import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
 import { 
   PayloadAdapter, ImportedCampaign, CampaignItem,
   payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
@@ -246,6 +247,13 @@ interface AppState extends SimulationState, ConfigurationState {
   createCampaign: (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => Promise<ImportedCampaign>;
   updateCampaign: (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => Promise<ImportedCampaign>;
   deleteCampaign: (id: string) => Promise<void>;
+
+  goldenDemos: GoldenDemo[]; // New: List of Golden Demos
+  isLoadingGoldenDemos: boolean; // New: Loading state for Golden Demos
+  fetchGoldenDemos: (vertical?: string) => Promise<void>;
+  createGoldenDemo: (goldenDemo: Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>) => Promise<GoldenDemo>;
+  updateGoldenDemo: (id: string, goldenDemo: Partial<Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>>) => Promise<GoldenDemo>;
+  deleteGoldenDemo: (id: string) => Promise<void>;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -313,6 +321,10 @@ export const useStore = create<AppState>()(
       profiles: [],
       activeProfileId: null,
       isLoadingProfiles: false,
+
+      // --- Golden Demo Slice Defaults ---
+      goldenDemos: [],
+      isLoadingGoldenDemos: false,
 
       // --- Actions ---
       setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
@@ -496,14 +508,113 @@ export const useStore = create<AppState>()(
         }
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
-      
-      startSimulation: () => set({ isGenerating: true, isManaging: true }),
-      pauseSimulation: () => set({ isGenerating: false, isManaging: true }),
-      stopSimulation: () => set({ isGenerating: false, isManaging: false }),
-      
-      addLog: (msg, type = 'info') => set((state) => ({
-        log: [{ ts: new Date().toLocaleTimeString(), type, msg }, ...state.log].slice(0, 800)
+
+      // --- Golden Demo Slice Defaults ---
+      goldenDemos: [],
+      isLoadingGoldenDemos: false,
+
+      // --- Actions ---
+      setCredentials: (creds) => set((state) => ({ ...state, ...creds })),
+      setSettings: (settings) => set((state) => ({ ...state, ...settings })),
+      setSeverityConfig: (severity, config) => set((state) => ({
+        severityConfigs: {
+          ...state.severityConfigs,
+          [severity]: { ...state.severityConfigs[severity], ...config }
+        }
       })),
+      setSelectedTeamIds: (ids) => set({ selectedTeamIds: ids }),
+      setSelectedEPIds: (ids) => set({ selectedEPIds: ids }),
+      setServiceInclude: (serviceId, include) => set((state) => ({
+        services: state.services.map(svc => 
+          svc.id === serviceId ? { ...svc, include } : svc
+        )
+      })),
+      // ... (rest of the existing actions) ...
+
+      // --- Golden Demo Actions ---
+      fetchGoldenDemos: async (vertical?: string) => {
+        set({ isLoadingGoldenDemos: true });
+        try {
+          const fetchedDemos = await api.getGoldenDemos(vertical);
+          set({ goldenDemos: fetchedDemos });
+          get().addLog(`Loaded ${fetchedDemos.length} Golden Demos.`, 'info');
+        } catch (error: any) {
+          get().addLog(`Failed to load Golden Demos: ${error.message}`, 'error');
+        } finally {
+          set({ isLoadingGoldenDemos: false });
+        }
+      },
+
+      createGoldenDemo: async (goldenDemoData) => {
+        try {
+          const newDemo = await api.createGoldenDemo(goldenDemoData);
+          get().addLog(`Golden Demo "${newDemo.name}" created.`, 'info');
+          get().fetchGoldenDemos(); // Refresh list
+          return newDemo;
+        } catch (error: any) {
+          get().addLog(`Failed to create Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      updateGoldenDemo: async (id, goldenDemoData) => {
+        try {
+          const updatedDemo = await api.updateGoldenDemo(id, goldenDemoData);
+          get().addLog(`Golden Demo "${updatedDemo.name}" updated.`, 'info');
+          get().fetchGoldenDemos(); // Refresh list
+          return updatedDemo;
+        } catch (error: any) {
+          get().addLog(`Failed to update Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      deleteGoldenDemo: async (id) => {
+        try {
+          await api.deleteGoldenDemo(id);
+          get().addLog('Golden Demo deleted.', 'info');
+          get().fetchGoldenDemos(); // Refresh list
+        } catch (error: any) {
+          get().addLog(`Failed to delete Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+    }),
+    {
+      name: 'pdns-storage', // Unique name for localStorage key
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        // Persist only configuration and profiles, not runtime state like logs or activeIncidents
+        profiles: state.profiles,
+        activeProfileId: state.activeProfileId,
+        apiToken: state.apiToken,
+        pdSubdomain: state.pdSubdomain,
+        fromEmail: state.fromEmail,
+        globalRoutingKey: state.globalRoutingKey,
+        selectedTeamIds: state.selectedTeamIds,
+        campaignConfig: state.campaignConfig,
+        
+        // Persist Simulation Settings
+        ratePerMinute: state.ratePerMinute,
+        severityWeights: state.severityWeights,
+        autoHealConfig: state.autoHealConfig,
+        resumeExistingEnabled: state.resumeExistingEnabled,
+        sourceMix: state.sourceMix,
+        burstProbability: state.burstProbability,
+        majorIncidentProbability: state.majorIncidentProbability,
+        responderAckRate: state.responderAckRate,
+        teamFailureProbability: state.teamFailureProbability,
+
+        // Persist Per-Severity Simulation Settings
+        severityConfigs: state.severityConfigs,
+        
+        // DO NOT persist goldenDemos or isLoadingGoldenDemos, they are fetched from backend
+        // goldenDemos: state.goldenDemos, 
+        // isLoadingGoldenDemos: state.isLoadingGoldenDemos,
+      }),
+    }
+  )
+);
 
       addIncident: (incident) => set((state) => ({
         activeIncidents: [incident, ...state.activeIncidents],
@@ -1047,6 +1158,55 @@ export const useStore = create<AppState>()(
           throw error;
         }
       },
+
+      // --- Golden Demo Actions ---
+      fetchGoldenDemos: async (vertical?: string) => {
+        set({ isLoadingGoldenDemos: true });
+        try {
+          const fetchedDemos = await api.getGoldenDemos(vertical);
+          set({ goldenDemos: fetchedDemos });
+          get().addLog(`Loaded ${fetchedDemos.length} Golden Demos.`, 'info');
+        } catch (error: any) {
+          get().addLog(`Failed to load Golden Demos: ${error.message}`, 'error');
+        } finally {
+          set({ isLoadingGoldenDemos: false });
+        }
+      },
+
+      createGoldenDemo: async (goldenDemoData) => {
+        try {
+          const newDemo = await api.createGoldenDemo(goldenDemoData);
+          get().addLog(`Golden Demo "${newDemo.name}" created.`, 'info');
+          get().fetchGoldenDemos(); // Refresh list
+          return newDemo;
+        } catch (error: any) {
+          get().addLog(`Failed to create Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      updateGoldenDemo: async (id, goldenDemoData) => {
+        try {
+          const updatedDemo = await api.updateGoldenDemo(id, goldenDemoData);
+          get().addLog(`Golden Demo "${updatedDemo.name}" updated.`, 'info');
+          get().fetchGoldenDemos(); // Refresh list
+          return updatedDemo;
+        } catch (error: any) {
+          get().addLog(`Failed to update Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      deleteGoldenDemo: async (id) => {
+        try {
+          await api.deleteGoldenDemo(id);
+          get().addLog('Golden Demo deleted.', 'info');
+          get().fetchGoldenDemos(); // Refresh list
+        } catch (error: any) {
+          get().addLog(`Failed to delete Golden Demo: ${error.message}`, 'error');
+          throw error;
+        }
+      },
     }),
     {
       name: 'pdns-storage', // Unique name for localStorage key
@@ -1075,6 +1235,10 @@ export const useStore = create<AppState>()(
 
         // Persist Per-Severity Simulation Settings
         severityConfigs: state.severityConfigs,
+        
+        // DO NOT persist goldenDemos or isLoadingGoldenDemos, they are fetched from backend
+        // goldenDemos: state.goldenDemos, 
+        // isLoadingGoldenDemos: state.isLoadingGoldenDemos,
       }),
     }
   )

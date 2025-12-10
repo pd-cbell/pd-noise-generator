@@ -1,0 +1,117 @@
+import React, { useEffect, useState } from 'react';
+import { useStore } from '../store/useStore';
+import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
+import { Loader2, Plus, Edit, Trash2, Play } from 'lucide-react';
+import GoldenDemoDetail from './GoldenDemoDetail';
+
+const GoldenDemoLibrary: React.FC = () => {
+  const { 
+    goldenDemos, 
+    isLoadingGoldenDemos, 
+    fetchGoldenDemos,
+    deleteGoldenDemo,
+    addLog,
+  } = useStore();
+
+  const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
+  const selectedDemo = goldenDemos.find(demo => demo.id === selectedDemoId);
+
+  useEffect(() => {
+    fetchGoldenDemos();
+  }, [fetchGoldenDemos]);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+      try {
+        await deleteGoldenDemo(id);
+        if (selectedDemoId === id) {
+          setSelectedDemoId(null);
+        }
+      } catch (error) {
+        // Error already logged by useStore
+      }
+    }
+  };
+
+  const handleLaunchSimulation = (demo: GoldenDemo) => {
+    // TODO: Implement actual simulation launch logic based on demo.configJson
+    addLog(`Launching simulation for Golden Demo: "${demo.name}"`, 'info');
+    // For now, just log the config
+    console.log('Simulation Config:', demo.configJson);
+  };
+
+  return (
+    <div className="flex h-full bg-gray-50">
+      {/* Sidebar - Golden Demo List */}
+      <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-gray-900">Golden Demos</h2>
+          <button 
+            className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+            title="Create New Golden Demo"
+            // onClick={() => onCreateNewDemo()} // TODO: Implement creation form
+          >
+            <Plus size={20} />
+          </button>
+        </div>
+        <div className="flex-grow overflow-y-auto">
+          {isLoadingGoldenDemos ? (
+            <div className="p-4 text-center text-gray-500">
+              <Loader2 className="animate-spin inline-block mr-2" size={20} /> Loading Demos...
+            </div>
+          ) : goldenDemos.length === 0 ? (
+            <p className="p-4 text-gray-500">No Golden Demos found. Create one!</p>
+          ) : (
+            <ul>
+              {goldenDemos.map((demo) => (
+                <li 
+                  key={demo.id} 
+                  className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 ${selectedDemoId === demo.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''}`}
+                  onClick={() => setSelectedDemoId(demo.id)}
+                >
+                  <div>
+                    <p className="font-medium text-gray-800">{demo.name}</p>
+                    <p className="text-sm text-gray-500">{demo.vertical} - {demo.maturityLevel}</p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button 
+                      className="text-gray-500 hover:text-blue-600" 
+                      title="Edit"
+                      // onClick={(e) => { e.stopPropagation(); onEditDemo(demo.id); }} // TODO: Implement edit form
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button 
+                      className="text-gray-500 hover:text-red-600" 
+                      title="Delete"
+                      onClick={(e) => { e.stopPropagation(); handleDelete(demo.id, demo.name); }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Main Content - Golden Demo Detail */}
+      <div className="flex-grow p-6 overflow-y-auto">
+        {selectedDemo ? (
+          <GoldenDemoDetail 
+            demo={selectedDemo} 
+            onLaunch={() => handleLaunchSimulation(selectedDemo)} 
+            // onEdit={() => onEditDemo(selectedDemo.id)} // TODO: Pass edit handler
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-500 text-lg">
+            Select a Golden Demo or create a new one to view details.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default GoldenDemoLibrary;

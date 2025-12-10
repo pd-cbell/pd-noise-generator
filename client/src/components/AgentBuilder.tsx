@@ -4,20 +4,27 @@ import { api } from '../services/api';
 import { useStore, Service } from '../store/useStore';
 import { ServiceSelector } from './ServiceSelector';
 
+import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
+
 interface AgentBuilderProps {
-  onBuildComplete: (campaign: any) => void;
+  onBuildComplete: (goldenDemo: GoldenDemo) => void;
 }
 
 export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) => {
-  const { services, fetchServices, selectedTeamIds } = useStore();
+  const { services, fetchServices, selectedTeamIds, profiles, activeProfileId } = useStore(); // Added profiles, activeProfileId
   
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'idle' | 'proposing' | 'proposed' | 'building'>('idle');
-  const [proposal, setProposal] = useState<string>('');
+  const [proposal, setProposal] = useState<string>(''); // This will serve as narrative
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<string>('google');
 
-  // New High-Control State
+  // New High-Control State (GoldenDemo Metadata)
+  const [goldenDemoName, setGoldenDemoName] = useState('');
+  const [vertical, setVertical] = useState('');
+  const [maturityLevel, setMaturityLevel] = useState('');
+  const [personaNotes, setPersonaNotes] = useState('');
+
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [eventCount, setEventCount] = useState<number>(10);
   const [changeCount, setChangeCount] = useState<number>(2);
@@ -40,6 +47,11 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
     if (!prompt.trim()) return;
     setStatus('proposing');
     setError(null);
+    setProposal(''); // Clear previous proposal
+    setGoldenDemoName(prompt); // Default name from prompt
+    setVertical('');
+    setMaturityLevel('');
+    setPersonaNotes('');
     try {
       const res = await api.agentProposal(prompt, provider);
       setProposal(res.summary);
@@ -63,33 +75,32 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
         return;
     }
 
+    if (!goldenDemoName.trim() || !vertical.trim() || !maturityLevel.trim()) {
+      setError("Please fill in all Golden Demo metadata fields (Name, Vertical, Maturity Level).");
+      setStatus('proposed');
+      return;
+    }
+
     try {
-      const campaignData = await api.agentBuild({
+      // The API call to agentBuild now returns a full GoldenDemo object
+      const goldenDemo = await api.agentBuild({
           prompt, 
           provider, 
           approvedPlan: proposal,
           services: targetServices,
           eventCount,
-          changeCount
+          changeCount,
+          goldenDemoName,
+          vertical,
+          maturityLevel,
+          narrative: proposal, // Use the edited proposal as the narrative
+          personaNotes: personaNotes || undefined, // Optional
+          createdByUserId: activeProfileId || 'anonymous', // Fallback if no active profile
       });
-
-      // Map API response to ImportedCampaign structure
-      // API returns: { name, description, items: [] } where items have 'payload' object
-      // ImportedCampaign needs: { id, source, items: [{ payloadString: "..." }] }
-      const newCampaign = {
-        id: 'new', // Editor will handle ID generation
-        source: `AI Agent (${provider})`,
-        ...campaignData,
-        items: campaignData.items?.map((item: any) => ({
-            ...item,
-            payloadString: JSON.stringify(item.payload || {}, null, 2),
-            times: item.repeatCount || 1, 
-        })) || []
-      };
       
-      onBuildComplete(newCampaign);
+      onBuildComplete(goldenDemo); // Pass the full GoldenDemo object
     } catch (e: any) {
-      setError(e.message || "Failed to build campaign");
+      setError(e.message || "Failed to build Golden Demo");
       setStatus('proposed');
     }
   };
@@ -184,6 +195,58 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
 
                 {/* Right: Configuration */}
                 <div className="md:w-1/2 p-6 bg-white flex flex-col gap-6">
+
+                    {/* Golden Demo Metadata */}
+                    <div>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
+                            <Bot className="w-4 h-4 text-gray-600" />
+                            Golden Demo Metadata
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Golden Demo Name</label>
+                                <input
+                                    type="text"
+                                    value={goldenDemoName}
+                                    onChange={(e) => setGoldenDemoName(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm"
+                                    placeholder="e.g., Black Friday Checkout Failure"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Vertical</label>
+                                <input
+                                    type="text"
+                                    value={vertical}
+                                    onChange={(e) => setVertical(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm"
+                                    placeholder="e.g., Retail, FinServ"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Maturity Level</label>
+                                <select
+                                    value={maturityLevel}
+                                    onChange={(e) => setMaturityLevel(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm"
+                                >
+                                    <option value="">Select Level</option>
+                                    <option value="Reactive">Reactive</option>
+                                    <option value="Proactive">Proactive</option>
+                                    <option value="Preventative">Preventative</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 mb-1">Persona Notes (Optional)</label>
+                                <textarea
+                                    value={personaNotes}
+                                    onChange={(e) => setPersonaNotes(e.target.value)}
+                                    className="w-full border border-gray-300 rounded p-2 text-sm min-h-[80px]"
+                                    placeholder="e.g., Key talking points, setup requirements"
+                                />
+                            </div>
+                        </div>
+                    </div>
                     
                     {/* Service Selection */}
                     <div className="flex-1 min-h-0 flex flex-col">
