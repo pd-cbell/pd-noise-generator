@@ -1,5 +1,7 @@
 # PagerDuty Incident Noise Simulator v2.0 (Agentic Edition)
 
+![Customer Simulation](customer_sim.png)
+
 A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now featuring an **AI-Powered Agentic Architect** for designing complex failure scenarios ("Golden Demos").
 
 ![Version](https://img.shields.io/badge/version-2.0.0-purple) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
@@ -10,6 +12,7 @@ A full-stack, multi-user application for generating realistic incident noise aga
 - **LangGraph Architecture:** Uses a "Planner -> Builder" workflow to ensure scenarios follow best-practice PagerDuty narratives (Signal -> Impact -> Triage -> Resolution).
 - **Structured Outputs:** Guarantees valid JSON configuration for all AI-generated content.
 - **Director Mode:** Trigger predefined templates instantly for live demos.
+- **Note:** Agentic campaign generation with GPT models has a known bug; use **Gemini 2.5 Pro** for best results.
 
 ## ✨ Core Features
 - **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.
