@@ -56,11 +56,11 @@ export class CampaignExecutor {
     const payload = TemplateParser.parseObject(rawPayload);
     
     if (item.eventType === 'incident') {
-      // Priority: Campaign Default > Webhook Header > Error
-      const routingKey = campaign.integrationKey || this.config.globalRoutingKey;
+      // Priority: Item override > Campaign default > Webhook header/global
+      const routingKey = item.integrationKey || campaign.integrationKey || this.config.globalRoutingKey;
 
       if (!routingKey) {
-        throw new Error("Missing routing key for incident event (checked campaign default and webhook headers)");
+        throw new Error("Missing routing key for incident event (checked item, campaign default, webhook headers)");
       }
 
       const body = {
@@ -80,11 +80,11 @@ export class CampaignExecutor {
       }
       
     } else if (item.eventType === 'change') {
-      // Priority: Item Override > Webhook Header > Error
-      const routingKey = item.integrationKey || this.config.changeRoutingKey;
+      // Priority: Item override > Campaign default > Webhook header/global
+      const routingKey = item.integrationKey || campaign.integrationKey || this.config.changeRoutingKey;
       
       if (!routingKey) {
-        throw new Error("Missing routing key for change event (checked item override and webhook headers)");
+        throw new Error("Missing routing key for change event (checked item, campaign default, webhook headers)");
       }
 
       const body = {
