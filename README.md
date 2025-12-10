@@ -1,4 +1,4 @@
-# PagerDuty Incident Noise Simulator v2.0 (Agentic Edition)
+# PagerDuty Customer Simulator v2.0 (Agentic Edition)
 
 ![Customer Simulation](customer_sim.png)
 
