@@ -6,13 +6,24 @@ A full-stack, multi-user application for generating realistic incident noise aga
 
 ![Version](https://img.shields.io/badge/version-2.0.0-purple) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.0 (Agentic Edition)
+## 🚀 New in v2.0 (Agentic Edition) - Hybrid Architecture: Tactical AI, Strategic Speed
+
+The v2.0 "Agentic Edition" pivots to a hybrid architecture, leveraging AI at design time for strategic speed and local Faker.js at runtime for tactical execution.
+
 - **Agentic Campaign Builder:** Describe a scenario (e.g., "Checkout DB failure during Black Friday") and the AI Agent designs a complete 4-stage "Golden Demo" campaign.
+  **Critical Note:** Agentic campaign generation with GPT models has a known bug; for best results, please use **Gemini 2.5 Pro**.
 - **Dual-Provider AI:** Choose between **Gemini 2.5 Pro** and **GPT-5.1** (OpenAI) for generation.
 - **LangGraph Architecture:** Uses a "Planner -> Builder" workflow to ensure scenarios follow best-practice PagerDuty narratives (Signal -> Impact -> Triage -> Resolution).
 - **Structured Outputs:** Guarantees valid JSON configuration for all AI-generated content.
-- **Director Mode:** Trigger predefined templates instantly for live demos.
-- **Note:** Agentic campaign generation with GPT models has a known bug; use **Gemini 2.5 Pro** for best results.
+- **Director Mode (Pending Polish v2.1):** Trigger predefined templates instantly for live demos.
+
+## 🧠 Core Concepts: Hybrid Architecture
+
+The PagerDuty Noise Simulator v2.0 employs a powerful **Hybrid Architecture** designed for both strategic speed and tactical execution:
+
+-   **Design Time (AI-Powered):** At this stage, our `AgentService` (leveraging `LangGraph` with Gemini or GPT models) acts as an intelligent architect. It processes natural language inputs to construct sophisticated, multi-stage JSON campaigns. This ensures that complex failure scenarios and "Golden Demos" are generated with strategic precision and adherence to best practices, significantly accelerating the planning phase.
+
+-   **Run Time (Local Faker.js):** Once a campaign is designed, the execution shifts to a highly efficient, local `FakerService`. This component rapidly generates realistic incident noise and associated events (e.g., alerts, change events) at high volumes (100+ RPM) without incurring LLM latency. This separation ensures tactical speed and reliability during live simulations, making the most of both AI's intelligence and local processing power.
 
 ## ✨ Core Features
 - **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.
