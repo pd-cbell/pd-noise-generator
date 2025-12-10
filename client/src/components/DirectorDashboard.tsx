@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Layers, AlertTriangle, Zap, CheckCircle, X } from 'lucide-react';
+import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2 } from 'lucide-react';
 import { useStore, GoldenDemo } from '../store/useStore'; // Import GoldenDemo type
+import { useServerSimulation } from '../hooks/useServerSimulation'; // New import
 
 export const DirectorDashboard: React.FC = () => {
   const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos } = useStore();
+  const { startSimulation } = useServerSimulation(); // Get startSimulation from hook
   
   const [isLoading, setIsLoading] = useState(true); // Control local loading state
 
@@ -17,10 +19,15 @@ export const DirectorDashboard: React.FC = () => {
   }, [fetchGoldenDemos]);
 
   const handleLaunch = (demo: GoldenDemo) => {
-    // TODO: Implement actual simulation launch logic based on demo.configJson
+    // Stop any currently running simulation
+    // This is handled implicitly by useServerSimulation which will reset
+    
+    // Extract configJson from the GoldenDemo
+    const simulationConfig = demo.configJson;
+
+    // Start the simulation with the Golden Demo's config
+    startSimulation(simulationConfig); // Pass the config to startSimulation
     addLog(`Launching simulation for Golden Demo: "${demo.name}"`, 'info');
-    // For now, just log the config
-    console.log('Simulation Config:', demo.configJson);
   };
 
   // State and handlers for filtering GoldenDemos
