@@ -1,5 +1,5 @@
 # Session Notes - v2.1 Golden Demo Platform
-**Date:** December 10, 2025
+**Date:** December 11, 2025
 **Branch:** `2.1`
 
 ## Workstream Phase 1: Golden Demo Abstraction (Complete)
@@ -85,5 +85,20 @@
 - Created `server/prisma/seed_demos.ts` script.
 - Seeded "OrbitPay" demo with full narrative and beats.
 
+## Workstream Phase 6: Release Candidate Polish (Complete)
+
+### Goals
+- Address critical bugs and refine the Agentic UX for final release.
+
+### Completed Tasks
+- **Bug Fixes:**
+  - **Zod Crash:** Resolved `TypeError: Cannot read properties of undefined (reading '_zod')` by relaxing `configJson` validation in `GoldenDemoService`.
+  - **Double-Save:** Fixed frontend logic in `App.tsx` where Golden Demos were being saved twice (once by Agent, once by Client).
+  - **Types:** Fixed TS errors in `GoldenDemoService` and `AgentService`.
+- **Agentic UX Refactor:**
+  - **Context-Aware Planning:** Moved Service Selection, Vertical, and Maturity inputs to the initial "Plan" stage in `AgentBuilder.tsx`.
+  - **Prompt Engineering:** Updated `AgentService` prompt to strictly enforce a 4-stage narrative arc ("Routine Change" -> "Business Impact" -> "Triage" -> "Resolution") and utilize the user-provided context.
+  - **LangGraph Update:** Migrated `AgentService` to use `Annotation`-based state management for forward compatibility.
+
 ---
-**Status:** v2.1 Release Candidate Ready.
+**Status:** v2.1 Release Candidate (Complete). Ready for final review.
