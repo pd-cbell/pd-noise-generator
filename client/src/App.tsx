@@ -11,7 +11,8 @@ import { PresenterDashboard } from './components/PresenterDashboard';
 import { Login } from './components/Login';
 import { useAuth } from './contexts/AuthContext';
 import { useServerSimulation } from './hooks/useServerSimulation';
-import { ImportedCampaign, useStore, GoldenDemo } from './store/useStore';
+import { ImportedCampaign, useStore } from './store/useStore';
+import { GoldenDemo } from '../../server/src/types';
 
 function App() {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -20,7 +21,7 @@ function App() {
   const [activePage, setActivePage] = useState('configure');
   const [editingCampaignId, setEditingCampaignId] = useState<string | 'new' | null>(null);
   const [agentBuiltCampaign, setAgentBuiltCampaign] = useState<Partial<ImportedCampaign> | undefined>(undefined);
-  const { createGoldenDemo } = useStore(); // Get createGoldenDemo action from store
+
 
   // Auto-switch to presenter view when a session starts
   useEffect(() => {
@@ -46,41 +47,27 @@ function App() {
   };
 
   const handleAgentBuildComplete = async (goldenDemo: GoldenDemo) => {
-    // The agent now returns a full GoldenDemo. We need to save it.
-    try {
-        await createGoldenDemo({
-            name: goldenDemo.name,
-            vertical: goldenDemo.vertical,
-            maturityLevel: goldenDemo.maturityLevel,
-            narrative: goldenDemo.narrative,
-            configJson: goldenDemo.configJson,
-            personaNotes: goldenDemo.personaNotes,
-            createdByUserId: goldenDemo.createdByUserId, // Should be filled by agentService
-        });
-        
-        // After saving, extract the campaign part and pass it to the CampaignEditor
-        const campaignData = goldenDemo.configJson;
-        // Map to ImportedCampaign structure (same logic as in AgentBuilder.tsx's handleBuild)
-        const newCampaignForEditor = {
-            id: 'new', // Editor will handle ID generation
-            name: campaignData.name,
-            description: campaignData.description,
-            source: `AI Agent (${goldenDemo.name})`, // Use GoldenDemo name as source
-            items: campaignData.items?.map((item: any) => ({
-                ...item,
-                payloadString: JSON.stringify(item.payload || {}, null, 2),
-                times: item.repeatCount || 1, 
-            })) || []
-        };
+    // The agent service has already saved the Golden Demo.
+    // We just need to extract the campaign part and pass it to the CampaignEditor.
+    
+    const campaignData = goldenDemo.configJson as any; // Cast to any to access items safely
+    
+    // Map to ImportedCampaign structure (same logic as in AgentBuilder.tsx's handleBuild)
+    const newCampaignForEditor = {
+        id: 'new', // Editor will handle ID generation or saving as a new variant
+        name: campaignData.name,
+        description: campaignData.description,
+        source: `AI Agent (${goldenDemo.name})`, // Use GoldenDemo name as source
+        items: campaignData.items?.map((item: any) => ({
+            ...item,
+            payloadString: JSON.stringify(item.payload || {}, null, 2),
+            times: item.repeatCount || 1, 
+        })) || []
+    };
 
-        setAgentBuiltCampaign(newCampaignForEditor);
-        setActivePage('campaigns');
-        setEditingCampaignId('new');
-
-    } catch (error) {
-        console.error("Failed to save Golden Demo from agent build:", error);
-        // Optionally show error to user
-    }
+    setAgentBuiltCampaign(newCampaignForEditor);
+    setActivePage('campaigns');
+    setEditingCampaignId('new');
   };
 
   if (isAuthLoading || isSimLoading) {

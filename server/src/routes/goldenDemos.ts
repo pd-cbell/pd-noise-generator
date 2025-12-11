@@ -12,7 +12,7 @@ const createGoldenDemoSchema = z.object({
   vertical: z.string().min(1, 'Vertical cannot be empty').max(255),
   maturityLevel: z.string().min(1, 'Maturity Level cannot be empty').max(255),
   narrative: z.string().min(1, 'Narrative cannot be empty'),
-  configJson: z.record(z.any()), // Loosely typed for now, can be more specific later
+  configJson: z.any(), // Loosely typed for now, can be more specific later
   personaNotes: z.string().max(1000).optional(),
 });
 
@@ -22,7 +22,7 @@ const updateGoldenDemoSchema = z.object({
   vertical: z.string().min(1).max(255).optional(),
   maturityLevel: z.string().min(1).max(255).optional(),
   narrative: z.string().min(1).optional(),
-  configJson: z.record(z.any()).optional(),
+  configJson: z.any().optional(),
   personaNotes: z.string().max(1000).optional(),
 });
 

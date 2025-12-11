@@ -65,7 +65,7 @@ io.use((socket, next) => {
 const simulationManager = new SimulationManager(io);
 export { simulationManager };
 
-const goldenDemoService = new GoldenDemoService(prisma); // Instantiate GoldenDemoService
+const goldenDemoService = new GoldenDemoService(); // Instantiate GoldenDemoService
 const agentService = new AgentService(goldenDemoService); // Instantiate AgentService with GoldenDemoService
 
 io.on('connection', (socket) => {
