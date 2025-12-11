@@ -1,29 +1,35 @@
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOpenAI } from "@langchain/openai";
-import { StateGraph, END, START } from "@langchain/langgraph";
+import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { z } from "zod";
-import { GoldenDemoService } from "./GoldenDemoService"; // New import
-import { GoldenDemo } from "@prisma/client"; // New import
+import { GoldenDemoService } from "./GoldenDemoService";
+import { GoldenDemo } from "@prisma/client";
 
-// --- State Definition ---
-interface AgentState {
-  userRequest: string;
-  planSummary?: string;
-  finalCampaign?: any; // This will become part of GoldenDemo.configJson
-  goldenDemoMetadata?: Partial<GoldenDemo>; // New field to hold GoldenDemo related data
-  provider?: 'google' | 'openai';
-  // New High-Control Fields
-  availableServices?: any[]; 
-  eventCount?: number;
-  changeCount?: number;
-  // Metadata for GoldenDemo creation
-  goldenDemoName?: string;
-  goldenDemoVertical?: string;
-  goldenDemoMaturityLevel?: string;
-  goldenDemoPersonaNotes?: string;
-  createdByUserId?: string;
-}
+// --- State Definition using Annotation (LangGraph v0.2/v1.0+) ---
+const AgentStateAnnotation = Annotation.Root({
+  userRequest: Annotation<string>,
+  planSummary: Annotation<string | undefined>,
+  finalCampaign: Annotation<any>,
+  goldenDemoMetadata: Annotation<Partial<GoldenDemo> | undefined>,
+  provider: Annotation<'google' | 'openai' | undefined>,
+  
+  // High-Control Fields
+  availableServices: Annotation<any[] | undefined>,
+  eventCount: Annotation<number | undefined>,
+  changeCount: Annotation<number | undefined>,
+  
+  // GoldenDemo Metadata
+  goldenDemoName: Annotation<string | undefined>,
+  goldenDemoVertical: Annotation<string | undefined>,
+  goldenDemoMaturityLevel: Annotation<string | undefined>,
+  goldenDemoNarrative: Annotation<string | undefined>,
+  goldenDemoPersonaNotes: Annotation<string | undefined>,
+  createdByUserId: Annotation<string | undefined>,
+});
+
+// Helper type for function signatures
+type AgentStateType = typeof AgentStateAnnotation.State;
 
 // --- Agent Service ---
 export class AgentService {
@@ -59,8 +65,7 @@ export class AgentService {
 
   // --- Nodes ---
 
-  // Node 1: Planner (Uses Smart Model for Reasoning)
-  private async plannerNode(state: AgentState, config?: RunnableConfig): Promise<Partial<AgentState>> {
+  private async plannerNode(state: AgentStateType, config?: RunnableConfig): Promise<Partial<AgentStateType>> {
     const provider = state.provider || 'google';
     const model = this.getModel(provider, 'smart');
 
@@ -79,6 +84,11 @@ export class AgentService {
       - Maximum gap between events: 5 minutes.
       - Total duration: 15-30 minutes.
 
+      **Context:**
+      - **Target Vertical:** ${state.goldenDemoVertical || 'General'}
+      - **Maturity Level:** ${state.goldenDemoMaturityLevel || 'Proactive'}
+      - **Available Services:** ${state.availableServices ? JSON.stringify(state.availableServices.map(s => s.name)) : 'Any (Assume standard e-commerce stack)'}
+
       Analyze the user's request: '${state.userRequest}'.
       Return a structured plan summary (TL;DR) explaining how this specific request fits into that 4-stage PagerDuty demo arc.
     `;
@@ -93,8 +103,7 @@ export class AgentService {
     }
   }
 
-  // Node 2: Builder (Uses Smart Model for structured Code)
-  private async builderNode(state: AgentState, config?: RunnableConfig): Promise<Partial<AgentState>> {
+  private async builderNode(state: AgentStateType, config?: RunnableConfig): Promise<Partial<AgentStateType>> {
     const provider = state.provider || 'google';
     
     // Override model name for OpenAI if provider is openai
@@ -108,7 +117,7 @@ export class AgentService {
 
     // Filter services to only basic info to save tokens
     const servicesJson = JSON.stringify(
-        state.availableServices?.map(s => ({ 
+        state.availableServices?.map(s => ({
             name: s.name, 
             type: s.type || 'technical',
             integrationKey: s.integrationKey ? 'available' : 'missing',
@@ -146,14 +155,13 @@ export class AgentService {
     try {
         let goldenDemoOutput: any;
 
-        // Define the schema for the full GoldenDemo output
         const goldenDemoOutputSchema = z.object({
             name: z.string().describe("The name of the Golden Demo scenario (e.g., 'Black Friday Checkout Failure')"),
             vertical: z.string().describe("The industry vertical this demo targets (e.g., 'Retail', 'FinServ', 'Healthcare')"),
             maturityLevel: z.enum(['Reactive', 'Proactive', 'Preventative']).describe("The PagerDuty Operations Cloud maturity level demonstrated (Reactive, Proactive, Preventative)"),
             narrative: z.string().describe("The full 4-stage Golden Demo narrative, including Signal, Impact, Triage, and Resolution phases, tailored to the user's request."),
             personaNotes: z.string().optional().describe("Internal notes for the presenter about personas, key talking points, or setup."),
-            configJson: z.object({ // This will contain the actual campaign structure
+            configJson: z.object({
                 name: z.string().describe("The name of the campaign"),
                 description: z.string().describe("A brief description of the scenario"),
                 beats: z.array(z.object({
@@ -184,12 +192,9 @@ export class AgentService {
         });
 
         if (provider === 'openai') {
-            // Use Structured Outputs for robustness
             const structuredModel = (model as ChatOpenAI).withStructuredOutput(goldenDemoOutputSchema);
             goldenDemoOutput = await structuredModel.invoke(basePrompt);
-
         } else {
-            // Google / Prompt Engineering Fallback
             const prompt = `
               ${basePrompt}
 
@@ -205,7 +210,7 @@ export class AgentService {
                             maturityLevel: "Reactive|Proactive|Preventative",
                             narrative: "The detailed 4-stage narrative.",
                             personaNotes: "Notes for the presenter.",
-                            configJson: { // This is the campaign config
+                            configJson: {
                                 name: "Campaign Name",
                                 description: "Campaign Description",
                                 beats: [
@@ -219,19 +224,19 @@ export class AgentService {
                                     }
                                 ],
                                 items: [
-                                    { 
+                                    {
                                         stepName: "Step Name",
                                         service: "Service Name",
                                         delaySeconds: 0, 
                                         repeatCount: 1, 
                                         eventType: "incident", 
                                         severity: "error", 
-                                        payload: { 
+                                        payload: {
                                             summary: "Summary", 
                                             source: "Source", 
                                             custom_details: {
                                                 service_name: "Service Name"
-                                            } 
+                                            }
                                         },
                                         slackMessageTemplate: "Slack alert..."
                                     }
@@ -247,10 +252,8 @@ export class AgentService {
             goldenDemoOutput = JSON.parse(text);
         }
 
-        // Add createdByUserId from state
         goldenDemoOutput.createdByUserId = state.createdByUserId;
-
-        return { goldenDemoMetadata: goldenDemoOutput }; // Return the full GoldenDemo object
+        return { goldenDemoMetadata: goldenDemoOutput }; 
     } catch (error: any) {
         console.error("Builder Node Failed:", error);
         throw new Error(`Builder failed (${provider}): ${error.message}`);
@@ -259,24 +262,27 @@ export class AgentService {
 
   // --- Public Methods (Workflows) ---
 
-  public async generateProposal(prompt: string, provider: 'google' | 'openai' = 'google'): Promise<string> {
-    // Workflow: START -> plannerNode -> END
-    const graph = new StateGraph<AgentState>({
-        channels: {
-            userRequest: null,
-            planSummary: null,
-            finalCampaign: null,
-            provider: null
-        }
-    })
+  public async generateProposal(params: {
+      prompt: string; 
+      provider?: 'google' | 'openai';
+      services?: any[];
+      vertical?: string;
+      maturityLevel?: string;
+  }): Promise<string> {
+    const graph = new StateGraph(AgentStateAnnotation)
       .addNode("planner", this.plannerNode.bind(this))
       .addEdge(START, "planner")
       .addEdge("planner", END);
 
     const app = graph.compile();
     
-    // START is implicitly the entry point
-    const result = await app.invoke({ userRequest: prompt, provider });
+    const result = await app.invoke({
+        userRequest: params.prompt, 
+        provider: params.provider || 'google',
+        availableServices: params.services,
+        goldenDemoVertical: params.vertical,
+        goldenDemoMaturityLevel: params.maturityLevel
+    });
     
     if (!result.planSummary) throw new Error("No plan generated");
     return result.planSummary as string;
@@ -289,45 +295,24 @@ export class AgentService {
       services?: any[];
       eventCount?: number;
       changeCount?: number;
-      // GoldenDemo Metadata
       goldenDemoName: string;
       vertical: string;
       maturityLevel: string;
       narrative: string;
       personaNotes?: string;
       createdByUserId: string;
-  }): Promise<GoldenDemo> { // Changed return type to GoldenDemo
-    // If no plan provided, we could optionally run the planner first.
-    // But typically the UI passes the plan back. If not, we generate a quick one or skip.
+  }): Promise<GoldenDemo> { 
     
     const plan = params.approvedPlan || "Proceed with standard best practices for this scenario.";
 
-    // Workflow: START -> builderNode -> END
-    const graph = new StateGraph<AgentState>({
-         channels: {
-            userRequest: null,
-            planSummary: null,
-            finalCampaign: null,
-            goldenDemoMetadata: null, // Ensure this channel is defined
-            provider: null,
-            availableServices: null,
-            eventCount: null,
-            changeCount: null,
-            goldenDemoName: null,
-            goldenDemoVertical: null,
-            goldenDemoMaturityLevel: null,
-            goldenDemoNarrative: null, // Add new channels for narrative
-            goldenDemoPersonaNotes: null,
-            createdByUserId: null,
-        }
-    })
+    const graph = new StateGraph(AgentStateAnnotation)
       .addNode("builder", this.builderNode.bind(this))
       .addEdge(START, "builder")
       .addEdge("builder", END);
 
     const app = graph.compile();
 
-    const result = await app.invoke({ 
+    const result = await app.invoke({
         userRequest: params.prompt, 
         planSummary: plan, 
         provider: params.provider || 'google',
@@ -344,19 +329,16 @@ export class AgentService {
     
     if (!result.goldenDemoMetadata) throw new Error("No Golden Demo metadata generated");
 
-    // Persist the Golden Demo
     const createdGoldenDemo = await this.goldenDemoService.createGoldenDemo({
-      name: result.goldenDemoMetadata.name,
-      vertical: result.goldenDemoMetadata.vertical,
-      maturityLevel: result.goldenDemoMetadata.maturityLevel,
-      narrative: result.goldenDemoMetadata.narrative,
+      name: result.goldenDemoMetadata.name!,
+      vertical: result.goldenDemoMetadata.vertical!,
+      maturityLevel: result.goldenDemoMetadata.maturityLevel!,
+      narrative: result.goldenDemoMetadata.narrative!,
       configJson: result.goldenDemoMetadata.configJson || {},
       personaNotes: result.goldenDemoMetadata.personaNotes,
-      createdByUserId: result.goldenDemoMetadata.createdByUserId,
+      createdByUserId: result.goldenDemoMetadata.createdByUserId!,
     });
 
     return createdGoldenDemo;
   }
 }
-
-

@@ -5,11 +5,17 @@ export default (agentService: AgentService) => { // Export a function that takes
   const router = Router();
 
   router.post('/proposal', async (req, res) => {
-    const { prompt, provider } = req.body;
+    const { prompt, provider, services, vertical, maturityLevel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
-      const summary = await agentService.generateProposal(prompt, provider);
+      const summary = await agentService.generateProposal({
+          prompt, 
+          provider,
+          services,
+          vertical,
+          maturityLevel
+      });
       res.json({ summary });
     } catch (error: any) {
       console.error("Proposal Error:", error);

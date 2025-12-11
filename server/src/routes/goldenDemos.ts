@@ -31,7 +31,7 @@ router.use(authenticateUser); // All Golden Demo routes require authentication
 // GET /api/golden-demos - List all golden demos for the authenticated user
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user!.id;
     const { vertical } = req.query;
     const goldenDemos = await goldenDemoService.listGoldenDemos(
       userId,
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
 // GET /api/golden-demos/:id - Get a specific golden demo
 router.get('/:id', async (req, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user!.id;
     const { id } = req.params;
     const goldenDemo = await goldenDemoService.getGoldenDemo(id, userId);
     if (!goldenDemo) {
@@ -63,11 +63,11 @@ router.get('/:id', async (req, res) => {
 // POST /api/golden-demos - Create a new golden demo
 router.post('/', async (req, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user!.id;
     const validation = createGoldenDemoSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({ message: 'Validation failed', errors: validation.error.errors });
+      return res.status(400).json({ message: 'Validation failed', errors: validation.error.issues });
     }
 
     const newGoldenDemo = await goldenDemoService.createGoldenDemo({
@@ -84,12 +84,12 @@ router.post('/', async (req, res) => {
 // PUT /api/golden-demos/:id - Update an existing golden demo
 router.put('/:id', async (req, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user!.id;
     const { id } = req.params;
     const validation = updateGoldenDemoSchema.safeParse(req.body);
 
     if (!validation.success) {
-      return res.status(400).json({ message: 'Validation failed', errors: validation.error.errors });
+      return res.status(400).json({ message: 'Validation failed', errors: validation.error.issues });
     }
 
     const updatedGoldenDemo = await goldenDemoService.updateGoldenDemo(
@@ -107,7 +107,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/golden-demos/:id - Delete a golden demo
 router.delete('/:id', async (req, res) => {
   try {
-    const userId = req.user!.id;
+    const userId = (req as any).user!.id;
     const { id } = req.params;
     await goldenDemoService.deleteGoldenDemo(id, userId);
     res.status(204).send(); // No content

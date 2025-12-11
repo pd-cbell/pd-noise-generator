@@ -51,12 +51,19 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
     setStatus('proposing');
     setError(null);
     setProposal(''); // Clear previous proposal
-    setGoldenDemoName(prompt); // Default name from prompt
-    setVertical('');
-    setMaturityLevel('');
-    setPersonaNotes('');
+    if (!goldenDemoName) setGoldenDemoName(prompt); // Default name from prompt if empty
+    
+    // Filter full service objects to send to backend for context
+    const targetServices = services.filter(s => selectedServiceIds.includes(s.id));
+
     try {
-      const res = await api.agentProposal(prompt, provider);
+      const res = await api.agentProposal({
+          prompt, 
+          provider,
+          services: targetServices,
+          vertical,
+          maturityLevel
+      });
       setProposal(res.summary);
       setStatus('proposed');
     } catch (e: any) {
@@ -121,38 +128,103 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Step 1: Input */}
-        <div className="p-6 border-b border-gray-100">
-            <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-semibold text-gray-700">
-                    Scenario Request
-                </label>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-500">AI Model:</span>
-                    <select 
-                        value={provider} 
-                        onChange={(e) => setProvider(e.target.value)}
-                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
-                        disabled={status !== 'idle'}
-                    >
-                        <option value="google">Gemini 2.5 Pro</option>
-                        <option value="openai">GPT-5.1</option>
-                    </select>
+        
+        {/* Step 1: Input & Context */}
+        <div className="p-6 border-b border-gray-100 flex flex-col gap-6">
+            
+            {/* Top Row: Prompt & Metadata */}
+            <div className="flex flex-col md:flex-row gap-6">
+                {/* Left: Prompt */}
+                <div className="flex-1">
+                    <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-semibold text-gray-700">
+                            Scenario Request
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-500">AI Model:</span>
+                            <select 
+                                value={provider} 
+                                onChange={(e) => setProvider(e.target.value)}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                                disabled={status !== 'idle'}
+                            >
+                                <option value="google">Gemini 2.5 Pro</option>
+                                <option value="openai">GPT-5.1</option>
+                            </select>
+                        </div>
+                    </div>
+                    <textarea
+                        className="w-full p-4 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 min-h-[140px]"
+                        placeholder="e.g., A slow memory leak in the Search API causing 504 errors, followed by a full crash during a deployment."
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        disabled={status !== 'idle' && status !== 'proposed'}
+                    />
+                </div>
+
+                {/* Right: Metadata Inputs */}
+                <div className="w-full md:w-1/3 space-y-4">
+                     <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Golden Demo Name</label>
+                        <input
+                            type="text"
+                            value={goldenDemoName}
+                            onChange={(e) => setGoldenDemoName(e.target.value)}
+                            className="w-full border border-gray-300 rounded p-2 text-sm"
+                            placeholder="e.g., Black Friday Failure"
+                            disabled={status !== 'idle' && status !== 'proposed'}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Vertical</label>
+                        <input
+                            type="text"
+                            value={vertical}
+                            onChange={(e) => setVertical(e.target.value)}
+                            className="w-full border border-gray-300 rounded p-2 text-sm"
+                            placeholder="e.g., Retail, FinServ"
+                            disabled={status !== 'idle' && status !== 'proposed'}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Maturity Level</label>
+                        <select
+                            value={maturityLevel}
+                            onChange={(e) => setMaturityLevel(e.target.value)}
+                            className="w-full border border-gray-300 rounded p-2 text-sm"
+                            disabled={status !== 'idle' && status !== 'proposed'}
+                        >
+                            <option value="">Select Level</option>
+                            <option value="Reactive">Reactive</option>
+                            <option value="Proactive">Proactive</option>
+                            <option value="Preventative">Preventative</option>
+                        </select>
+                    </div>
                 </div>
             </div>
-            <textarea
-                className="w-full p-4 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
-                placeholder="e.g., A slow memory leak in the Search API causing 504 errors, followed by a full crash during a deployment."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                disabled={status !== 'idle' && status !== 'proposed'}
-            />
-            
+
+            {/* Middle Row: Service Selection (Always Visible but disabled if not idle/proposed) */}
+            <div className="border-t border-gray-100 pt-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Target Services</label>
+                <div className="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg">
+                    <ServiceSelector 
+                        services={services}
+                        selectedIds={selectedServiceIds}
+                        onChange={(ids) => {
+                             if (status === 'idle' || status === 'proposed') {
+                                 setSelectedServiceIds(ids);
+                             }
+                        }}
+                    />
+                </div>
+            </div>
+
+            {/* Action Button */}
             {status === 'idle' && (
-                <div className="mt-4 flex justify-end">
+                <div className="flex justify-end pt-2">
                     <button
                         onClick={handleAnalyze}
-                        disabled={!prompt.trim()}
+                        disabled={!prompt.trim() || !vertical || !maturityLevel || selectedServiceIds.length === 0}
                         className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Sparkles className="w-5 h-5" />
@@ -199,67 +271,23 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
                 {/* Right: Configuration */}
                 <div className="md:w-1/2 p-6 bg-white flex flex-col gap-6">
 
-                    {/* Golden Demo Metadata */}
+                    {/* Additional Notes */}
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
                             <Bot className="w-4 h-4 text-gray-600" />
-                            Golden Demo Metadata
+                            Additional Metadata
                         </h3>
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">Golden Demo Name</label>
-                                <input
-                                    type="text"
-                                    value={goldenDemoName}
-                                    onChange={(e) => setGoldenDemoName(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm"
-                                    placeholder="e.g., Black Friday Checkout Failure"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">Vertical</label>
-                                <input
-                                    type="text"
-                                    value={vertical}
-                                    onChange={(e) => setVertical(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm"
-                                    placeholder="e.g., Retail, FinServ"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">Maturity Level</label>
-                                <select
-                                    value={maturityLevel}
-                                    onChange={(e) => setMaturityLevel(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm"
-                                >
-                                    <option value="">Select Level</option>
-                                    <option value="Reactive">Reactive</option>
-                                    <option value="Proactive">Proactive</option>
-                                    <option value="Preventative">Preventative</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">Persona Notes (Optional)</label>
-                                <textarea
-                                    value={personaNotes}
-                                    onChange={(e) => setPersonaNotes(e.target.value)}
-                                    className="w-full border border-gray-300 rounded p-2 text-sm min-h-[80px]"
-                                    placeholder="e.g., Key talking points, setup requirements"
-                                />
-                            </div>
+                         <div>
+                            <label className="block text-xs font-semibold text-gray-500 mb-1">Persona Notes (Optional)</label>
+                            <textarea
+                                value={personaNotes}
+                                onChange={(e) => setPersonaNotes(e.target.value)}
+                                className="w-full border border-gray-300 rounded p-2 text-sm min-h-[80px]"
+                                placeholder="e.g., Key talking points, setup requirements"
+                            />
                         </div>
                     </div>
                     
-                    {/* Service Selection */}
-                    <div className="flex-1 min-h-0 flex flex-col">
-                        <ServiceSelector 
-                            services={services}
-                            selectedIds={selectedServiceIds}
-                            onChange={setSelectedServiceIds}
-                        />
-                    </div>
-
                     {/* Volume Control */}
                     <div>
                         <h3 className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">
@@ -295,7 +323,7 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
                             onClick={() => setStatus('idle')}
                             className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
                         >
-                            Back
+                            Back to Edit Plan
                         </button>
                         <button
                             onClick={handleBuild}

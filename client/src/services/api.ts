@@ -204,11 +204,23 @@ export const api = {
     }),
 
   // --- Agent ---
-  agentProposal: (prompt: string, provider: string = 'google') => 
+  agentProposal: (data: { 
+      prompt: string; 
+      provider?: string; 
+      services?: any[]; 
+      vertical?: string; 
+      maturityLevel?: string; 
+  }) => 
     fetchFromProxy('/api/agent/proposal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, provider }),
+      body: JSON.stringify({ 
+          prompt: data.prompt, 
+          provider: data.provider || 'google',
+          services: data.services,
+          vertical: data.vertical,
+          maturityLevel: data.maturityLevel
+      }),
     }),
 
 

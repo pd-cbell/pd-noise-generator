@@ -13,7 +13,7 @@ export default (simulationManager: SimulationManager) => {
   router.post('/start', async (req, res) => {
     try {
       const { goldenDemoId, name, notes } = req.body;
-      const userId = req.user!.id;
+      const userId = (req as any).user!.id;
 
       if (!goldenDemoId) {
         return res.status(400).json({ message: 'goldenDemoId is required' });
@@ -45,7 +45,7 @@ export default (simulationManager: SimulationManager) => {
     try {
       const { id } = req.params;
       const { notes } = req.body;
-      const userId = req.user!.id;
+      const userId = (req as any).user!.id;
 
       // Capture Metrics from active simulation
       const simInstance = simulationManager.get(userId);
@@ -78,7 +78,7 @@ export default (simulationManager: SimulationManager) => {
   // GET /api/sessions
   router.get('/', async (req, res) => {
     try {
-      const userId = req.user!.id;
+      const userId = (req as any).user!.id;
       const { goldenDemoId } = req.query;
       const sessions = await sessionService.listSessions(userId, goldenDemoId ? String(goldenDemoId) : undefined);
       res.json(sessions);
