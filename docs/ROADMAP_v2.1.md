@@ -4,7 +4,7 @@
 
 ---
 
-## Phase 1: Golden Demo Abstraction (Core Data Layer)
+## Phase 1: Golden Demo Abstraction (Core Data Layer) - (Complete)
 *Establishes the system of record for high-value demos.*
 
 ### 1.1 Data Model (Schema)
@@ -42,7 +42,7 @@
 
 ---
 
-## Phase 2: Director Mode (The Consumer)
+## Phase 2: Director Mode (The Consumer) - (Complete)
 *The "Soundboard" UI that utilizes the Golden Demo data layer.*
 
 - **UI Implementation:**
@@ -54,7 +54,7 @@
 
 ---
 
-## Phase 3: Enhanced Realism (Polish)
+## Phase 3: Enhanced Realism (Polish) - (Complete)
 
 ### 3.1 ChatOps Persona Engine
 - **Goal:** Generate realistic Slack messages based on team tone.
@@ -70,7 +70,7 @@
 
 ---
 
-## Phase 4: Narrative & Session UX
+## Phase 4: Narrative & Session UX - (Complete)
 *The "Presenter View" for guided, consistent demos.*
 
 ### 4.1 Data Model (Session & Beats)
@@ -121,7 +121,7 @@
 
 ---
 
-## Phase 5: Seeding & Validation
+## Phase 5: Seeding & Validation - (Complete)
 
 ### 5.1 Default Demos
 - Create a seed script (`prisma/seed_demos.ts`) to populate the database with best-practice examples (including Beats):
