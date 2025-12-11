@@ -6,12 +6,15 @@ import { ServiceSelector } from './ServiceSelector';
 
 import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
 
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+
 interface AgentBuilderProps {
   onBuildComplete: (goldenDemo: GoldenDemo) => void;
 }
 
 export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) => {
-  const { services, fetchServices, selectedTeamIds, profiles, activeProfileId } = useStore(); // Added profiles, activeProfileId
+  const { services, fetchServices, selectedTeamIds } = useStore();
+  const { user } = useAuth(); // Get user from AuthContext
   
   const [prompt, setPrompt] = useState('');
   const [status, setStatus] = useState<'idle' | 'proposing' | 'proposed' | 'building'>('idle');
@@ -95,7 +98,7 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
           maturityLevel,
           narrative: proposal, // Use the edited proposal as the narrative
           personaNotes: personaNotes || undefined, // Optional
-          createdByUserId: activeProfileId || 'anonymous', // Fallback if no active profile
+          createdByUserId: user?.id || 'anonymous', // Use actual user ID
       });
       
       onBuildComplete(goldenDemo); // Pass the full GoldenDemo object

@@ -18,7 +18,21 @@ export default (agentService: AgentService) => { // Export a function that takes
   });
 
   router.post('/build', async (req, res) => {
-    const { prompt, approvedPlan, provider, services, eventCount, changeCount } = req.body;
+    const { 
+        prompt, 
+        approvedPlan, 
+        provider, 
+        services, 
+        eventCount, 
+        changeCount,
+        goldenDemoName,
+        vertical,
+        maturityLevel,
+        narrative,
+        personaNotes,
+        createdByUserId
+    } = req.body;
+
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
@@ -28,7 +42,13 @@ export default (agentService: AgentService) => { // Export a function that takes
           provider,
           services,
           eventCount,
-          changeCount
+          changeCount,
+          goldenDemoName,
+          vertical,
+          maturityLevel,
+          narrative,
+          personaNotes,
+          createdByUserId
       });
       res.json(campaign);
     } catch (error: any) {
