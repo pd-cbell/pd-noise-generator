@@ -87,6 +87,9 @@ export class SimulationInstance {
       _mttrCounts: createEmptySeverityMetrics(),
       _apiCallTimestamps: [],
       _lastRpmCheck: 0,
+      _lastPollCheck: 0,
+    };
+
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,

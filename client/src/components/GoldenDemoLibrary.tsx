@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
 import { Loader2, Plus, Edit, Trash2, Play } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
+import { GoldenDemoEditor } from './GoldenDemoEditor'; // New Import
 
 const GoldenDemoLibrary: React.FC = () => {
   const { 
@@ -14,6 +15,7 @@ const GoldenDemoLibrary: React.FC = () => {
   } = useStore();
 
   const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false); // Edit Modal State
   const selectedDemo = goldenDemos.find(demo => demo.id === selectedDemoId);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ const GoldenDemoLibrary: React.FC = () => {
                     <button 
                       className="text-gray-500 hover:text-blue-600" 
                       title="Edit"
-                      // onClick={(e) => { e.stopPropagation(); onEditDemo(demo.id); }} // TODO: Implement edit form
+                      onClick={(e) => { e.stopPropagation(); setSelectedDemoId(demo.id); setIsEditing(true); }} 
                     >
                       <Edit size={16} />
                     </button>
@@ -102,7 +104,7 @@ const GoldenDemoLibrary: React.FC = () => {
           <GoldenDemoDetail 
             demo={selectedDemo} 
             onLaunch={() => handleLaunchSimulation(selectedDemo)} 
-            // onEdit={() => onEditDemo(selectedDemo.id)} // TODO: Pass edit handler
+            onEdit={() => setIsEditing(true)} 
           />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500 text-lg">
@@ -110,6 +112,14 @@ const GoldenDemoLibrary: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Editor Modal */}
+      {isEditing && selectedDemo && (
+        <GoldenDemoEditor 
+          demo={selectedDemo} 
+          onClose={() => setIsEditing(false)} 
+        />
+      )}
     </div>
   );
 };

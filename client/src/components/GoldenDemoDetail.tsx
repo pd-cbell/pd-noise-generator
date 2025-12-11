@@ -1,6 +1,7 @@
 import React from 'react';
 import { GoldenDemo } from '../../../server/src/types';
-import { Play } from 'lucide-react';
+import { Play, History } from 'lucide-react';
+import { SessionHistory } from './SessionHistory';
 
 interface GoldenDemoDetailProps {
   demo: GoldenDemo;
@@ -10,7 +11,7 @@ interface GoldenDemoDetailProps {
 
 const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onEdit }) => {
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-full flex flex-col overflow-y-auto">
       <div className="flex items-center justify-between mb-4 border-b pb-4">
         <h2 className="text-2xl font-bold text-gray-900">{demo.name}</h2>
         <div className="flex space-x-2">
@@ -55,6 +56,14 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
           <p className="text-gray-700 whitespace-pre-wrap">{demo.personaNotes}</p>
         </div>
       )}
+
+      <div className="mt-8 border-t pt-6">
+        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <History className="w-5 h-5 text-gray-500" />
+            Session History
+        </h3>
+        <SessionHistory goldenDemoId={demo.id} />
+      </div>
 
       <div className="mt-auto border-t pt-4 text-sm text-gray-500 flex justify-between">
         <p>Created: {new Date(demo.createdAt).toLocaleString()}</p>
