@@ -1,4 +1,4 @@
-import { useStore } from '../store/useStore';
+import { useStore, ImportedCampaign } from '../store/useStore';
 
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
@@ -15,6 +15,22 @@ export async function fetchFromProxy(url: string, options: RequestInit = {}) {
 export interface ApiConfig {
   token?: string;
   fromEmail?: string;
+}
+
+export interface AgentBuildParams { 
+    prompt: string; 
+    provider?: string; 
+    approvedPlan?: string;
+    services?: any[];
+    eventCount?: number;
+    changeCount?: number;
+    // GoldenDemo Metadata
+    goldenDemoName: string;
+    vertical: string;
+    maturityLevel: string;
+    narrative: string;
+    personaNotes?: string;
+    createdByUserId: string;
 }
 
 function getHeaders(config?: ApiConfig) {
@@ -195,21 +211,7 @@ export const api = {
       body: JSON.stringify({ prompt, provider }),
     }),
 
-    export interface AgentBuildParams { 
-        prompt: string; 
-        provider?: string; 
-        approvedPlan?: string;
-        services?: any[];
-        eventCount?: number;
-        changeCount?: number;
-        // GoldenDemo Metadata
-        goldenDemoName: string;
-        vertical: string;
-        maturityLevel: string;
-        narrative: string;
-        personaNotes?: string;
-        createdByUserId: string;
-    }
+
   
     agentBuild: (params: AgentBuildParams) =>
       fetchFromProxy('/api/agent/build', {
