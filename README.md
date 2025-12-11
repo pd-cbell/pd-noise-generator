@@ -1,105 +1,65 @@
-# PagerDuty Customer Simulator v2.0 (Agentic Edition)
+# PagerDuty Golden Demo Platform v2.1
 
-![Customer Simulation](customer_sim.png)
+![Golden Demo Platform](customer_sim.png)
 
-A full-stack, multi-user application for generating realistic incident noise against PagerDuty. Now featuring an **AI-Powered Agentic Architect** for designing complex failure scenarios ("Golden Demos").
+A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.0.0-purple) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.1.0-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.0 (Agentic Edition) - Hybrid Architecture: Tactical AI, Strategic Speed
+## 🚀 New in v2.1: The Golden Demo Platform
 
-The v2.0 "Agentic Edition" pivots to a hybrid architecture, leveraging AI at design time for strategic speed and local Faker.js at runtime for tactical execution.
+v2.1 elevates the tool from a noise generator to a strategic demo asset manager.
 
-- **Agentic Campaign Builder:** Describe a scenario (e.g., "Checkout DB failure during Black Friday") and the AI Agent designs a complete 4-stage "Golden Demo" campaign.
-  **Critical Note:** Agentic campaign generation with GPT models has a known bug; for best results, please use **Gemini 2.5 Pro**.
-- **Dual-Provider AI:** Choose between **Gemini 2.5 Pro** and **GPT-5.1** (OpenAI) for generation.
-- **LangGraph Architecture:** Uses a "Planner -> Builder" workflow to ensure scenarios follow best-practice PagerDuty narratives (Signal -> Impact -> Triage -> Resolution).
-- **Structured Outputs:** Guarantees valid JSON configuration for all AI-generated content.
-- **Director Mode (Pending Polish v2.1):** Trigger predefined templates instantly for live demos.
+-   **Persistent "Golden Demos":** Save AI-generated campaigns as reusable, persistent assets in the database.
+-   **Agentic Architect (Enhanced):**
+    -   **Context-Aware Planning:** The AI Planner now understands Verticals (e.g., Retail, FinServ), Maturity Levels (Reactive, Proactive), and *your actual PagerDuty services* to craft tailored narratives.
+    -   **4-Stage Narrative Arc:** Enforces a strict best-practice structure: Routine Change -> Business Impact -> Triage -> Resolution.
+-   **Director Mode (Soundboard):** A visual grid for "one-click" activation of your saved Golden Demos.
+-   **Presenter View:** A guided, real-time dashboard for presenters, featuring:
+    -   **Narrative Beats:** Step-by-step cues on what to say and what to show.
+    -   **Live Metrics:** Real-time MTTA/MTTR tracking during the session.
+    -   **Session History:** Track every run of a demo for compliance and review.
+-   **Enhanced Realism:**
+    -   **ChatOps Persona Engine:** Slack messages now match specific team tones (e.g., "Anxious", "Professional").
+    -   **Multi-Region Support:** Native support for both US and EU PagerDuty regions.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
-The PagerDuty Noise Simulator v2.0 employs a powerful **Hybrid Architecture** designed for both strategic speed and tactical execution:
+The platform employs a powerful **Hybrid Architecture**:
 
--   **Design Time (AI-Powered):** At this stage, our `AgentService` (leveraging `LangGraph` with Gemini or GPT models) acts as an intelligent architect. It processes natural language inputs to construct sophisticated, multi-stage JSON campaigns. This ensures that complex failure scenarios and "Golden Demos" are generated with strategic precision and adherence to best practices, significantly accelerating the planning phase.
-
--   **Run Time (Local Faker.js):** Once a campaign is designed, the execution shifts to a highly efficient, local `FakerService`. This component rapidly generates realistic incident noise and associated events (e.g., alerts, change events) at high volumes (100+ RPM) without incurring LLM latency. This separation ensures tactical speed and reliability during live simulations, making the most of both AI's intelligence and local processing power.
+-   **Design Time (AI-Powered):** The `AgentService` (LangGraph + Gemini/GPT) acts as an intelligent architect, designing complex JSON scenarios and narratives based on your natural language prompt and PagerDuty environment.
+-   **Run Time (Local Faker.js):** The `FakerService` executes these designs locally at high speed (100+ RPM), ensuring tactical reliability and realism without LLM latency during live demos.
 
 ## ✨ Core Features
-- **Poisson Noise Generation:** Simulates realistic, non-deterministic incident traffic.
-- **Lifecycle Automation:** Auto-Acknowledge and Auto-Resolve incidents based on severity targets.
-- **Campaign Engine:** Design complex failure scenarios (Alerts + Change Events) with a visual editor.
-- **Webhook-Triggered Campaigns:** Import or build campaigns and trigger them via secure webhooks with campaign-level or per-step routing keys.
-- **Zero-Config Webhooks:** Trigger campaigns from CI/CD pipelines using secure, token-less magic links.
-- **Event Bursts:** Simulate "Event Storms" with compressed alert bursts.
+-   **Golden Demo Library:** Create, edit, and manage a library of perfect demos.
+-   **Agentic Builder:** AI-driven creation of campaigns with specific volume, service, and narrative constraints.
+-   **Poisson Noise Generation:** Simulates realistic background traffic.
+-   **Lifecycle Automation:** Auto-Acknowledge/Resolve based on severity targets.
+-   **Zero-Config Webhooks:** Trigger campaigns from CI/CD pipelines.
 
 ## 🛠️ Local Development
 
-### Environment configuration (5 minutes)
+### Environment configuration
 1) Copy examples:
 ```bash
 cp server/.env.example server/.env
 cp client/.env.example client/.env
 ```
 2) Fill required values in `server/.env`:
-   - `DATABASE_URL` (e.g., `postgresql://pdns:pdnspassword@localhost:5432/pdns_db`)
-   - `JWT_SECRET` (random string; required in production)
-   - `ENCRYPTION_KEY` (32 chars)
-   - `PD_REST_API_TOKEN`, `PD_FROM_EMAIL`, `PD_EVENTS_ROUTING_KEY` (PagerDuty)
-   - Optional: `PD_CHANGE_EVENTS_ROUTING_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `SLACK_WEBHOOK_URL`
-   - `GOOGLE_CLIENT_ID` if using Google login; leave blank to use Dev Login in non-prod.
+   - `DATABASE_URL` (PostgreSQL)
+   - `PD_REST_API_TOKEN`, `PD_FROM_EMAIL`, `PD_EVENTS_ROUTING_KEY`
+   - `GEMINI_API_KEY` or `OPENAI_API_KEY` (Required for Agent features)
 3) Fill `client/.env`:
    - `VITE_API_URL` (default `http://localhost:3001`)
-   - `VITE_GOOGLE_CLIENT_ID` (match server value if using Google login)
-
-### Prerequisites
-- Node.js 18+
-- Docker (for PostgreSQL)
 
 ### Quick Start
-1. **Start Database:**
-   ```bash
-   docker-compose up -d db
-   ```
-2. **Backend:**
-   ```bash
-   cd server
-   npm install
-   npx prisma migrate dev
-   npm run dev
-   ```
-3. **Frontend:**
-   ```bash
-   cd client
-   npm install
-   npm run dev
-   ```
-4. **Access:** Open `http://localhost:5173`. Use **Dev Login** in non-production or Google Sign-In when configured.
+1. **Start Database:** `docker-compose up -d db`
+2. **Backend:** `cd server && npm install && npx prisma migrate dev && npm run dev`
+3. **Frontend:** `cd client && npm install && npm run dev`
+4. **Access:** `http://localhost:5173`
 
 ## ☁️ Deployment (AWS)
-
-This repository includes a CloudFormation template (`deploy/aws-cfn.yaml`) that deploys the entire stack to an EC2 instance.
-
-- **EC2:** hosting Docker containers (Frontend + Backend).
-- **RDS (Optional):** Managed PostgreSQL database for persistence.
-- **Security:** Auto-configures Security Groups for HTTP/SSH access.
-
-**Required Parameters:**
-- `JwtSecret`: A secure random string.
-- `EncryptionKey`: A 32-character secure random string.
-- `GoogleClientId`: Your Google OAuth Client ID (configure Authorized Origins for the EC2 public IP).
-
-## 🔐 Environment Variables
-
-| Variable | Description |
-| :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string. |
-| `JWT_SECRET` | Secret key for signing session cookies. |
-| `ENCRYPTION_KEY` | 32-char key for encrypting user API tokens. |
-| `GOOGLE_CLIENT_ID` | OAuth Client ID for Google Sign-In. |
-| `GEMINI_API_KEY` | (Optional) API key for Google Gemini AI. |
-| `OPENAI_API_KEY` | (Optional) API key for OpenAI (GPT-4o/5.1). |
-| `CLIENT_URL` | URL of the frontend (for CORS). |
+Includes CloudFormation template (`deploy/aws-cfn.yaml`) for EC2 deployment.
 
 ## 📜 License
-This project is provided as-is for demonstration purposes.
+Provided as-is for demonstration purposes.
