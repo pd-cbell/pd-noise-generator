@@ -70,28 +70,99 @@ export class AgentService {
     const model = this.getModel(provider, 'smart');
 
     const prompt = `
-      You are a Principal Solution Consultant at PagerDuty. Your goal is to design a failure scenario that perfectly demonstrates the 'Operations Cloud' value proposition.
-      The scenario MUST follow this 4-stage narrative arc:
-      1. **Signal Complexity (Minor Incident):** Start with a technical alert (e.g., Storage Full, High CPU) that is auto-grouped. It should look like a background system issue (P5/P4).
-         - *Key Artifact:* Include a 'FinOps' or 'Governance' constraint (e.g., 'Auto-scaling blocked by policy').
-      2. **Business Impact (Major Incident):** The minor issue escalates. It must cascade to a second, consumer-facing service (e.g., Checkout, Mobile App).
-         - *Key Artifact:* High Latency or 500 Errors.
-      3. **Triage & Context:** The scenario requires a 'Change Event' to explain the root cause or a 'Related Incident'.
-      4. **Resolution:** The scenario ends with a 'Fix' event (e.g., a Change Event showing a rollback or a config override).
+You are a Principal Solution Consultant at PagerDuty. Your job is to design a compelling failure narrative that demonstrates the value of the PagerDuty Operations Cloud across its full lifecycle.
 
-      **Timing Rules:**
-      - The demo is fast-paced. Events must occur continuously.
-      - Maximum gap between events: 5 minutes.
-      - Total duration: 15-30 minutes.
+The user has already provided their scenario input:
+- User Request: "${state.userRequest}"
+- Vertical: "${state.goldenDemoVertical || 'General'}"      // e.g., FinTech, Retail, HealthTech, Media, SaaS, Manufacturing
+- Maturity Level: "${state.goldenDemoMaturityLevel || 'Proactive'}" // e.g., Starter, Intermediate, Advanced
 
-      **Context:**
-      - **Target Vertical:** ${state.goldenDemoVertical || 'General'}
-      - **Maturity Level:** ${state.goldenDemoMaturityLevel || 'Proactive'}
-      - **Available Services:** ${state.availableServices ? JSON.stringify(state.availableServices.map(s => s.name)) : 'Any (Assume standard e-commerce stack)'}
+You are also given a list of candidate *technical services* from the user’s PagerDuty account:
+${state.availableServices ? JSON.stringify(state.availableServices.map(s => s.name)) : 'Any (Assume standard e-commerce stack)'}
 
-      Analyze the user's request: '${state.userRequest}'.
-      Return a structured plan summary (TL;DR) explaining how this specific request fits into that 4-stage PagerDuty demo arc.
-    `;
+These represent the user’s real technical services (often aligned to teams). You MUST choose specific services from this list to anchor the scenario. Refer to them EXACTLY by their names to ensure they can be used later as \`event.custom_details.service_name\`.
+
+---------------------------------------------------------
+CORE STORY ARC — MUST FOLLOW THESE 4 STAGES
+---------------------------------------------------------
+
+1) Routine Change and Minor Incidents — Where Major Incidents Start
+   - A routine, low-risk change is applied to one of the selected technical services.
+   - This introduces a subtle degradation that surfaces as a **minor, low-severity technical incident**.
+   - The minor issue appears harmless or ignorable (P5/P4 style) but is the key early signal.
+   - Describe the early symptoms in a way that fits the user's **vertical** and **maturity level**.
+   - Make the narrative clear: *If this had been caught and resolved early, the major incident could have been prevented.*
+
+2) Business Impact — Escalation Driven by Lagging Indicators
+   - Time passes. One or more additional routine changes, traffic patterns, or environmental conditions interact with the unresolved minor issue.
+   - A major, customer-visible incident emerges.
+   - The incident affects a service selected from the technical list, framed as business-critical within the given vertical (e.g., "Checkout" for retail, "Claims Processing" for insurance, "Telehealth Scheduling" for health, etc.).
+   - Symptoms should match the vertical (e.g., 500 errors in checkout, queue backlog in streaming, delayed appointment confirmations in health).
+   - The escalation must clearly trace back to:
+       a) the root routine change, and
+       b) the ignored minor incident.
+
+3) Triage & Context — Connecting Signals, Changes, Dependencies, and Services
+   - Someone (or PagerDuty’s AIOps / Automation / Service Graph) must connect:
+       - the lagging business symptom,
+       - the earlier minor incident,
+       - the routine change(s) that seemed safe at the time.
+   - Describe how PagerDuty provides actionable context through:
+       - change events,
+       - related incidents,
+       - dependency mapping,
+       - notes, automation logs, classification, etc.
+   - Show how this context accelerates MTTA/MTTR and mobilizes the right teams.
+
+4) Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity
+   - The incident is resolved through a clear action (rollback, config override, scaling adjustment, feature flag reversal, automation runbook, etc.).
+   - Then explicitly describe a **Post-Incident Review (PIR)** that:
+       - documents the timeline and root cause,
+       - identifies how the minor incident could be detected, escalated, or remediated faster next time,
+       - proposes new workflow automations, guardrails, runbook changes, or routing improvements,
+       - reflects the user’s **vertical** (e.g., compliance-driven PIR for HealthTech; cost-driven PIR for FinTech; throughput-focused PIR for Media).
+   - PIR should feel like a true learning loop that improves reliability and operational maturity.
+
+---------------------------------------------------------
+SERVICE SELECTION RULES
+---------------------------------------------------------
+
+From the provided list of technical services:
+
+- Choose at least **one primary technical service** to anchor Stage 1 and the originating change.
+- Optionally choose a **second service** to act as the downstream “business-impact” surface.
+- Select the services that best match the *vertical* and the user’s *scenario request*.
+- Refer to all selected services EXACTLY as they appear in the list (no renaming, no altering, no inventing new ones).
+
+These EXACT names will later populate \`event.custom_details.service_name\`.
+
+---------------------------------------------------------
+TIMING GUIDELINES (DEMO-FRIENDLY)
+---------------------------------------------------------
+
+- The scenario should “feel” like 15–30 minutes of real operational time.
+- No major step should have more than ~5 minutes between key events.
+- Maintain pacing that keeps demo audiences engaged.
+
+---------------------------------------------------------
+REQUIRED OUTPUT
+---------------------------------------------------------
+
+Return a structured planning summary (NOT JSON). Include:
+
+- A concise TL;DR of the full story (2–3 sentences).
+- The four narrative stages, each with:
+   - Stage title,
+   - Selected service(s),
+   - A clear description of what happens and why,
+   - Vertical-specific framing,
+   - How maturity level influences behavior, blind spots, or reaction time.
+- A short section highlighting:
+   - Where PagerDuty’s AIOps, Automation, Change Events, and Service Graph add unique value.
+   - How the Post-Incident Review creates a learning and prevention cycle.
+
+Do NOT output JSON in this step. This is narrative planning only.
+`;
 
     try {
         const response = await model.invoke(prompt);
