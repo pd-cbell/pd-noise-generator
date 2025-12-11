@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { api } from '../services/api'; // Import the API service
-import { GoldenDemo, Session } from '../../../server/src/types'; // Import GoldenDemo and Session types
+import { api } from '../services/api'; 
+import { GoldenDemo, Session } from '../../../server/src/types'; 
 import { 
   PayloadAdapter, ImportedCampaign, CampaignItem,
   payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
@@ -12,7 +12,7 @@ export interface Profile {
   id: string;
   name: string;
   description: string;
-  settings: any; // Will be strictly typed progressively
+  settings: any; 
   updatedAt: number;
 }
 
@@ -20,7 +20,7 @@ export interface Team {
   id: string;
   name: string;
   html_url?: string;
-  persona?: string; // New: ChatOps tone/persona
+  persona?: string; 
 }
 
 export interface ServiceIntegration {
@@ -36,7 +36,7 @@ export interface Service {
   html_url?: string;
   teams: { id: string; name: string }[];
   changeIntegrations: ServiceIntegration[];
-  include: boolean; // For local selection in UI
+  include: boolean; 
 }
 
 export interface EscalationPolicy {
@@ -56,7 +56,7 @@ export interface Incident {
   startedAt: number;
   incidentId: string | null;
   mapAttempts: number;
-  lastMapAttemptAt?: number; // New: Timestamp of last ID mapping attempt
+  lastMapAttemptAt?: number; 
   nextEvalAt: number;
   ackAt: number | null;
   autoAckAt: number | null;
@@ -75,7 +75,7 @@ export interface Incident {
   noteContext: string[];
   syncedFromPd: boolean;
   isMajor?: boolean;
-  prioritySet?: boolean; // New v1.8
+  prioritySet?: boolean; 
 }
 
 export interface CampaignConfig {
@@ -100,32 +100,32 @@ export const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
 
 
 export interface SimulationState {
-  isGenerating: boolean; // Controls new incident creation
-  isManaging: boolean;   // Controls lifecycle (ack/resolve) of existing incidents
+  isGenerating: boolean; 
+  isManaging: boolean;   
   activeIncidents: Incident[];
   log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[];
   monitorTrend: { ts: number; count: number }[];
   totalEvents: number;
   
   // Metrics
-  avgMtta: Record<IncidentSeverity | 'global', number>; // milliseconds
-  avgMttr: Record<IncidentSeverity | 'global', number>; // milliseconds
+  avgMtta: Record<IncidentSeverity | 'global', number>; 
+  avgMttr: Record<IncidentSeverity | 'global', number>; 
   apiRpm: number;
-  apiCallsLast60s: number; // New: API calls in the last 60 seconds
-  droppedEvents: number; // New: Incidents dropped due to failed mapping (suppressed)
+  apiCallsLast60s: number; 
+  droppedEvents: number; 
 
-  // Internal Counters (not exposed to UI mostly)
+  // Internal Counters 
   _mttaSums: Record<IncidentSeverity | 'global', number>;
   _mttaCounts: Record<IncidentSeverity | 'global', number>;
   _mttrSums: Record<IncidentSeverity | 'global', number>;
   _mttrCounts: Record<IncidentSeverity | 'global', number>;
   _apiCallCount: number;
   _lastRpmCheck: number;
-  _apiCallTimestamps: number[]; // New: Timestamps of recent API calls
+  _apiCallTimestamps: number[]; 
   
   startSimulation: () => void;
-  pauseSimulation: () => void; // Stop generating, keep managing
-  stopSimulation: () => void; // Stop everything
+  pauseSimulation: () => void; 
+  stopSimulation: () => void; 
   addLog: (msg: string, type?: 'info' | 'warn' | 'error') => void;
   addIncident: (incident: Incident) => void;
   updateIncident: (dedupKey: string, updates: Partial<Incident>) => void;
@@ -133,7 +133,7 @@ export interface SimulationState {
   clearActiveIncidents: () => void;
   addMonitorTrendData: (count: number) => void;
   incrementApiCount: () => void;
-  evalTick: () => void; // Periodic evaluation for incidents
+  evalTick: () => void; 
   triggerIncident: (service: Service, failureContext?: any) => Promise<void>;
   ackIncident: (dedupKey: string) => Promise<void>;
   resolveIncident: (dedupKey: string) => Promise<void>;
@@ -164,7 +164,7 @@ export interface SeverityConfig {
 }
 
 export const DEFAULT_SEVERITY_CONFIGS: Record<IncidentSeverity, SeverityConfig> = {
-  info: { // Info is suppressed, but included for completeness
+  info: { 
     minAckSec: 0, maxAckSec: 0,
     minResolveSec: 0, maxResolveSec: 0,
     noteProbability: 0, responderProbability: 0,
@@ -192,22 +192,20 @@ export interface ConfigurationState {
   pdSubdomain: string;
   fromEmail: string;
   globalRoutingKey: string;
-  pdRegion: 'US' | 'EU'; // New: PagerDuty region
+  pdRegion: 'US' | 'EU'; 
   selectedTeamIds: string[];
   selectedEPIds: string[];
   
-  // Global Simulation Settings
   ratePerMinute: number;
   severityWeights: { info: number; warning: number; error: number; critical: number };
   autoHealConfig: AutoHealConfig;
   resumeExistingEnabled: boolean;
   sourceMix: Record<string, number>;
-  burstProbability: number; // New: Probability (0-1) that an incident will have bursts
-  majorIncidentProbability: number; // New v1.8
-  responderAckRate: number; // New v1.8
-  teamFailureProbability: number; // New v1.8.1
+  burstProbability: number; 
+  majorIncidentProbability: number; 
+  responderAckRate: number; 
+  teamFailureProbability: number; 
 
-  // Per-Severity Simulation Settings
   severityConfigs: Record<IncidentSeverity, SeverityConfig>;
 
   teams: Team[];
@@ -224,7 +222,7 @@ export interface ConfigurationState {
 
   setCredentials: (creds: Partial<ConfigurationState>) => void;
   setSettings: (settings: Partial<ConfigurationState>) => void;
-  setSeverityConfig: (severity: IncidentSeverity, config: Partial<SeverityConfig>) => void; // New action
+  setSeverityConfig: (severity: IncidentSeverity, config: Partial<SeverityConfig>) => void; 
   setSelectedTeamIds: (ids: string[]) => void;
   setSelectedEPIds: (ids: string[]) => void;
   setServiceInclude: (serviceId: string, include: boolean) => void;
@@ -239,8 +237,6 @@ export interface ConfigurationState {
   setLastChangeEvent: (event: { ts: number; serviceName: string; failureSummary: string } | null) => void;
 }
 
-// --- Store Definition ---
-
 interface AppState extends SimulationState, ConfigurationState {
   profiles: Profile[];
   activeProfileId: string | null;
@@ -250,20 +246,19 @@ interface AppState extends SimulationState, ConfigurationState {
   updateCampaign: (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => Promise<ImportedCampaign>;
   deleteCampaign: (id: string) => Promise<void>;
 
-  goldenDemos: GoldenDemo[]; // New: List of Golden Demos
-  isLoadingGoldenDemos: boolean; // New: Loading state for Golden Demos
+  goldenDemos: GoldenDemo[]; 
+  isLoadingGoldenDemos: boolean; 
   fetchGoldenDemos: (vertical?: string) => Promise<void>;
   createGoldenDemo: (goldenDemo: Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>) => Promise<GoldenDemo>;
   updateGoldenDemo: (id: string, goldenDemo: Partial<Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>>) => Promise<GoldenDemo>;
   deleteGoldenDemo: (id: string) => Promise<void>;
 
-  // Session State (Phase 4.3)
   activeSessionId: string | null;
   startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) => Promise<void>;
   endSession: (notes?: string) => Promise<void>;
 }
 
-const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const TREND_WINDOW_MS = 15 * 60 * 1000; 
 
 export const useStore = create<AppState>()(
   persist(
@@ -273,22 +268,20 @@ export const useStore = create<AppState>()(
       pdSubdomain: '',
       fromEmail: '',
       globalRoutingKey: '',
-      pdRegion: 'US', // Default to US
+      pdRegion: 'US', 
       selectedTeamIds: [],
       selectedEPIds: [],
       
-      // Global Simulation Defaults
       ratePerMinute: 6,
       severityWeights: { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 },
       autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
       resumeExistingEnabled: true,
       sourceMix: { cloudwatch: 0.25, datadog: 0.25, newrelic: 0.25, splunk: 0.25 },
       burstProbability: 0.5,
-      majorIncidentProbability: 0.2, // Default 20% of team failures are Major
+      majorIncidentProbability: 0.2, 
       responderAckRate: 0.9,
       teamFailureProbability: 0.01,
 
-      // Per-Severity Simulation Defaults
       severityConfigs: DEFAULT_SEVERITY_CONFIGS,
 
       teams: [],
@@ -354,6 +347,10 @@ export const useStore = create<AppState>()(
         )
       })),
 
+      addLog: (msg, type = 'info') => set((state) => ({
+        log: [{ ts: new Date().toLocaleTimeString(), type, msg }, ...state.log].slice(0, 800)
+      })),
+
       fetchTeams: async () => {
         set({ isLoadingTeams: true });
         try {
@@ -364,9 +361,7 @@ export const useStore = create<AppState>()(
 
           while (more) {
             const data = await api.getTeams({ token: apiToken, fromEmail }, 100, offset);
-            // v2.0: Removed hard filtering. All teams are loaded. Visibility is handled in UI components.
             allTeams.push(...data.teams);
-            
             more = data.more;
             offset += data.limit || 100;
           }
@@ -382,8 +377,6 @@ export const useStore = create<AppState>()(
       fetchServices: async () => {
         set({ isLoadingServices: true });
         try {
-          // v2.0: Fetch services for ALL loaded teams to enable Campaign Builder usage
-          // regardless of Noise Simulation selection.
           const { teams, services: currentServices, apiToken, fromEmail } = get();
           const targetTeamIds = teams.map(t => t.id);
 
@@ -474,7 +467,6 @@ export const useStore = create<AppState>()(
 
       loadImportedCampaigns: async () => {
         try {
-          // Fetch from API instead of local file parsing
           const data = await api.getCampaigns();
           const campaigns = (data.campaigns || []).map((c: any) => ({
             id: c.id,
@@ -485,13 +477,13 @@ export const useStore = create<AppState>()(
             items: c.items.map((i: any) => ({
               id: i.id,
               stepName: i.stepName,
-              payloadString: JSON.stringify(i.payload), // Convert back to string for compatibility
+              payloadString: JSON.stringify(i.payload),
               eventAction: i.eventAction,
               eventType: i.eventType,
               dedupKey: i.dedupKey,
               integrationKey: i.integrationKey,
               delaySeconds: i.delaySeconds,
-              times: i.repeatCount, // Map DB 'repeatCount' to frontend 'times'
+              times: i.repeatCount, 
               intervalSeconds: i.intervalSeconds,
             }))
           }));
@@ -519,8 +511,101 @@ export const useStore = create<AppState>()(
         }
       },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
+      
+      startSimulation: () => set({ isGenerating: true, isManaging: true }),
+      pauseSimulation: () => set({ isGenerating: false, isManaging: true }),
+      stopSimulation: () => set({ isGenerating: false, isManaging: false }),
+      
+      addIncident: (incident) => set((state) => ({
+        activeIncidents: [incident, ...state.activeIncidents],
+      })),
 
-      // --- Golden Demo Actions ---
+      updateIncident: (dedupKey, updates) => set((state) => ({
+        activeIncidents: state.activeIncidents.map(inc => 
+          inc.dedupKey === dedupKey ? { ...inc, ...updates } : inc
+        ),
+      })),
+
+      removeIncident: (dedupKey) => set((state) => ({
+        activeIncidents: state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey),
+      })),
+      
+      clearActiveIncidents: () => set({ activeIncidents: [] }),
+
+      addMonitorTrendData: (count) => set((state) => {
+        const nowTs = Date.now();
+        const windowStart = nowTs - TREND_WINDOW_MS;
+        const trimmed = state.monitorTrend.filter((point) => point.ts >= windowStart);
+        return { monitorTrend: [...trimmed, { ts: nowTs, count }] };
+      }),
+
+      incrementApiCount: () => set((state) => ({ 
+        _apiCallCount: state._apiCallCount + 1,
+        _apiCallTimestamps: [...state._apiCallTimestamps, Date.now()]
+      })),
+
+      evalTick: async () => {
+        // Client-side simulation logic (mostly deprecated/unused if server simulation is active)
+      },
+
+      triggerIncident: async (service: Service, failureContext: any = null) => {
+         // Deprecated client-side logic
+      },
+
+      ackIncident: async (dedupKey: string) => {
+         // Deprecated client-side logic
+      },
+
+      resolveIncident: async (dedupKey: string) => {
+         // Deprecated client-side logic
+      },
+
+      resolveAllIncidents: async () => {
+         // Deprecated client-side logic
+      },
+
+      setActiveProfile: (id) => set({ activeProfileId: id }),
+      
+      saveProfile: async (profileData) => {
+        const { profiles } = get();
+        const existing = profileData.id ? profiles.find(p => p.id === profileData.id) : null;
+        
+        try {
+          let savedProfile;
+          const apiPayload = {
+            name: profileData.name,
+            description: profileData.description,
+            settings: profileData.settings,
+          };
+
+          if (existing) {
+            savedProfile = await api.updateProfile(existing.id, apiPayload);
+            get().addLog(`Profile "${savedProfile.name}" updated.`, 'info');
+          } else {
+            savedProfile = await api.createProfile(apiPayload);
+            get().addLog(`Profile "${savedProfile.name}" created.`, 'info');
+          }
+          
+          await get().fetchProfiles();
+          set({ activeProfileId: savedProfile.id });
+        } catch (error: any) {
+          get().addLog(`Failed to save profile: ${error.message}`, 'error');
+        }
+      },
+
+      deleteProfile: async (id) => {
+        try {
+          await api.deleteProfile(id);
+          get().addLog('Profile deleted.', 'info');
+          await get().fetchProfiles();
+          if (get().activeProfileId === id) {
+            set({ activeProfileId: null });
+          }
+        } catch (error: any) {
+          get().addLog(`Failed to delete profile: ${error.message}`, 'error');
+        }
+      },
+
       fetchGoldenDemos: async (vertical?: string) => {
         set({ isLoadingGoldenDemos: true });
         try {
@@ -538,7 +623,7 @@ export const useStore = create<AppState>()(
         try {
           const newDemo = await api.createGoldenDemo(goldenDemoData);
           get().addLog(`Golden Demo "${newDemo.name}" created.`, 'info');
-          get().fetchGoldenDemos(); // Refresh list
+          get().fetchGoldenDemos(); 
           return newDemo;
         } catch (error: any) {
           get().addLog(`Failed to create Golden Demo: ${error.message}`, 'error');
@@ -550,7 +635,7 @@ export const useStore = create<AppState>()(
         try {
           const updatedDemo = await api.updateGoldenDemo(id, goldenDemoData);
           get().addLog(`Golden Demo "${updatedDemo.name}" updated.`, 'info');
-          get().fetchGoldenDemos(); // Refresh list
+          get().fetchGoldenDemos(); 
           return updatedDemo;
         } catch (error: any) {
           get().addLog(`Failed to update Golden Demo: ${error.message}`, 'error');
@@ -562,14 +647,84 @@ export const useStore = create<AppState>()(
         try {
           await api.deleteGoldenDemo(id);
           get().addLog('Golden Demo deleted.', 'info');
-          get().fetchGoldenDemos(); // Refresh list
+          get().fetchGoldenDemos(); 
         } catch (error: any) {
           get().addLog(`Failed to delete Golden Demo: ${error.message}`, 'error');
           throw error;
         }
       },
 
-      // --- Session Actions ---
+      createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
+        try {
+          const apiPayload = {
+            ...campaignData,
+            integrationKey: campaignData.integrationKey || '',
+            items: campaignData.items.map(item => {
+              let payload = {};
+              try {
+                payload = JSON.parse(item.payloadString || '{}');
+              } catch (e) {
+                console.error("Failed to parse payloadString for item", item.id);
+              }
+              return { 
+                  ...item, 
+                  payload,
+                  repeatCount: item.times || 1 
+              };
+            })
+          };
+
+          const newCampaign = await api.createCampaign(apiPayload);
+          get().addLog(`Campaign "${newCampaign.name}" created.`, 'info');
+          await get().loadImportedCampaigns(); 
+          return newCampaign;
+        } catch (error: any) {
+          get().addLog(`Failed to create campaign: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
+        try {
+          const apiPayload = {
+            ...campaignData,
+            integrationKey: campaignData.integrationKey || '',
+            items: campaignData.items?.map(item => {
+              let payload = {};
+              try {
+                payload = JSON.parse(item.payloadString || '{}');
+              } catch (e) {
+                console.error("Failed to parse payloadString for item", item.id);
+              }
+              return { 
+                  ...item, 
+                  payload,
+                  repeatCount: item.times || 1 
+              };
+            })
+          };
+
+          const updatedCampaign = await api.updateCampaign(id, apiPayload);
+          get().addLog(`Campaign "${updatedCampaign.name}" updated.`, 'info');
+          await get().loadImportedCampaigns(); 
+          return updatedCampaign;
+        } catch (error: any) {
+          get().addLog(`Failed to update campaign: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
+      deleteCampaign: async (id: string) => {
+        try {
+          await api.deleteCampaign(id);
+          get().addLog('Campaign deleted.', 'info');
+          await get().loadImportedCampaigns(); 
+        } catch (error: any) {
+          get().addLog(`Failed to delete campaign: ${error.message}`, 'error');
+          throw error;
+        }
+      },
+
       startSession: async (data) => {
         try {
           const session = await api.startSession(data);
@@ -595,21 +750,19 @@ export const useStore = create<AppState>()(
       },
     }),
     {
-      name: 'pdns-storage', // Unique name for localStorage key
+      name: 'pdns-storage', 
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Persist only configuration and profiles, not runtime state like logs or activeIncidents
         profiles: state.profiles,
         activeProfileId: state.activeProfileId,
         apiToken: state.apiToken,
         pdSubdomain: state.pdSubdomain,
         fromEmail: state.fromEmail,
         globalRoutingKey: state.globalRoutingKey,
-        pdRegion: state.pdRegion, // Persist pdRegion
+        pdRegion: state.pdRegion, 
         selectedTeamIds: state.selectedTeamIds,
         campaignConfig: state.campaignConfig,
         
-        // Persist Simulation Settings
         ratePerMinute: state.ratePerMinute,
         severityWeights: state.severityWeights,
         autoHealConfig: state.autoHealConfig,
@@ -620,15 +773,7 @@ export const useStore = create<AppState>()(
         responderAckRate: state.responderAckRate,
         teamFailureProbability: state.teamFailureProbability,
 
-        // Persist Per-Severity Simulation Settings
         severityConfigs: state.severityConfigs,
-        
-        // DO NOT persist goldenDemos or isLoadingGoldenDemos, they are fetched from backend
-        // goldenDemos: state.goldenDemos, 
-        // isLoadingGoldenDemos: state.isLoadingGoldenDemos,
-        
-        // DO NOT persist session state
-        // activeSessionId: state.activeSessionId,
       }),
     }
   )
