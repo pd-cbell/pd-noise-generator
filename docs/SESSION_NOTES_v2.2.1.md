@@ -21,14 +21,15 @@
   - ServerSimulationEngine applies mapping profiles for incidents + change events; change routing key pulled from config/headers/env.
 - **Change routing keys:**
   - Mapping profiles support `changeRoutingKeyOverride` per logical service; change events also honor per-event change key overrides. Runtime resolution now prefers event override → mapping override → service change integration → simulator/global.
+- **Director UX (v2.2.2):**
+  - Added `GoldenDemoDetailModal` for pre-launch inspection.
+  - Shows narrative and real-time mapping preview (Logical Service -> Mapped Service).
+  - Fixed client-side crash in mapping loop.
 
 ## Outstanding / Bug Bash Checks
-- Verify mapping resolution on incidents/change events (effective service + routing keys) across Director + webhook trigger.
-- Validate Golden Demo save/load ensures `logicalServiceName` persists; payload JSON remains valid post-edit/import.
-- Import flows: Campaign Failure and Crux payload string parsing; base offset adjustments; repeat/interval respected.
-- Webhook trigger without socket client: routing keys present or from env; mapping profile override honored.
-- Confirm change events send with mapping change routing key override (no incident-key fallback).
-- Schedules for demos: not implemented (webhook-only) — note for future.
+- **Golden Demo "Silence":** Launching a Golden Demo currently stops background noise.
+  - **Root Cause:** `DirectorDashboard` sends *only* the Golden Demo config (items) to `startSimulation`, which overwrites the server's active configuration (wiping out `selectedServices`, `ratePerMinute`, etc.).
+  - **Plan:** Update `DirectorDashboard.tsx` to merge the current global configuration (from `useStore`) with the Golden Demo config before calling `startSimulation`. This ensures background noise continues alongside the scripted demo.
 
 ## Notes / Gotchas
 - Webhook credentials: best-effort; API token/fromEmail not auto-populated.

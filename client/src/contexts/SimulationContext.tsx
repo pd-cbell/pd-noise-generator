@@ -16,8 +16,9 @@ interface ServerSimulationState {
 interface SimulationContextType {
   currentSimState: ServerSimulationState | null;
   isSimRunning: boolean;
-  startSimulation: (overrideConfig?: any) => void; // Updated signature
+  startSimulation: (overrideConfig?: any) => void;
   stopSimulation: () => void;
+  injectGoldenDemo: (items: any[], mappingProfileId?: string) => void; // Added for injecting Golden Demo items
   isLoading: boolean;
   ackIncident: (dedupKey: string) => void;
   resolveIncident: (dedupKey: string) => void;
@@ -90,6 +91,17 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       socketRef.current.emit('stop_simulation');
     }
   }, []);
+
+  const injectGoldenDemo = useCallback((items: any[], mappingProfileId?: string) => {
+    if (socketRef.current && user && credentials) {
+      // Don't block UI for injection
+      socketRef.current.emit('inject_golden_demo_items', { items, mappingProfileId }, (err: any) => {
+        if (err) {
+          console.error('SimulationProvider: inject_golden_demo_items callback error', err);
+        }
+      });
+    }
+  }, [user, credentials]);
 
   // Actions
   const ackIncident = useCallback((dedupKey: string) => {
@@ -182,7 +194,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   return (
     <SimulationContext.Provider value={{ 
-        currentSimState, isSimRunning, startSimulation, stopSimulation, isLoading,
+        currentSimState, isSimRunning, startSimulation, stopSimulation, injectGoldenDemo, isLoading,
         ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents
     }}>
       {children}

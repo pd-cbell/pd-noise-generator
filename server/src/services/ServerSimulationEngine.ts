@@ -827,9 +827,7 @@ export class SimulationInstance {
       if (!payload.summary || String(payload.summary).trim().length === 0) {
         payload.summary = item.summary || `Change event for ${logicalServiceName}`;
       }
-      if (!payload.timestamp) {
-        payload.timestamp = new Date().toISOString();
-      }
+      payload.timestamp = new Date().toISOString();
       const body = {
         routing_key: routingKey,
         payload: {
@@ -873,6 +871,23 @@ export class SimulationInstance {
     this.state.totalEvents++;
     const dedup = response?.dedup_key || item.dedupKey || 'unknown';
     this.addLog(`Golden Demo event sent (${type}) ${logicalServiceName} dedup=${dedup}`, 'info');
+  }
+
+  public injectGoldenDemoItems(items: any[]) {
+    if (!items.length) return;
+    let cumulativeMs = 0;
+    items.forEach((item) => {
+      const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
+      cumulativeMs += delaySec * 1000;
+      const timer = setTimeout(() => {
+        this.fireGoldenDemoItem(item).catch((err) => {
+          this.addLog(`Golden Demo event failed: ${err.message}`, 'error');
+        });
+      }, cumulativeMs);
+      this.goldenDemoTimers.push(timer);
+    });
+    this.addLog(`Injected ${items.length} Golden Demo items.`, 'info');
+    this.emitState();
   }
 
   private scheduleGoldenDemoItems(itemsOverride?: any[]) {
@@ -1213,8 +1228,7 @@ export class SimulationInstance {
 
   private emitState() {
     const room = this.io.sockets.adapter.rooms.get(this.userId);
-    console.log('Emitting tick to', this.userId, 'Clients:', room ? room.size : 0);
-    this.io.to(this.userId).emit('sim_tick', this.state);
+        this.io.to(this.userId).emit('sim_tick', this.state);
   }
 }
 
@@ -1239,6 +1253,32 @@ export class SimulationManager {
     } else {
         instance = new SimulationInstance(userId, config, credentials, this.io);
         this.instances.set(userId, instance);
+        // Set up socket event listener for this new instance
+        this.io.of('/').adapter.on('join-room', (room, id) => {
+          if (room === userId) { // When a client joins their user-specific room
+            const clientSocket = this.io.of('/').sockets.get(id);
+            if (clientSocket) {
+              clientSocket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
+                try {
+                  const instanceToInject = this.instances.get(userId);
+                  if (instanceToInject) {
+                    if (mappingProfileId) {
+                      await instanceToInject.applyMappingProfile(mappingProfileId);
+                    }
+                    instanceToInject.injectGoldenDemoItems(items);
+                    if (callback) callback(null);
+                  } else {
+                    console.error(`Attempted to inject golden demo items for non-existent user instance: ${userId}`);
+                    if (callback) callback({ message: "Simulation instance not found" });
+                  }
+                } catch (e: any) {
+                  console.error("Error injecting golden demo items:", e);
+                  if (callback) callback({ message: e.message });
+                }
+              });
+            }
+          }
+        });
     }
     await instance.applyMappingProfile(config.mappingProfileId ?? null);
     return instance;

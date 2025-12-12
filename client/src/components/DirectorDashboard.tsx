@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2 } from 'lucide-react';
-import { useStore, GoldenDemo, MappingProfile } from '../store/useStore'; // Import GoldenDemo type
-import { useServerSimulation } from '../hooks/useServerSimulation'; // New import
+import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
+import { useServerSimulation } from '../hooks/useServerSimulation';
+import { GoldenDemoDetailModal } from './GoldenDemoDetailModal'; // Import the new modal component
 
 export const DirectorDashboard: React.FC = () => {
   const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos, mappingProfiles, fetchMappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
-  const { startSimulation } = useServerSimulation(); // Get startSimulation from hook
+  const { startSimulation, injectGoldenDemo } = useServerSimulation(); // Import injectGoldenDemo
   
-  const [isLoading, setIsLoading] = useState(true); // Control local loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDemo, setSelectedDemo] = useState<GoldenDemo | null>(null);
 
   useEffect(() => {
     const loadDemos = async () => {
@@ -24,25 +27,25 @@ export const DirectorDashboard: React.FC = () => {
   );
 
   const handleLaunch = (demo: GoldenDemo) => {
-    // Stop any currently running simulation
-    // This is handled implicitly by useServerSimulation which will reset
-    
-    // Extract configJson from the GoldenDemo
-    const simulationConfig = {
-      ...demo.configJson,
-      mappingProfileId: selectedMappingProfileId,
-      goldenDemoId: demo.id,
-    };
+    // Inject the golden demo items directly
+    injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined);
 
-    // Start the simulation with the Golden Demo's config
-    startSimulation(simulationConfig); // Pass the config to startSimulation
     addLog(
-      `Launching simulation for Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
+      `Injecting Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
       'info'
     );
   };
 
-  // State and handlers for filtering GoldenDemos
+  const handleCardClick = (demo: GoldenDemo) => {
+    setSelectedDemo(demo);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedDemo(null);
+  };
+
   const [filterVertical, setFilterVertical] = useState<string>('');
   const [filterMaturity, setFilterMaturity] = useState<string>('');
 
@@ -124,7 +127,11 @@ export const DirectorDashboard: React.FC = () => {
           <div className="flex-1 overflow-y-auto pr-2">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {filteredDemos.map(demo => (
-                      <div key={demo.id} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                      <div 
+                          key={demo.id} 
+                          className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow"
+                          onClick={() => handleCardClick(demo)} // Make the card clickable
+                      >
                           {/* Golden Demo Header */}
                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                               <AlertTriangle className="w-4 h-4 text-gray-400" />
@@ -140,7 +147,7 @@ export const DirectorDashboard: React.FC = () => {
                               </div>
                               
                               <button
-                                  onClick={() => handleLaunch(demo)}
+                                  onClick={(e) => { e.stopPropagation(); handleLaunch(demo); }} // Prevent modal from opening when launching
                                   className={`w-full py-2 rounded flex items-center justify-center gap-2 text-sm font-semibold transition-colors
                                       bg-green-50 text-green-600 hover:bg-green-600 hover:text-white border border-green-100 hover:border-green-600
                                   }`}
@@ -153,6 +160,16 @@ export const DirectorDashboard: React.FC = () => {
                   ))}
               </div>
           </div>
+      )}
+
+      {selectedDemo && (
+        <GoldenDemoDetailModal
+          isOpen={isModalOpen}
+          onClose={closeModal}
+          demo={selectedDemo}
+          selectedMappingProfile={selectedProfile}
+          onLaunch={handleLaunch}
+        />
       )}
     </div>
   );

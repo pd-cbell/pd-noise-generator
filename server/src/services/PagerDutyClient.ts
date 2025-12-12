@@ -246,6 +246,7 @@ export class PagerDutyClient {
   }
 
   async triggerChangeEvent(eventBody: any) {
+    console.log('[PagerDutyClient] Sending change event:', JSON.stringify(eventBody, null, 2));
     const res = await fetch('https://events.pagerduty.com/v2/change/enqueue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -253,6 +254,7 @@ export class PagerDutyClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      console.error('[PagerDutyClient] Change Event Error Response:', JSON.stringify(errorData, null, 2));
       throw new Error(errorData.message || `PagerDuty Change Events API Error: ${res.statusText}`);
     }
     return res.json();

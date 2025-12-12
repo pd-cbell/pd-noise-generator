@@ -1,41 +1,38 @@
-# PagerDuty Golden Demo Platform v2.1
+# PagerDuty Golden Demo Platform v2.2
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.1.0-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.2.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.1: The Golden Demo Platform
+## 🚀 New in v2.2: Mapping & Personalization
 
-v2.1 elevates the tool from a noise generator to a strategic demo asset manager.
+v2.2 introduces robust tools for tailoring demos to any prospect environment without rewriting scripts.
 
--   **Persistent "Golden Demos":** Save AI-generated campaigns as reusable, persistent assets in the database.
--   **Agentic Architect (Enhanced):**
-    -   **Context-Aware Planning:** The AI Planner now understands Verticals (e.g., Retail, FinServ), Maturity Levels (Reactive, Proactive), and *your actual PagerDuty services* to craft tailored narratives.
-    -   **4-Stage Narrative Arc:** Enforces a strict best-practice structure: Routine Change -> Business Impact -> Triage -> Resolution.
--   **Director Mode (Soundboard):** A visual grid for "one-click" activation of your saved Golden Demos.
--   **Presenter View:** A guided, real-time dashboard for presenters, featuring:
-    -   **Narrative Beats:** Step-by-step cues on what to say and what to show.
-    -   **Live Metrics:** Real-time MTTA/MTTR tracking during the session.
-    -   **Session History:** Track every run of a demo for compliance and review.
--   **Enhanced Realism:**
-    -   **ChatOps Persona Engine:** Slack messages now match specific team tones (e.g., "Anxious", "Professional").
-    -   **Multi-Region Support:** Native support for both US and EU PagerDuty regions.
+-   **Mapping Profiles:**
+    -   **Runtime Personalization:** Map "Logical Services" (e.g., "Payments DB") in your Golden Demos to *actual* PagerDuty Services (e.g., "Payments DB - Customer A") dynamically at launch.
+    -   **Flexible Routing:** Define global or service-specific routing keys for incidents and change events.
+-   **Director Soundboard (Enhanced):**
+    -   **Interactive Preview:** Click any demo card to inspect the full narrative and verify service mappings before launching.
+    -   **Concurrent Injection:** Launch multiple Golden Demos on top of running background noise without interruption.
+-   **Unified Golden Demo Editor:**
+    -   **Inline Editing:** Tweak event payloads, timing, and summaries directly in the UI.
+    -   **Imports:** Import legacy Campaign Failures or Crux scenarios directly into the Golden Demo format.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
 The platform employs a powerful **Hybrid Architecture**:
 
 -   **Design Time (AI-Powered):** The `AgentService` (LangGraph + Gemini/GPT) acts as an intelligent architect, designing complex JSON scenarios and narratives based on your natural language prompt and PagerDuty environment.
--   **Run Time (Local Faker.js):** The `FakerService` executes these designs locally at high speed (100+ RPM), ensuring tactical reliability and realism without LLM latency during live demos.
+-   **Run Time (Local Faker.js):** The `FakerService` executes these designs locally at high speed, ensuring tactical reliability and realism without LLM latency during live demos.
 
 ## ✨ Core Features
 -   **Golden Demo Library:** Create, edit, and manage a library of perfect demos.
+-   **Director Mode:** A visual "Soundboard" for one-click injection of scenarios into a running simulation.
 -   **Agentic Builder:** AI-driven creation of campaigns with specific volume, service, and narrative constraints.
 -   **Poisson Noise Generation:** Simulates realistic background traffic.
 -   **Lifecycle Automation:** Auto-Acknowledge/Resolve based on severity targets.
--   **Zero-Config Webhooks:** Trigger campaigns from CI/CD pipelines.
 
 ## 🛠️ Local Development
 
