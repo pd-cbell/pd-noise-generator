@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { GoldenDemoService } from '../services/GoldenDemoService';
 import { authenticateUser } from '../middleware/auth';
 import { z } from 'zod'; // For validation
+import { simulationManager } from '../index';
+import { serverConfig } from '../config';
 
 const router = Router();
 const goldenDemoService = new GoldenDemoService();
@@ -27,6 +29,64 @@ const updateGoldenDemoSchema = z.object({
 });
 
 router.use(authenticateUser); // All Golden Demo routes require authentication
+
+// --- Webhook trigger (public) ---
+router.post('/:id/trigger', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mappingProfileId =
+      (req.headers['x-mapping-profile-id'] as string) ||
+      (req.body && req.body.mappingProfileId) ||
+      null;
+
+    const demo = await goldenDemoService.getGoldenDemo(id, undefined as any);
+    if (!demo) {
+      return res.status(404).json({ message: 'Golden Demo not found' });
+    }
+
+    // Build credentials from headers/body/env (best-effort)
+    const globalRoutingKey =
+      (req.headers['x-pd-routing-key'] as string) ||
+      (req.body && req.body.globalRoutingKey) ||
+      serverConfig.pdEventsRoutingKey;
+    const changeRoutingKey =
+      (req.headers['x-pd-change-routing-key'] as string) ||
+      (req.body && req.body.changeRoutingKey) ||
+      serverConfig.pdChangeEventsRoutingKey;
+
+    const credentials = {
+      apiToken: (req.body && req.body.apiToken) || '',
+      fromEmail: (req.body && req.body.fromEmail) || '',
+      globalRoutingKey: globalRoutingKey || '',
+      pdRegion: req.body?.pdRegion || 'US',
+    };
+
+    if (!credentials.globalRoutingKey) {
+      return res.status(400).json({ message: 'Missing global routing key (header/body/env)' });
+    }
+
+    const simConfig = {
+      ...(demo.configJson as any),
+      mappingProfileId,
+      changeRoutingKey: changeRoutingKey || (demo.configJson as any)?.changeRoutingKey,
+      goldenDemoId: demo.id,
+    };
+
+    const instance = await simulationManager.createOrUpdate(demo.createdByUserId, simConfig, credentials);
+    instance.start();
+
+    res.status(202).json({
+      message: 'Golden Demo simulation started',
+      goldenDemo: demo.name,
+    });
+  } catch (error) {
+    console.error('Golden Demo webhook trigger failed:', error);
+    res.status(500).json({
+      message: 'Failed to trigger Golden Demo',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
 
 // GET /api/golden-demos - List all golden demos for the authenticated user
 router.get('/', async (req, res) => {

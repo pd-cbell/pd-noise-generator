@@ -38,9 +38,15 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (socketRef.current && user && credentials) {
       setIsLoading(true);
       const state = useStore.getState();
+
+      // Ignore accidental event objects passed from onClick
+      const overrideSafe =
+        overrideConfig && typeof overrideConfig === 'object' && 'target' in overrideConfig
+          ? undefined
+          : overrideConfig;
       
       // Use override config (Golden Demo) or current store config
-      const simConfig = overrideConfig || {
+      const simConfig = overrideSafe || {
         ratePerMinute: state.ratePerMinute,
         severityWeights: state.severityWeights,
         autoHealConfig: state.autoHealConfig,
@@ -53,7 +59,8 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         severityConfigs: state.severityConfigs,
         changeRoutingKey: state.campaignConfig.importedChangeRoutingKey,
         selectedServices: state.services.filter(svc => svc.include),
-        selectedTeamIds: state.selectedTeamIds, 
+        selectedTeamIds: state.selectedTeamIds,
+        mappingProfileId: state.selectedMappingProfileId,
       };
 
       // Merge pdRegion into credentials
@@ -62,7 +69,18 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           pdRegion: state.pdRegion
       };
 
-      socketRef.current.emit('start_simulation', { config: simConfig, credentials: fullCredentials });
+      // Clone to strip any non-serializable references
+      const payload = {
+        config: JSON.parse(JSON.stringify(simConfig)),
+        credentials: JSON.parse(JSON.stringify(fullCredentials)),
+      };
+
+      socketRef.current.emit('start_simulation', payload, (err: any) => {
+        if (err) {
+          console.error('SimulationProvider: start_simulation callback error', err);
+          setIsLoading(false);
+        }
+      });
     }
   }, [user, credentials]);
 
@@ -129,6 +147,11 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
       socket.on('sim_started', () => {
         setIsSimRunning(true);
+        setIsLoading(false);
+      });
+
+      socket.on('sim_error', (payload: any) => {
+        console.error('SimulationProvider: sim_error', payload);
         setIsLoading(false);
       });
 

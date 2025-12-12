@@ -167,3 +167,29 @@ model Session {
   
   @@index([goldenDemoId])
 }
+
+model MappingProfile {
+  id                       String            @id @default(cuid())
+  name                     String
+  description              String?
+  globalIncidentRoutingKey String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  serviceMappings          ServiceMapping[]
+}
+
+model ServiceMapping {
+  id                        String          @id @default(cuid())
+  mappingProfileId          String
+  logicalServiceName        String
+  incidentServiceId         String?
+  incidentServiceName       String?
+  incidentRoutingKeyOverride String?
+  changeRoutingKeyOverride  String?
+  changeServiceId           String?
+  changeServiceName         String?
+  useIncidentForChange      Boolean         @default(true)
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  mappingProfile            MappingProfile  @relation(fields: [mappingProfileId], references: [id], onDelete: Cascade)
+}

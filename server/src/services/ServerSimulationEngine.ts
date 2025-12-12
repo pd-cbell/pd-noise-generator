@@ -12,6 +12,12 @@ import {
   SimulationCredentials,
   SourceMix,
 } from '../types';
+import { MappingProfileService } from './MappingProfileService';
+import {
+  resolveEventTarget,
+  MappingProfileWithMappings,
+  SimulatorConfig as MappingSimulatorConfig,
+} from './MappingResolver';
 import { PagerDutyClient } from './PagerDutyClient';
 import { payloadGenerator, payloadRegistry } from '../utils/payloads';
 import { TemplateParser } from '../utils/TemplateParser';
@@ -46,6 +52,8 @@ type FailureContext = {
   preferredPriorityLabel?: string;
 };
 
+const mappingProfileService = new MappingProfileService();
+
 export class SimulationInstance {
   public userId: string;
   public config: SimulationConfig;
@@ -54,6 +62,10 @@ export class SimulationInstance {
   private timer: NodeJS.Timeout | null = null;
   private pdClient: PagerDutyClient;
   private io: SocketIOServer; // Socket.io server instance for emitting updates
+  private mappingProfile: MappingProfileWithMappings | null = null;
+  private mappingProfileId: string | null = null;
+  private simulatorConfig: MappingSimulatorConfig = { pdChangeEventsRoutingKey: null };
+  private goldenDemoTimers: NodeJS.Timeout[] = [];
   
   // Queues for batching API calls
   private pendingAcks: Set<string> = new Set<string>();
@@ -65,8 +77,12 @@ export class SimulationInstance {
   constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
     this.userId = userId;
     this.config = this.normalizeConfig(config);
+    this.mappingProfileId = config.mappingProfileId || null;
     this.credentials = credentials;
     this.io = io;
+    this.simulatorConfig = {
+      pdChangeEventsRoutingKey: this.config.changeRoutingKey ?? serverConfig.pdChangeEventsRoutingKey ?? null,
+    };
 
     this.state = {
       isRunning: false,
@@ -101,6 +117,16 @@ export class SimulationInstance {
     payloadRegistry.list();
   }
 
+  private getChangeIntegrationKey(serviceName?: string): string | null {
+    if (!serviceName) return null;
+    const svc = (this.config.selectedServices || []).find(
+      (s) => s.name === serviceName || s.logicalServiceName === serviceName
+    );
+    if (!svc) return null;
+    const integration = (svc as any).changeIntegrations?.find((i: any) => i.integrationKey);
+    return integration?.integrationKey || null;
+  }
+
   private normalizeSourceMix(sourceMix: SourceMix | Partial<SourceMix> | undefined): SourceMix {
     return { ...DEFAULT_SOURCE_MIX, ...(sourceMix || {}) };
   }
@@ -118,6 +144,16 @@ export class SimulationInstance {
     };
   }
 
+  async applyMappingProfile(mappingProfileId?: string | null) {
+    this.mappingProfileId = mappingProfileId ?? null;
+    if (!this.mappingProfileId) {
+      this.mappingProfile = null;
+      return;
+    }
+    const profile = await mappingProfileService.getMappingProfileById(this.mappingProfileId);
+    this.mappingProfile = profile;
+  }
+
   updateCredentials(credentials: SimulationCredentials) {
     this.credentials = credentials;
     this.pdClient = new PagerDutyClient({
@@ -131,6 +167,13 @@ export class SimulationInstance {
 
   updateConfig(config: SimulationConfig) {
     this.config = this.normalizeConfig(config);
+    this.mappingProfileId = config.mappingProfileId ?? this.mappingProfileId ?? null;
+    this.simulatorConfig = {
+      pdChangeEventsRoutingKey: this.config.changeRoutingKey ?? serverConfig.pdChangeEventsRoutingKey ?? null,
+    };
+    if (this.state.isRunning && config.items && Array.isArray(config.items) && config.items.length) {
+      this.scheduleGoldenDemoItems(config.items);
+    }
   }
 
   start() {
@@ -139,6 +182,7 @@ export class SimulationInstance {
     console.log('ServerSimulationEngine: Starting simulation for user', this.userId);
     this.timer = setInterval(() => this.tick(), 1000);
     this.addLog("Simulation started (Headless Mode)", 'info');
+    this.scheduleGoldenDemoItems();
     this.emitState();
   }
 
@@ -148,6 +192,7 @@ export class SimulationInstance {
     this.timer = null;
     console.log('ServerSimulationEngine: Stopping simulation for user', this.userId);
     this.addLog("Simulation stopped", 'info');
+    this.clearGoldenDemoTimers();
     this.emitState();
   }
 
@@ -359,6 +404,16 @@ export class SimulationInstance {
 
   private removeIncident(dedupKey: string) {
     this.state.activeIncidents = this.state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey);
+  }
+
+  private clearGoldenDemoTimers() {
+    this.goldenDemoTimers.forEach((t) => clearTimeout(t));
+    this.goldenDemoTimers = [];
+  }
+
+  private getLogicalServiceName(service: Service): string {
+    const svc: any = service;
+    return svc?.logicalServiceName || service.name || 'Unknown Service';
   }
 
   private updateMetricsOnAck(severity: IncidentSeverity, timeToAck: number) {
@@ -735,6 +790,108 @@ export class SimulationInstance {
   }
 
   // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---
+  private async fireGoldenDemoItem(item: any) {
+    const logicalServiceName =
+      item.logicalServiceName ||
+      item.service ||
+      item.serviceName ||
+      item?.payload?.custom_details?.service_name ||
+      'Unknown Service';
+    const type = (item.eventType || item.type || 'alert') as EventType;
+
+    const resolvedTarget = resolveEventTarget(
+      { logicalServiceName, type },
+      this.mappingProfile,
+      this.simulatorConfig
+    );
+
+    const payload = TemplateParser.parseObject(item.payload || {});
+    if (!payload.custom_details) payload.custom_details = {};
+    payload.custom_details.service_name =
+      resolvedTarget.effectiveServiceName || payload.custom_details.service_name || logicalServiceName;
+
+    if (type === 'change') {
+      const routingKey =
+        item.changeRoutingKey ||
+        item.integrationKey ||
+        resolvedTarget.effectiveChangeRoutingKey ||
+        this.getChangeIntegrationKey(resolvedTarget.effectiveServiceName || logicalServiceName) ||
+        this.getChangeIntegrationKey(logicalServiceName) ||
+        this.simulatorConfig.pdChangeEventsRoutingKey ||
+        this.config.changeRoutingKey ||
+        null;
+      if (!routingKey) {
+        this.addLog(`Skipped change event for ${logicalServiceName}: missing change routing key.`, 'warn');
+        return;
+      }
+      if (!payload.summary || String(payload.summary).trim().length === 0) {
+        payload.summary = item.summary || `Change event for ${logicalServiceName}`;
+      }
+      if (!payload.timestamp) {
+        payload.timestamp = new Date().toISOString();
+      }
+      const body = {
+        routing_key: routingKey,
+        payload: {
+          ...payload,
+          source: payload.source || 'pd-noise-simulator-golden-demo',
+        },
+      };
+      this.incrementApiCount();
+      await this.pdClient.triggerChangeEvent(body);
+      this.state.totalEvents++;
+      this.addLog(`Golden Demo change sent for ${logicalServiceName}`, 'info');
+      return;
+    }
+
+    // incident/alert/note/automation fall through to Events API
+    const routingKey =
+      resolvedTarget.effectiveRoutingKey || this.credentials.globalRoutingKey || this.simulatorConfig.pdChangeEventsRoutingKey;
+
+    if (!routingKey) {
+      this.addLog(`Skipped event for ${logicalServiceName}: missing routing key.`, 'warn');
+      return;
+    }
+
+    if (!payload.severity) {
+      payload.severity = 'error';
+    }
+
+    const body = {
+      routing_key: routingKey,
+      event_action: 'trigger',
+      dedup_key: item.dedupKey,
+      payload: {
+        ...payload,
+        source: payload.source || 'pd-noise-simulator-golden-demo',
+        component: payload.component || resolvedTarget.effectiveServiceName || logicalServiceName,
+      },
+    };
+
+    this.incrementApiCount();
+    const response = await this.pdClient.triggerEvent(body);
+    this.state.totalEvents++;
+    const dedup = response?.dedup_key || item.dedupKey || 'unknown';
+    this.addLog(`Golden Demo event sent (${type}) ${logicalServiceName} dedup=${dedup}`, 'info');
+  }
+
+  private scheduleGoldenDemoItems(itemsOverride?: any[]) {
+    const items = Array.isArray(itemsOverride) ? itemsOverride : Array.isArray(this.config.items) ? this.config.items : [];
+    if (!items.length) return;
+    this.clearGoldenDemoTimers();
+    let cumulativeMs = 0;
+    items.forEach((item) => {
+      const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
+      cumulativeMs += delaySec * 1000;
+      const timer = setTimeout(() => {
+        this.fireGoldenDemoItem(item).catch((err) => {
+          this.addLog(`Golden Demo event failed: ${err.message}`, 'error');
+        });
+      }, cumulativeMs);
+      this.goldenDemoTimers.push(timer);
+    });
+  }
+
   public async triggerIncident(service: Service, failureContext: FailureContext | null = null) {
     console.log('ServerSimulationEngine: Attempting to trigger incident for service', service.name);
     const { globalRoutingKey } = this.credentials;
@@ -754,10 +911,17 @@ export class SimulationInstance {
     // Dynamic Payload Processing
     const parsedPayload = TemplateParser.parseObject(payload);
 
+    const logicalServiceName = this.getLogicalServiceName(service);
+    const resolvedTarget = resolveEventTarget(
+      { logicalServiceName, type: 'incident' },
+      this.mappingProfile,
+      this.simulatorConfig
+    );
+
     if (parsedPayload.custom_details) {
-      parsedPayload.custom_details.service_name = service.name;
+      parsedPayload.custom_details.service_name = resolvedTarget.effectiveServiceName || logicalServiceName;
     } else {
-      parsedPayload.custom_details = { service_name: service.name };
+      parsedPayload.custom_details = { service_name: resolvedTarget.effectiveServiceName || logicalServiceName };
     }
 
     // Determine Severity & Major Status
@@ -783,15 +947,21 @@ export class SimulationInstance {
 
     const dedupKey = failureContext?.preGeneratedDedupKey ?? (failureContext ? undefined : crypto.randomUUID()); // Allow PD to assign when campaign context exists
 
+    const routingKey = resolvedTarget.effectiveRoutingKey || globalRoutingKey;
+    if (!routingKey) {
+      this.addLog(`No routing key available for incident on ${logicalServiceName}; skipping send.`, 'warn');
+      return;
+    }
+
     const baseEventBody = {
-      routing_key: globalRoutingKey,
+      routing_key: routingKey,
       event_action: 'trigger',
       dedup_key: dedupKey,
       payload: {
         ...parsedPayload,
         severity,
         source: parsedPayload.source || 'pd-noise-simulator',
-        component: parsedPayload.component || service.name,
+        component: parsedPayload.component || resolvedTarget.effectiveServiceName || logicalServiceName,
         custom_details: {
           ...parsedPayload.custom_details,
           generator: 'pd-noise-simulator',
@@ -799,6 +969,10 @@ export class SimulationInstance {
         }
       }
     };
+
+    if (resolvedTarget.notes) {
+      this.addLog(resolvedTarget.notes, 'info');
+    }
 
     try {
       this.incrementApiCount();
@@ -912,31 +1086,42 @@ export class SimulationInstance {
       const selectedServices = targetServices.sort(() => 0.5 - Math.random()).slice(0, count);
 
       for (const service of selectedServices) {
-          // Determine Routing Key: Priority = Service Integration > Global Config
-          let routingKey = this.config.changeRoutingKey;
-          
+          const logicalServiceName = this.getLogicalServiceName(service);
+
+          // Determine Routing Key: Priority = Service Integration > Config > Simulator default
+          let changeRoutingKeyCandidate = this.config.changeRoutingKey ?? this.simulatorConfig.pdChangeEventsRoutingKey ?? null;
+
           if (service.changeIntegrations && service.changeIntegrations.length > 0) {
               // Use the first available integration key
-              // Frontend maps it to { integrationKey: ... }
               const integration = service.changeIntegrations.find((i: any) => i.integrationKey);
               if (integration) {
-                  routingKey = integration.integrationKey;
+                  changeRoutingKeyCandidate = integration.integrationKey;
               }
           }
 
+          const resolvedTarget = resolveEventTarget(
+            { logicalServiceName, type: 'change' },
+            this.mappingProfile,
+            { ...this.simulatorConfig, pdChangeEventsRoutingKey: changeRoutingKeyCandidate }
+          );
+
+          const routingKey = resolvedTarget.effectiveChangeRoutingKey;
+
           if (!routingKey) {
-              this.addLog(`Skipped change event for ${service.name}: No Change Integration Key found.`, 'warn');
+              this.addLog(`Skipped change event for ${logicalServiceName}: No Change Integration Key found.`, 'warn');
               continue;
           }
           
+          const effectiveServiceName = resolvedTarget.effectiveServiceName || logicalServiceName;
+
           const body = {
               routing_key: routingKey,
               payload: {
-                  summary: `Recent Deploy: ${service.name} v${getRandomInt(1,9)}.${getRandomInt(0,9)}`,
+                  summary: `Recent Deploy: ${effectiveServiceName} v${getRandomInt(1,9)}.${getRandomInt(0,9)}`,
                   timestamp: new Date().toISOString(),
                   source: 'CI/CD Pipeline',
                   custom_details: {
-                      service: service.name,
+                      service: effectiveServiceName,
                       build_id: getRandomInt(1000, 9999),
                       triggered_by: 'Major Incident Simulation'
                   }
@@ -946,12 +1131,16 @@ export class SimulationInstance {
           // Add random delay for realism
           await new Promise(r => setTimeout(r, getRandomInt(500, 2000)));
 
+          if (resolvedTarget.notes) {
+              this.addLog(resolvedTarget.notes, 'info');
+          }
+
           this.pdClient.triggerChangeEvent(body)
             .then(() => {
                 this.state.totalEvents++;
-                this.addLog(`Sent related change event for ${service.name}`, 'info');
+                this.addLog(`Sent related change event for ${effectiveServiceName}`, 'info');
             })
-            .catch(e => this.addLog(`Failed change event for ${service.name}: ${e.message}`, 'warn'));
+            .catch(e => this.addLog(`Failed change event for ${effectiveServiceName}: ${e.message}`, 'warn'));
       }
   }
 
@@ -1041,7 +1230,7 @@ export class SimulationManager {
     return this.instances.get(userId);
   }
 
-  createOrUpdate(userId: string, config: SimulationConfig, credentials: SimulationCredentials) {
+  async createOrUpdate(userId: string, config: SimulationConfig, credentials: SimulationCredentials) {
     console.log(`SimulationManager: createOrUpdate for ${userId}`, { hasCreds: !!credentials, hasKey: !!credentials?.globalRoutingKey });
     let instance = this.instances.get(userId);
     if (instance) {
@@ -1051,6 +1240,7 @@ export class SimulationManager {
         instance = new SimulationInstance(userId, config, credentials, this.io);
         this.instances.set(userId, instance);
     }
+    await instance.applyMappingProfile(config.mappingProfileId ?? null);
     return instance;
   }
   

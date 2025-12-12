@@ -55,6 +55,7 @@ export interface Metrics {
 export interface Service {
   id: string;
   name: string;
+  logicalServiceName?: string; // Optional logical service name used for mapping profiles
   html_url?: string;
   teams: { id: string; name: string; persona?: string }[]; // Updated: include persona
   changeIntegrations: any[];
@@ -175,6 +176,9 @@ export interface SimulationConfig {
   severityConfigs: SeverityConfigMap;
   selectedServices: Service[]; // Backend needs full service objects to trigger
   selectedTeamIds: string[]; // New: Restrict personas to these teams
+  mappingProfileId?: string | null; // v2.2: mapping profile applied at runtime
+  goldenDemoId?: string; // Optional: track which Golden Demo initiated the run
+  items?: any[]; // Optional: Golden Demo items to execute
 }
 
 // For Phase 4 - Narrative & Session UX (defining Beat now as it's part of GoldenDemo configJson)
@@ -212,4 +216,3 @@ export interface GoldenDemo {
   createdAt: Date;
   updatedAt: Date;
 }
-

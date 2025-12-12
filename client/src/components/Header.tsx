@@ -1,4 +1,4 @@
-import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers } from 'lucide-react';
+import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers, Map as MapIcon } from 'lucide-react';
 import { useStore } from '../store/useStore'; // Still need for global config
 import { useServerSimulation } from '../hooks/useServerSimulation'; // New
 
@@ -25,6 +25,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
           { id: 'golden-demos', label: 'Golden Demos', icon: Layers }, // New Golden Demos tab
           { id: 'agent', label: 'Agent', icon: Bot },
           { id: 'director', label: 'Director', icon: Layers },
+          { id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -51,7 +52,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         
         {!isSimRunning ? (
           <button
-            onClick={startSimulation}
+            onClick={() => startSimulation()}
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-white shadow-md transition-colors bg-green-600 hover:bg-green-700"
           >
             <Play className="w-4 h-4 fill-current" />
