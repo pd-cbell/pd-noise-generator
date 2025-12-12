@@ -12,9 +12,9 @@ export class GoldenDemoService {
     return prisma.goldenDemo.findMany({ where });
   }
 
-  async getGoldenDemo(id: string, userId: string): Promise<GoldenDemo | null> {
-    return prisma.goldenDemo.findUnique({
-      where: { id, createdByUserId: userId },
+  async getGoldenDemo(id: string, userId?: string): Promise<GoldenDemo | null> {
+    return prisma.goldenDemo.findFirst({
+      where: userId ? { id, createdByUserId: userId } : { id },
     });
   }
 

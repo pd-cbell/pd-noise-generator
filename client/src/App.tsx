@@ -9,6 +9,7 @@ import { DirectorDashboard } from './components/DirectorDashboard';
 import GoldenDemoLibrary from './components/GoldenDemoLibrary';
 import { PresenterDashboard } from './components/PresenterDashboard';
 import { Login } from './components/Login';
+import MappingProfilesPage from './components/MappingProfilesPage';
 import { useAuth } from './contexts/AuthContext';
 import { useServerSimulation } from './hooks/useServerSimulation';
 import { ImportedCampaign, useStore } from './store/useStore';
@@ -91,6 +92,7 @@ function App() {
         {activePage === 'monitor' && <MonitorDashboard />}
         {activePage === 'agent' && <AgentBuilder onBuildComplete={handleAgentBuildComplete} />}
         {activePage === 'director' && <DirectorDashboard />}
+        {activePage === 'mapping-profiles' && <MappingProfilesPage />}
         {activePage === 'golden-demos' && <GoldenDemoLibrary />}
         {activePage === 'presenter' && <PresenterDashboard />}
         {activePage === 'campaigns' && (

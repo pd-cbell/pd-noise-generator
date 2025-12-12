@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
 import { Loader2, Plus, Edit, Trash2, Play } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
-import { GoldenDemoEditor } from './GoldenDemoEditor'; // New Import
+import { GoldenDemoEditorV2 } from './GoldenDemoEditorV2';
 
 const GoldenDemoLibrary: React.FC = () => {
   const { 
@@ -16,6 +16,7 @@ const GoldenDemoLibrary: React.FC = () => {
 
   const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false); // Edit Modal State
+  const [draftDemo, setDraftDemo] = useState<GoldenDemo | null>(null);
   const selectedDemo = goldenDemos.find(demo => demo.id === selectedDemoId);
 
   useEffect(() => {
@@ -51,7 +52,22 @@ const GoldenDemoLibrary: React.FC = () => {
           <button 
             className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
             title="Create New Golden Demo"
-            // onClick={() => onCreateNewDemo()} // TODO: Implement creation form
+            onClick={() => {
+              const blank: GoldenDemo = {
+                id: 'new',
+                name: '',
+                vertical: '',
+                maturityLevel: '',
+                narrative: '',
+                configJson: { name: '', description: '', items: [], narrative: { stages: {} } } as any,
+                personaNotes: '',
+                createdByUserId: '',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              };
+              setDraftDemo(blank);
+              setIsEditing(true);
+            }}
           >
             <Plus size={20} />
           </button>
@@ -79,7 +95,7 @@ const GoldenDemoLibrary: React.FC = () => {
                     <button 
                       className="text-gray-500 hover:text-blue-600" 
                       title="Edit"
-                      onClick={(e) => { e.stopPropagation(); setSelectedDemoId(demo.id); setIsEditing(true); }} 
+                      onClick={(e) => { e.stopPropagation(); setSelectedDemoId(demo.id); setDraftDemo(demo); setIsEditing(true); }} 
                     >
                       <Edit size={16} />
                     </button>
@@ -104,7 +120,7 @@ const GoldenDemoLibrary: React.FC = () => {
           <GoldenDemoDetail 
             demo={selectedDemo} 
             onLaunch={() => handleLaunchSimulation(selectedDemo)} 
-            onEdit={() => setIsEditing(true)} 
+            onEdit={() => { setDraftDemo(selectedDemo); setIsEditing(true); }} 
           />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500 text-lg">
@@ -114,10 +130,11 @@ const GoldenDemoLibrary: React.FC = () => {
       </div>
 
       {/* Editor Modal */}
-      {isEditing && selectedDemo && (
-        <GoldenDemoEditor 
-          demo={selectedDemo} 
-          onClose={() => setIsEditing(false)} 
+      {isEditing && (draftDemo || selectedDemo) && (
+        <GoldenDemoEditorV2 
+          demo={(draftDemo || selectedDemo)!} 
+          onClose={() => { setIsEditing(false); setDraftDemo(null); }}
+          isNew={draftDemo?.id === 'new'}
         />
       )}
     </div>

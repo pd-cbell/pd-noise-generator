@@ -14,6 +14,7 @@ import createSessionsRouter from './routes/sessions'; // New import
 import simulationRouter from './routes/simulation';
 import authRouter from './routes/auth';
 import goldenDemosRouter from './routes/goldenDemos';
+import mappingProfilesRouter from './routes/mappingProfiles';
 import { SimulationManager } from './services/ServerSimulationEngine';
 import { GoldenDemoService } from './services/GoldenDemoService'; // New import
 import { AgentService } from './services/AgentService'; // New import
@@ -79,10 +80,15 @@ io.on('connection', (socket) => {
       socket.emit('sim_state', existingSim.state);
   }
 
-  socket.on('start_simulation', (data) => {
-      const sim = simulationManager.createOrUpdate(userId, data.config, data.credentials);
-      sim.start();
-      socket.emit('sim_started');
+  socket.on('start_simulation', async (data) => {
+      try {
+        const sim = await simulationManager.createOrUpdate(userId, data.config, data.credentials);
+        sim.start();
+        socket.emit('sim_started');
+      } catch (err: any) {
+        console.error('start_simulation error:', err);
+        socket.emit('sim_error', { message: err?.message || 'Failed to start simulation' });
+      }
   });
 
   socket.on('stop_simulation', () => {
@@ -128,6 +134,7 @@ app.use('/api/sessions', createSessionsRouter(simulationManager)); // New Route
 app.use('/api/simulation', simulationRouter);
 app.use('/auth', authRouter);
 app.use('/api/golden-demos', goldenDemosRouter); // New route
+app.use('/api/mapping-profiles', mappingProfilesRouter);
 
 app.get('/', (req, res) => {
   res.send('PD Noise Simulator API is running!');

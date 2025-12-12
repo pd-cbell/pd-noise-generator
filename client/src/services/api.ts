@@ -49,6 +49,36 @@ export const api = {
     fetchFromProxy(`/proxy/teams?limit=${limit}&offset=${offset}`, {
       headers: getHeaders(config)
     }),
+
+  // --- Mapping Profiles ---
+  getMappingProfiles: () => fetchFromProxy('/api/mapping-profiles'),
+  getMappingProfile: (id: string) => fetchFromProxy(`/api/mapping-profiles/${id}`),
+  createMappingProfile: (profile: {
+    name: string;
+    description?: string | null;
+    globalIncidentRoutingKey?: string | null;
+    serviceMappings?: any[];
+  }) =>
+    fetchFromProxy('/api/mapping-profiles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    }),
+  updateMappingProfile: (id: string, profile: {
+    name?: string;
+    description?: string | null;
+    globalIncidentRoutingKey?: string | null;
+    serviceMappings?: any[];
+  }) =>
+    fetchFromProxy(`/api/mapping-profiles/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    }),
+  deleteMappingProfile: (id: string) =>
+    fetchFromProxy(`/api/mapping-profiles/${id}`, {
+      method: 'DELETE',
+    }),
     
   getServices: (teamIds: string[] = [], config?: ApiConfig, limit = 100, offset = 0) => {
     const params = new URLSearchParams({

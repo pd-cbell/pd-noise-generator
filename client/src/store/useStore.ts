@@ -7,6 +7,29 @@ import {
   payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
 } from '../utils/payloads';
 
+// --- Mapping Profiles ---
+export interface ServiceMapping {
+  id: string;
+  mappingProfileId: string;
+  logicalServiceName: string;
+  incidentServiceId?: string | null;
+  incidentServiceName?: string | null;
+  incidentRoutingKeyOverride?: string | null;
+  changeServiceId?: string | null;
+  changeServiceName?: string | null;
+  useIncidentForChange?: boolean;
+}
+
+export interface MappingProfile {
+  id: string;
+  name: string;
+  description?: string | null;
+  globalIncidentRoutingKey?: string | null;
+  serviceMappings: ServiceMapping[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // --- Types ---
 export interface Profile {
   id: string;
@@ -256,6 +279,14 @@ interface AppState extends SimulationState, ConfigurationState {
   activeSessionId: string | null;
   startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) => Promise<void>;
   endSession: (notes?: string) => Promise<void>;
+
+  mappingProfiles: MappingProfile[];
+  selectedMappingProfileId: string | null;
+  fetchMappingProfiles: () => Promise<void>;
+  setSelectedMappingProfileId: (id: string | null) => void;
+  createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMapping[] }) => Promise<MappingProfile>;
+  updateMappingProfile: (id: string, profile: Partial<Omit<MappingProfile, 'id'>>) => Promise<MappingProfile>;
+  deleteMappingProfile: (id: string) => Promise<void>;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
@@ -326,6 +357,10 @@ export const useStore = create<AppState>()(
       // --- Golden Demo Slice Defaults ---
       goldenDemos: [],
       isLoadingGoldenDemos: false,
+
+      // --- Mapping Profiles ---
+      mappingProfiles: [],
+      selectedMappingProfileId: null,
 
       // --- Session Slice Defaults ---
       activeSessionId: null,
@@ -654,6 +689,49 @@ export const useStore = create<AppState>()(
         }
       },
 
+      fetchMappingProfiles: async () => {
+        try {
+          const profiles = await api.getMappingProfiles();
+          set({ mappingProfiles: profiles });
+          const { selectedMappingProfileId } = get();
+          if (selectedMappingProfileId && !profiles.find((p: MappingProfile) => p.id === selectedMappingProfileId)) {
+            set({ selectedMappingProfileId: null });
+          }
+        } catch (error: any) {
+          get().addLog(`Failed to load mapping profiles: ${error.message}`, 'error');
+        }
+      },
+
+      setSelectedMappingProfileId: (id) => {
+        set({ selectedMappingProfileId: id });
+        get().addLog(id ? `Selected mapping profile ${id}` : 'Cleared mapping profile selection', 'info');
+      },
+
+      createMappingProfile: async (profileData) => {
+        const created = await api.createMappingProfile(profileData);
+        const profiles = [...get().mappingProfiles, created];
+        set({ mappingProfiles: profiles, selectedMappingProfileId: created.id });
+        get().addLog(`Created mapping profile "${created.name}"`, 'info');
+        return created;
+      },
+
+      updateMappingProfile: async (id, profileData) => {
+        const updated = await api.updateMappingProfile(id, profileData);
+        const profiles = get().mappingProfiles.map((p) => (p.id === id ? updated : p));
+        set({ mappingProfiles: profiles });
+        get().addLog(`Updated mapping profile "${updated.name}"`, 'info');
+        return updated;
+      },
+
+      deleteMappingProfile: async (id) => {
+        await api.deleteMappingProfile(id);
+        set((state) => ({
+          mappingProfiles: state.mappingProfiles.filter((p) => p.id !== id),
+          selectedMappingProfileId: state.selectedMappingProfileId === id ? null : state.selectedMappingProfileId,
+        }));
+        get().addLog('Deleted mapping profile', 'info');
+      },
+
       createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
         try {
           const apiPayload = {
@@ -761,6 +839,8 @@ export const useStore = create<AppState>()(
         globalRoutingKey: state.globalRoutingKey,
         pdRegion: state.pdRegion, 
         selectedTeamIds: state.selectedTeamIds,
+        mappingProfiles: state.mappingProfiles,
+        selectedMappingProfileId: state.selectedMappingProfileId,
         campaignConfig: state.campaignConfig,
         
         ratePerMinute: state.ratePerMinute,

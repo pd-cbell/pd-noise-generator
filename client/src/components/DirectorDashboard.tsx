@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2 } from 'lucide-react';
-import { useStore, GoldenDemo } from '../store/useStore'; // Import GoldenDemo type
+import { useStore, GoldenDemo, MappingProfile } from '../store/useStore'; // Import GoldenDemo type
 import { useServerSimulation } from '../hooks/useServerSimulation'; // New import
 
 export const DirectorDashboard: React.FC = () => {
-  const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos } = useStore();
+  const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos, mappingProfiles, fetchMappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
   const { startSimulation } = useServerSimulation(); // Get startSimulation from hook
   
   const [isLoading, setIsLoading] = useState(true); // Control local loading state
@@ -12,22 +12,34 @@ export const DirectorDashboard: React.FC = () => {
   useEffect(() => {
     const loadDemos = async () => {
       setIsLoading(true);
-      await fetchGoldenDemos();
+      await Promise.all([fetchGoldenDemos(), fetchMappingProfiles()]);
       setIsLoading(false);
     };
     loadDemos();
-  }, [fetchGoldenDemos]);
+  }, [fetchGoldenDemos, fetchMappingProfiles]);
+
+  const selectedProfile: MappingProfile | null = useMemo(
+    () => mappingProfiles.find((p) => p.id === selectedMappingProfileId) || null,
+    [mappingProfiles, selectedMappingProfileId]
+  );
 
   const handleLaunch = (demo: GoldenDemo) => {
     // Stop any currently running simulation
     // This is handled implicitly by useServerSimulation which will reset
     
     // Extract configJson from the GoldenDemo
-    const simulationConfig = demo.configJson;
+    const simulationConfig = {
+      ...demo.configJson,
+      mappingProfileId: selectedMappingProfileId,
+      goldenDemoId: demo.id,
+    };
 
     // Start the simulation with the Golden Demo's config
     startSimulation(simulationConfig); // Pass the config to startSimulation
-    addLog(`Launching simulation for Golden Demo: "${demo.name}"`, 'info');
+    addLog(
+      `Launching simulation for Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
+      'info'
+    );
   };
 
   // State and handlers for filtering GoldenDemos
@@ -58,6 +70,22 @@ export const DirectorDashboard: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-4 justify-center">
+            <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Mapping Profile</label>
+                <select
+                    className="w-48 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-indigo-500"
+                    value={selectedMappingProfileId || ''}
+                    onChange={(e) => setSelectedMappingProfileId(e.target.value || null)}
+                >
+                    <option value="">No mapping profile</option>
+                    {mappingProfiles.map(profile => (
+                        <option key={profile.id} value={profile.id}>{profile.name}</option>
+                    ))}
+                </select>
+                <div className="mt-1 text-xs text-gray-500">
+                    Profile: {selectedProfile ? selectedProfile.name : 'None'}{selectedProfile ? ` • Mapped: ${selectedProfile.serviceMappings?.length || 0}` : ''}{selectedProfile?.globalIncidentRoutingKey ? ` • RK: ${selectedProfile.globalIncidentRoutingKey}` : ''}
+                </div>
+            </div>
             <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
                 <select
