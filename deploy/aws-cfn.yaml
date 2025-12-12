@@ -238,6 +238,7 @@ Resources:
           echo "ENCRYPTION_KEY=${EncryptionKey}" >> .env
           echo "GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
           echo "VITE_GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
+          echo "VITE_API_URL=/" >> .env
           echo "GEMINI_API_KEY=${GeminiApiKey}" >> .env
           echo "OPENAI_API_KEY=${OpenaiApiKey}" >> .env
           
