@@ -21,8 +21,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         {[
           { id: 'configure', label: 'Configure', icon: Settings },
           { id: 'monitor', label: 'Monitor', icon: Activity },
-          { id: 'campaigns', label: 'Campaigns', icon: Users },
-          { id: 'golden-demos', label: 'Golden Demos', icon: Layers }, // New Golden Demos tab
+          { id: 'golden-demos', label: 'Golden Demos', icon: Layers },
           { id: 'agent', label: 'Agent', icon: Bot },
           { id: 'director', label: 'Director', icon: Layers },
           { id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon },

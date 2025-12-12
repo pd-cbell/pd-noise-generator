@@ -2,10 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; 
 import { GoldenDemo, Session } from '../../../server/src/types'; 
-import { 
-  PayloadAdapter, ImportedCampaign, CampaignItem,
-  payloadRegistry, payloadGenerator, loadImportedCampaignBundles 
-} from '../utils/payloads';
+import { payloadRegistry, payloadGenerator, loadImportedCampaignBundles } from '../utils/payloads';
 
 // --- Mapping Profiles ---
 export interface ServiceMapping {
@@ -101,25 +98,7 @@ export interface Incident {
   prioritySet?: boolean; 
 }
 
-export interface CampaignConfig {
-  enabled: boolean;
-  probability: number;
-  maxRelated: number;
-  windowSec: number;
-  templateMode: 'all' | 'custom';
-  templateIds: string[];
-  importedChangeRoutingKey: string;
-}
 
-export const DEFAULT_CAMPAIGN_CONFIG: CampaignConfig = {
-  enabled: true,
-  probability: 0.35,
-  maxRelated: 3,
-  windowSec: 300,
-  templateMode: 'all',
-  templateIds: [],
-  importedChangeRoutingKey: "",
-};
 
 
 export interface SimulationState {
@@ -143,7 +122,7 @@ export interface SimulationState {
   _mttrSums: Record<IncidentSeverity | 'global', number>;
   _mttrCounts: Record<IncidentSeverity | 'global', number>;
   _apiCallCount: number;
-  _lastRpmCheck: number;
+  _lastRpmCheck: 0;
   _apiCallTimestamps: number[]; 
   
   startSimulation: () => void;
@@ -238,9 +217,6 @@ export interface ConfigurationState {
   isLoadingServices: boolean;
   isLoadingEscalationPolicies: boolean;
 
-  campaignConfig: CampaignConfig;
-  payloadAdapters: PayloadAdapter[];
-  importedCampaigns: ImportedCampaign[];
   lastChangeEvent: { ts: number; serviceName: string; failureSummary: string } | null;
 
   setCredentials: (creds: Partial<ConfigurationState>) => void;
@@ -253,10 +229,6 @@ export interface ConfigurationState {
   fetchServices: () => Promise<void>;
   fetchEscalationPolicies: () => Promise<void>;
 
-  setCampaignConfig: (config: Partial<CampaignConfig>) => void;
-  loadPayloadAdapters: () => void;
-  loadImportedCampaigns: () => Promise<void>;
-  triggerImportedCampaign: (campaign: ImportedCampaign) => Promise<void>;
   setLastChangeEvent: (event: { ts: number; serviceName: string; failureSummary: string } | null) => void;
 }
 
@@ -265,9 +237,6 @@ interface AppState extends SimulationState, ConfigurationState {
   activeProfileId: string | null;
   setActiveProfile: (id: string) => void;
   saveProfile: (profile: Profile) => void;
-  createCampaign: (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => Promise<ImportedCampaign>;
-  updateCampaign: (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => Promise<ImportedCampaign>;
-  deleteCampaign: (id: string) => Promise<void>;
 
   goldenDemos: GoldenDemo[]; 
   isLoadingGoldenDemos: boolean; 
@@ -322,9 +291,6 @@ export const useStore = create<AppState>()(
       isLoadingServices: false,
       isLoadingEscalationPolicies: false,
 
-      campaignConfig: DEFAULT_CAMPAIGN_CONFIG,
-      payloadAdapters: [],
-      importedCampaigns: [],
       lastChangeEvent: null,
       
       // --- Simulation Slice Defaults ---
@@ -491,60 +457,6 @@ export const useStore = create<AppState>()(
         }
       },
 
-      setCampaignConfig: (config) => set((state) => ({ 
-        campaignConfig: { ...state.campaignConfig, ...config } 
-      })),
-
-      loadPayloadAdapters: () => {
-        set({ payloadAdapters: payloadRegistry.list() });
-        get().addLog(`Loaded ${payloadRegistry.list().length} payload adapters.`, 'info');
-      },
-
-      loadImportedCampaigns: async () => {
-        try {
-          const data = await api.getCampaigns();
-          const campaigns = (data.campaigns || []).map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            description: c.description,
-            source: c.source,
-            integrationKey: c.integrationKey || '',
-            items: c.items.map((i: any) => ({
-              id: i.id,
-              stepName: i.stepName,
-              payloadString: JSON.stringify(i.payload),
-              eventAction: i.eventAction,
-              eventType: i.eventType,
-              dedupKey: i.dedupKey,
-              integrationKey: i.integrationKey,
-              delaySeconds: i.delaySeconds,
-              times: i.repeatCount, 
-              intervalSeconds: i.intervalSeconds,
-            }))
-          }));
-          
-          set({ importedCampaigns: campaigns });
-          get().addLog(`Loaded ${campaigns.length} campaigns from database.`, 'info');
-        } catch (error: any) {
-          get().addLog(`Failed to load campaigns: ${error.message}`, 'error');
-        }
-      },
-
-      triggerImportedCampaign: async (campaign: ImportedCampaign) => {
-        const { addLog, globalRoutingKey, campaignConfig } = get();
-        addLog(`Triggering imported campaign "${campaign.name}" (${campaign.items.length} steps) via webhook.`, 'info');
-
-        const routingKey = campaign.integrationKey || globalRoutingKey || undefined;
-        const changeRoutingKey = campaign.integrationKey || campaignConfig.importedChangeRoutingKey || undefined;
-
-        try {
-          await api.triggerCampaign(campaign.id, { routingKey, changeRoutingKey });
-          addLog(`Webhook accepted for "${campaign.name}".`, 'info');
-        } catch (error: any) {
-          addLog(`Failed to trigger campaign "${campaign.name}": ${error.message}`, 'error');
-          throw error;
-        }
-      },
       setLastChangeEvent: (event) => set({ lastChangeEvent: event }),
       
       startSimulation: () => set({ isGenerating: true, isManaging: true }),
@@ -690,6 +602,7 @@ export const useStore = create<AppState>()(
       },
 
       fetchMappingProfiles: async () => {
+        set({ isLoadingMappingProfiles: true });
         try {
           const profiles = await api.getMappingProfiles();
           set({ mappingProfiles: profiles });
@@ -699,6 +612,8 @@ export const useStore = create<AppState>()(
           }
         } catch (error: any) {
           get().addLog(`Failed to load mapping profiles: ${error.message}`, 'error');
+        } finally {
+          set({ isLoadingMappingProfiles: false });
         }
       },
 
@@ -730,77 +645,6 @@ export const useStore = create<AppState>()(
           selectedMappingProfileId: state.selectedMappingProfileId === id ? null : state.selectedMappingProfileId,
         }));
         get().addLog('Deleted mapping profile', 'info');
-      },
-
-      createCampaign: async (campaignData: Omit<ImportedCampaign, 'id' | 'source'>) => {
-        try {
-          const apiPayload = {
-            ...campaignData,
-            integrationKey: campaignData.integrationKey || '',
-            items: campaignData.items.map(item => {
-              let payload = {};
-              try {
-                payload = JSON.parse(item.payloadString || '{}');
-              } catch (e) {
-                console.error("Failed to parse payloadString for item", item.id);
-              }
-              return { 
-                  ...item, 
-                  payload,
-                  repeatCount: item.times || 1 
-              };
-            })
-          };
-
-          const newCampaign = await api.createCampaign(apiPayload);
-          get().addLog(`Campaign "${newCampaign.name}" created.`, 'info');
-          await get().loadImportedCampaigns(); 
-          return newCampaign;
-        } catch (error: any) {
-          get().addLog(`Failed to create campaign: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      updateCampaign: async (id: string, campaignData: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) => {
-        try {
-          const apiPayload = {
-            ...campaignData,
-            integrationKey: campaignData.integrationKey || '',
-            items: campaignData.items?.map(item => {
-              let payload = {};
-              try {
-                payload = JSON.parse(item.payloadString || '{}');
-              } catch (e) {
-                console.error("Failed to parse payloadString for item", item.id);
-              }
-              return { 
-                  ...item, 
-                  payload,
-                  repeatCount: item.times || 1 
-              };
-            })
-          };
-
-          const updatedCampaign = await api.updateCampaign(id, apiPayload);
-          get().addLog(`Campaign "${updatedCampaign.name}" updated.`, 'info');
-          await get().loadImportedCampaigns(); 
-          return updatedCampaign;
-        } catch (error: any) {
-          get().addLog(`Failed to update campaign: ${error.message}`, 'error');
-          throw error;
-        }
-      },
-
-      deleteCampaign: async (id: string) => {
-        try {
-          await api.deleteCampaign(id);
-          get().addLog('Campaign deleted.', 'info');
-          await get().loadImportedCampaigns(); 
-        } catch (error: any) {
-          get().addLog(`Failed to delete campaign: ${error.message}`, 'error');
-          throw error;
-        }
       },
 
       startSession: async (data) => {
@@ -841,7 +685,6 @@ export const useStore = create<AppState>()(
         selectedTeamIds: state.selectedTeamIds,
         mappingProfiles: state.mappingProfiles,
         selectedMappingProfileId: state.selectedMappingProfileId,
-        campaignConfig: state.campaignConfig,
         
         ratePerMinute: state.ratePerMinute,
         severityWeights: state.severityWeights,

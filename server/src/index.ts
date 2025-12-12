@@ -7,7 +7,6 @@ import jwt from 'jsonwebtoken';
 import { serverConfig } from './config';
 import proxyRouter from './routes/proxy';
 import profilesRouter from './routes/profiles';
-import campaignsRouter from './routes/campaigns';
 import taxonomyRouter from './routes/taxonomy';
 import createAgentRouter from './routes/agent'; // Renamed import
 import createSessionsRouter from './routes/sessions'; // New import
@@ -127,7 +126,6 @@ const PORT = serverConfig.port;
 
 app.use('/proxy', proxyRouter);
 app.use('/api/profiles', profilesRouter);
-app.use('/api/campaigns', campaignsRouter);
 app.use('/api/taxonomy', taxonomyRouter);
 app.use('/api/agent', createAgentRouter(agentService));
 app.use('/api/sessions', createSessionsRouter(simulationManager)); // New Route
