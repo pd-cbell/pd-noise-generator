@@ -4,21 +4,18 @@
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.2.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.3.0-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.2: Mapping & Personalization
+## 🚀 New in v2.3: Multi-Sim & Director Control
 
-v2.2 introduces robust tools for tailoring demos to any prospect environment without rewriting scripts.
+v2.3 introduces a powerful multi-track simulation architecture.
 
--   **Mapping Profiles:**
-    -   **Runtime Personalization:** Map "Logical Services" (e.g., "Payments DB") in your Golden Demos to *actual* PagerDuty Services (e.g., "Payments DB - Customer A") dynamically at launch.
-    -   **Flexible Routing:** Define global or service-specific routing keys for incidents and change events.
--   **Director Soundboard (Enhanced):**
-    -   **Interactive Preview:** Click any demo card to inspect the full narrative and verify service mappings before launching.
-    -   **Concurrent Injection:** Launch multiple Golden Demos on top of running background noise without interruption.
--   **Unified Golden Demo Editor:**
-    -   **Inline Editing:** Tweak event payloads, timing, and summaries directly in the UI.
-    -   **Imports:** Import legacy Campaign Failures or Crux scenarios directly into the Golden Demo format.
+-   **Multi-Simulation Architecture:** Run "Background Noise" and multiple "Golden Demos" concurrently as independent tracks.
+-   **Enhanced Director Mode:**
+    -   **Active Tracks Panel:** Monitor running Golden Demos in real-time with a slide-out status panel.
+    -   **Concurrent Injection:** Launch demos without stopping the background simulation.
+-   **Frictionless Mapping:** "Add to Profile" feature in Configuration allows rapid bulk creation of service mappings.
+-   **Cleanup:** Deprecated "Campaigns" feature removed in favor of the unified Golden Demo platform.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 

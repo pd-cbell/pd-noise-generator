@@ -63,4 +63,6 @@ Reduce the friction of creating mappings by allowing bulk-creation from the serv
 1.  **Refactor Server:** Implement `SimulationSession` and `SimulationTrack` classes.
 2.  **Update Client Context:** Modify `SimulationContext` to handle track-based updates.
 3.  **Update UI:** Replace global Start/Stop with track-specific controls.
-4.  **Cleanup:** Execute deletion of Campaign code.
+4.  **Database Migration:** Add roles to User schema.
+5.  **Implement RBAC:** Add middleware and UI gating.
+6.  **Cleanup:** Execute deletion of Campaign code.

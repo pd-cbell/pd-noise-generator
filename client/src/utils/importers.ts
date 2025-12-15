@@ -37,8 +37,11 @@ const coerceLogicalService = (item: any, parsedPayload?: any): string => {
     item?.logicalServiceName ||
     item?.serviceName ||
     item?.service ||
+    item?.service_name ||
+    parsedPayload?.service_name ||
+    parsedPayload?.service ||
     parsedPayload?.payload?.custom_details?.service_name ||
-    ''
+    'Unknown Service'
   );
 };
 
@@ -71,9 +74,7 @@ export function convertCampaignFailureToGoldenDemoItems(data: any): ImportedGold
 
   const normalized: ImportedGoldenDemoEvent[] = rawItems.map((item: any, idx: number) => {
     const logicalServiceName = coerceLogicalService(item, item.payload);
-    if (!logicalServiceName) {
-      throw new Error(`Missing logicalServiceName/service for item at index ${idx}.`);
-    }
+    
     const payload = item.payload || {};
     const type = item.eventType || item.type || 'alert';
     const summary = item.summary || item.stepName || payload.summary || '';
@@ -135,9 +136,6 @@ export function convertCruxEventGroupToGoldenDemoItems(data: any): ImportedGolde
     }
 
     const logicalServiceName = coerceLogicalService(item, parsedPayload);
-    if (!logicalServiceName) {
-      throw new Error(`Missing logicalServiceName/service_name in payload for item at index ${idx}.`);
-    }
 
     const type = item.event_type || item.eventType || 'alert';
     const delaySeconds = Number(item.delay_seconds) || 0;
