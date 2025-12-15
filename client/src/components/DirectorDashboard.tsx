@@ -1,16 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2 } from 'lucide-react';
+import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2, ListEnd } from 'lucide-react'; // Added ListEnd icon
 import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
-import { GoldenDemoDetailModal } from './GoldenDemoDetailModal'; // Import the new modal component
+import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
+import { ActiveTracksPanel } from './ActiveTracksPanel';
 
 export const DirectorDashboard: React.FC = () => {
   const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos, mappingProfiles, fetchMappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
-  const { startSimulation, injectGoldenDemo } = useServerSimulation(); // Import injectGoldenDemo
+  const { startSimulation, injectGoldenDemo } = useServerSimulation();
   
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<GoldenDemo | null>(null);
+  const [isActiveTracksPanelOpen, setIsActiveTracksPanelOpen] = useState(false); // New state for panel
 
   useEffect(() => {
     const loadDemos = async () => {
@@ -27,13 +29,13 @@ export const DirectorDashboard: React.FC = () => {
   );
 
   const handleLaunch = (demo: GoldenDemo) => {
-    // Inject the golden demo items directly
     injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined);
 
     addLog(
       `Injecting Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
       'info'
     );
+    setIsActiveTracksPanelOpen(true); // Open panel when demo is launched
   };
 
   const handleCardClick = (demo: GoldenDemo) => {
@@ -111,6 +113,16 @@ export const DirectorDashboard: React.FC = () => {
                     {uniqueMaturityLevels.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
             </div>
+             {/* Toggle for Active Tracks Panel */}
+            <button
+                onClick={() => setIsActiveTracksPanelOpen(!isActiveTracksPanelOpen)}
+                className={`flex items-center gap-1 text-[10px] font-medium px-3 py-1.5 rounded transition-colors whitespace-nowrap ${
+                    isActiveTracksPanelOpen ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500 hover:text-gray-700'
+                }`}
+            >
+                <ListEnd className="w-4 h-4" />
+                <span>Active Tracks</span>
+            </button>
         </div>
       </div>
 
@@ -171,6 +183,7 @@ export const DirectorDashboard: React.FC = () => {
           onLaunch={handleLaunch}
         />
       )}
+      <ActiveTracksPanel isOpen={isActiveTracksPanelOpen} onClose={() => setIsActiveTracksPanelOpen(false)} />
     </div>
   );
 };

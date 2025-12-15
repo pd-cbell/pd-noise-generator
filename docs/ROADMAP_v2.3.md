@@ -5,47 +5,46 @@
 2.  **Cleanup:** Remove deprecated "Campaigns" functionality and UI.
 3.  **Consolidation:** Centralize all configuration settings.
 4.  **Frictionless Mapping:** Simplify the creation of mapping profiles directly from the service list to reduce setup friction.
-5.  **Admin & RBAC:** Introduce basic Role-Based Access Control and an administration interface to secure the platform.
+5.  **Admin & RBAC:** (Moved to v2.3.1)
 
-## 1. Cleanup: Remove Campaigns
+## 1. Cleanup: Remove Campaigns (DONE)
 The "Campaigns" feature has been superseded by "Golden Demos" and "Director Mode". We will remove all legacy campaign code.
 
 ### Tasks
-- [ ] **Client:** Delete `client/src/components/CampaignManager.tsx` and `CampaignEditor.tsx`.
-- [ ] **Client:** Remove "Campaigns" tab from `client/src/components/Header.tsx`.
-- [ ] **Client:** Remove campaign-related slices from `client/src/store/useStore.ts` (`importedCampaigns`, `campaignConfig`, related actions).
-- [ ] **Server:** Delete `server/src/routes/campaigns.ts`.
-- [ ] **Server:** Delete `server/src/services/CampaignExecutor.ts`.
-- [ ] **Server:** Remove campaign routes from `server/src/index.ts`.
+- [x] **Client:** Delete `client/src/components/CampaignManager.tsx` and `CampaignEditor.tsx`.
+- [x] **Client:** Remove "Campaigns" tab from `client/src/components/Header.tsx`.
+- [x] **Client:** Remove campaign-related slices from `client/src/store/useStore.ts` (`importedCampaigns`, `campaignConfig`, related actions).
+- [x] **Server:** Delete `server/src/routes/campaigns.ts`.
+- [x] **Server:** Delete `server/src/services/CampaignExecutor.ts`.
+- [x] **Server:** Remove campaign routes from `server/src/index.ts`.
 
-## 2. Consolidate Configuration
+## 2. Consolidate Configuration (DONE)
 Ensure all relevant simulation settings are in `ConfigurationForm.tsx`.
 
 ### Tasks
-- [ ] **Review:** Check if `campaignConfig` contained any settings (e.g., `importedChangeRoutingKey`) that need to be migrated to the main `SimulationConfig` for general noise generation.
-- [ ] **UI:** Ensure `ConfigurationForm` correctly exposes all "Realism & Chaos" settings (Team Failure Probability, etc.).
+- [x] **Review:** Check if `campaignConfig` contained any settings (e.g., `importedChangeRoutingKey`) that need to be migrated to the main `SimulationConfig` for general noise generation.
+- [x] **UI:** Ensure `ConfigurationForm` correctly exposes all "Realism & Chaos" settings (Team Failure Probability, etc.).
 
-## 3. Multi-Simulation Architecture
-Refactor the server to support independent simulation tracks.
+## 3. Multi-Simulation Architecture (COMPLETE)
+Refactor the server to support independent simulation tracks using a "Conductor/Musician" pattern.
 
 ### Concept
-*   **SimulationSession:** Represents a user's active session. Manages the socket connection and aggregates state.
-*   **SimulationTrack:** An independent simulation engine.
-    *   **Background Track:** Infinite, stochastic, config-driven (the current "Noise" simulation).
-    *   **Scenario Track:** Finite, script-driven (Golden Demos).
+*   **SimulationSession (The Conductor):** One per User. Manages the central clock (1Hz tick), socket connection, and aggregates state from all tracks.
+*   **SimulationTrack (The Musician):** An independent simulation logic unit.
+    *   **BackgroundTrack:** Infinite, stochastic, config-driven (Poisson noise, Team Failures).
+    *   **ScenarioTrack:** Finite, script-driven (Golden Demos).
 
 ### Architecture Changes
-*   **Server:** Refactor `SimulationInstance` into `SimulationSession` and `SimulationTrack`.
-    *   `SimulationSession` holds a map of `tracks: Map<string, SimulationTrack>`.
-    *   `SimulationSession` aggregates `activeIncidents`, `logs`, and `metrics` from all tracks to emit a unified `sim_tick`.
-*   **Server:** Add new socket events:
-    *   `start_track(trackId: string, config: any)`
-    *   `stop_track(trackId: string)`
-*   **Client:** Update `DirectorDashboard` to use `start_track` for Golden Demos (instead of `injectGoldenDemo` or `startSimulation`).
-*   **Client:** Update `ConfigurationForm` / `Header` to control the "Background Track" specifically.
-*   **Client:** Create a "Active Simulations" widget to list running tracks and allow stopping them individually.
+- [x] **Server:** Create `SimulationTrack` base class.
+- [x] **Server:** Extract `BackgroundTrack` logic from `ServerSimulationEngine`.
+- [x] **Server:** Extract `ScenarioTrack` logic from `ServerSimulationEngine`.
+- [x] **Server:** Refactor `ServerSimulationEngine.ts` to become `SimulationSession` and support multi-track aggregation.
+- [x] **Server:** Update `SimulationManager` to handle `inject_golden_demo_items` by spawning new `ScenarioTrack`s.
+- [x] **Server:** Add `stop_track` socket listener to `SimulationManager`.
+- [x] **Client:** Update `useServerSimulation` to include `stopTrack` action.
+- [x] **Client:** Update `DirectorDashboard` to visualize active tracks with a toggleable slide-out panel (`ActiveTracksPanel`).
 
-## 4. Ease of Mapping
+## 4. Ease of Mapping (COMPLETE)
 Reduce the friction of creating mappings by allowing bulk-creation from the service inventory.
 
 ### Features
@@ -55,34 +54,13 @@ Reduce the friction of creating mappings by allowing bulk-creation from the serv
     -   *Transforms:* Option to apply simple rules (e.g., strip " - Prod" suffix for Logical Name).
 
 ### Tasks
-- [ ] **Client:** Add "Add to Mapping Profile" button to the Services list in `ConfigurationForm`.
-- [ ] **Client:** Create `AddToProfileModal` component.
-- [ ] **Client:** Implement `addServicesToProfile` action in `useStore`.
-- [ ] **Server:** Ensure `MappingProfileService` supports bulk-adding service mappings.
+- [x] **Client:** Add "Add to Mapping Profile" button to the Services list in `ConfigurationForm`.
+- [x] **Client:** Create `AddToProfileModal` component.
+- [x] **Client:** Implement `addServicesToProfile` action via `useStore` and `api`.
+- [x] **Server:** Ensure `MappingProfileService` supports bulk-adding service mappings.
 
-## 5. Admin & RBAC
-Implement basic Role-Based Access Control to manage user permissions and system settings.
-
-### Concepts
--   **Roles:**
-    -   `Admin`: Full access to all settings, users, and system configuration.
-    -   `Editor`: Can create/edit Golden Demos, Profiles, and run simulations.
-    -   `Viewer`: Can view dashboards (Director, Monitor, Presenter) but cannot edit or launch.
--   **User Management:** Simple list of users with role assignment.
-
-### Tasks
-- [ ] **Database:** Update `User` model in Prisma to include `role` (enum: ADMIN, EDITOR, VIEWER, default: EDITOR).
-- [ ] **Server:** Middleware to check roles for sensitive routes (e.g., `POST /api/golden-demos`, `PUT /api/config`).
-- [ ] **Client:**
-    -   Create `AdminDashboard.tsx` for user management.
-    -   Update `AuthContext` to expose user role.
-    -   Gate UI elements (Edit buttons, Delete actions) based on role.
-    -   Add "Admin" tab to Header (visible only to Admins).
-
-## 6. Migration Steps
+## 5. Migration Steps
 1.  **Refactor Server:** Implement `SimulationSession` and `SimulationTrack` classes.
 2.  **Update Client Context:** Modify `SimulationContext` to handle track-based updates.
 3.  **Update UI:** Replace global Start/Stop with track-specific controls.
-4.  **Database Migration:** Add roles to User schema.
-5.  **Implement RBAC:** Add middleware and UI gating.
-6.  **Cleanup:** Execute deletion of Campaign code.
+4.  **Cleanup:** Execute deletion of Campaign code.

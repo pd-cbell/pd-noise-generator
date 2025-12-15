@@ -108,6 +108,34 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+router.post('/:id/mappings', async (req, res) => {
+  try {
+    const mappingsSchema = z.array(serviceMappingSchema);
+    const validation = mappingsSchema.safeParse(req.body);
+    
+    if (!validation.success) {
+      return res
+        .status(400)
+        .json({ message: 'Validation failed', errors: validation.error.issues });
+    }
+
+    const profile = await mappingProfileService.addMappingsToProfile(
+      req.params.id,
+      validation.data
+    );
+    res.json(profile);
+  } catch (error) {
+    console.error('Error adding mappings to profile:', error);
+    if (error instanceof Error && error.message.includes('not found')) {
+      return res.status(404).json({ message: 'Mapping profile not found' });
+    }
+    res.status(500).json({
+      message: 'Failed to add mappings to profile',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     await mappingProfileService.deleteMappingProfile(req.params.id);

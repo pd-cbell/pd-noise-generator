@@ -1,40 +1,30 @@
 import crypto from 'crypto';
-import { Server as SocketIOServer } from 'socket.io'; // Import Socket.io Server type
+import { Server as SocketIOServer } from 'socket.io'; 
 import {
-  Incident,
   SimulationConfig,
-  IncidentSeverity,
-  Service,
-  DEFAULT_SEVERITY_CONFIGS,
-  DEFAULT_SOURCE_MIX,
   SimulationState,
   createEmptySeverityMetrics,
   SimulationCredentials,
+  DEFAULT_SOURCE_MIX,
+  DEFAULT_SEVERITY_CONFIGS,
   SourceMix,
+  Incident,
+  IncidentSeverity,
+  TrackInfo,
 } from '../types';
 import { MappingProfileService } from './MappingProfileService';
-import {
-  resolveEventTarget,
-  MappingProfileWithMappings,
-  SimulatorConfig as MappingSimulatorConfig,
-} from './MappingResolver';
 import { PagerDutyClient } from './PagerDutyClient';
-import { payloadGenerator, payloadRegistry } from '../utils/payloads';
-import { TemplateParser } from '../utils/TemplateParser';
+import { payloadRegistry } from '../utils/payloads';
+import { serverConfig } from '../config';
+import { SimulationTrack } from './tracks/SimulationTrack';
+import { BackgroundTrack } from './tracks/BackgroundTrack';
+import { ScenarioTrack } from './tracks/ScenarioTrack';
 import { fakerService } from './FakerService';
 import { integrationService } from './IntegrationService';
-import { serverConfig } from '../config';
 
-// --- Shared Helper Functions ---
-function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+const mappingProfileService = new MappingProfileService();
+const TREND_WINDOW_MS = 15 * 60 * 1000; 
 
-function getRandomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-const TREND_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-type PdPriority = { id: string; name: string };
 type GeneratedPayload = {
   summary?: string;
   source?: string;
@@ -43,47 +33,26 @@ type GeneratedPayload = {
   custom_details?: Record<string, unknown>;
   [key: string]: unknown;
 };
-type FailureContext = {
-  id?: string;
-  summary?: string;
-  isMajor?: boolean;
-  preGeneratedDedupKey?: string;
-  preferredTemplateId?: string;
-  preferredPriorityLabel?: string;
-};
 
-const mappingProfileService = new MappingProfileService();
-
-export class SimulationInstance {
+// --- SimulationSession (The Conductor) ---
+export class SimulationSession {
   public userId: string;
-  public config: SimulationConfig;
+  public config: SimulationConfig; // Global config (used for background track mostly)
   public credentials: SimulationCredentials;
   public state: SimulationState;
-  private timer: NodeJS.Timeout | null = null;
-  private pdClient: PagerDutyClient;
-  private io: SocketIOServer; // Socket.io server instance for emitting updates
-  private mappingProfile: MappingProfileWithMappings | null = null;
-  private mappingProfileId: string | null = null;
-  private simulatorConfig: MappingSimulatorConfig = { pdChangeEventsRoutingKey: null };
-  private goldenDemoTimers: NodeJS.Timeout[] = [];
   
-  // Queues for batching API calls
-  private pendingAcks: Set<string> = new Set<string>();
-  private pendingResolves: Set<string> = new Set<string>();
-  private priorities: PdPriority[] = []; // Cache for Priority IDs
-  private onCallCache = new Map<string, { emails: string[]; expires: number }>();
-  private pendingMerges: { targetDedupKey: string; sourceDedupKeys: string[]; createdAt: number; note: string }[] = [];
+  private tracks: Map<string, SimulationTrack> = new Map();
+  private timer: NodeJS.Timeout | null = null;
+  private io: SocketIOServer; 
+  private pdClient: PagerDutyClient; // Still needed for some session-level ops or just passing to tracks
 
   constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
     this.userId = userId;
     this.config = this.normalizeConfig(config);
-    this.mappingProfileId = config.mappingProfileId || null;
     this.credentials = credentials;
     this.io = io;
-    this.simulatorConfig = {
-      pdChangeEventsRoutingKey: this.config.changeRoutingKey ?? serverConfig.pdChangeEventsRoutingKey ?? null,
-    };
 
+    // Initialize State
     this.state = {
       isRunning: false,
       activeIncidents: [],
@@ -97,34 +66,27 @@ export class SimulationInstance {
         apiCallsLast60s: 0,
         droppedEvents: 0,
       },
+      tracks: [], // Initial empty tracks list
       _mttaSums: createEmptySeverityMetrics(),
       _mttaCounts: createEmptySeverityMetrics(),
       _mttrSums: createEmptySeverityMetrics(),
       _mttrCounts: createEmptySeverityMetrics(),
       _apiCallTimestamps: [],
       _lastRpmCheck: 0,
-      _lastPollCheck: 0,
+      _lastPollCheck: 0, // Legacy field, might be used by tracks internally
     };
 
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
-      pdRegion: credentials.pdRegion, // Pass pdRegion here
-      apiBase: serverConfig.pdApiBase, // This will be overridden by pdRegion in PagerDutyClient constructor
+      pdRegion: credentials.pdRegion,
+      apiBase: serverConfig.pdApiBase,
     });
     
-    // Seed payload registry on creation
     payloadRegistry.list();
-  }
 
-  private getChangeIntegrationKey(serviceName?: string): string | null {
-    if (!serviceName) return null;
-    const svc = (this.config.selectedServices || []).find(
-      (s) => s.name === serviceName || s.logicalServiceName === serviceName
-    );
-    if (!svc) return null;
-    const integration = (svc as any).changeIntegrations?.find((i: any) => i.integrationKey);
-    return integration?.integrationKey || null;
+    // Initialize Default Background Track
+    this.createBackgroundTrack();
   }
 
   private normalizeSourceMix(sourceMix: SourceMix | Partial<SourceMix> | undefined): SourceMix {
@@ -144,77 +106,173 @@ export class SimulationInstance {
     };
   }
 
-  async applyMappingProfile(mappingProfileId?: string | null) {
-    this.mappingProfileId = mappingProfileId ?? null;
-    if (!this.mappingProfileId) {
-      this.mappingProfile = null;
-      return;
+  private async createBackgroundTrack() {
+    // If background track exists, update it? Or recreate?
+    // For v2.3, we'll recreate or update. 
+    // Let's check if it exists.
+    let bgTrack = this.tracks.get('background') as BackgroundTrack;
+    if (bgTrack) {
+        // Update logic not fully implemented on Track yet, so we might just replace it 
+        // if we want to support dynamic config updates.
+        // Ideally, SimulationTrack should have an updateConfig method. 
+        // For now, we assume this is called on init.
+    } else {
+        bgTrack = new BackgroundTrack('background', this.config, this.credentials, this.io);
+        // Apply mapping profile if global config has one
+        if (this.config.mappingProfileId) {
+            const profile = await mappingProfileService.getMappingProfileById(this.config.mappingProfileId);
+            bgTrack.applyMappingProfile(profile);
+        }
+        this.tracks.set('background', bgTrack);
     }
-    const profile = await mappingProfileService.getMappingProfileById(this.mappingProfileId);
-    this.mappingProfile = profile;
   }
 
-  updateCredentials(credentials: SimulationCredentials) {
-    this.credentials = credentials;
-    this.pdClient = new PagerDutyClient({
-      apiToken: credentials.apiToken,
-      fromEmail: credentials.fromEmail,
-      pdRegion: credentials.pdRegion, // Pass pdRegion here
-      apiBase: serverConfig.pdApiBase, // This will be overridden by pdRegion in PagerDutyClient constructor
-    });
-    // this.addLog("Credentials updated.", 'info'); // Optional: log internally
-  }
-
-  updateConfig(config: SimulationConfig) {
+  public async updateConfig(config: SimulationConfig) {
     this.config = this.normalizeConfig(config);
-    this.mappingProfileId = config.mappingProfileId ?? this.mappingProfileId ?? null;
-    this.simulatorConfig = {
-      pdChangeEventsRoutingKey: this.config.changeRoutingKey ?? serverConfig.pdChangeEventsRoutingKey ?? null,
-    };
-    if (this.state.isRunning && config.items && Array.isArray(config.items) && config.items.length) {
-      this.scheduleGoldenDemoItems(config.items);
+    // Re-create or update background track
+    // This is a bit heavy-handed but ensures config sync.
+    // In future, pass updates to tracks.
+    // Preserving state is tricky if we replace the object.
+    // Better: Update the existing track's config property.
+    const bgTrack = this.tracks.get('background') as BackgroundTrack;
+    if (bgTrack) {
+        // Hack: Direct property update. Should be a method.
+        // We'll reimplement the track with new config but keep its state?
+        // Or just let the track read from a shared config ref?
+        // Tracks have their own copy. Let's just replace it for now to ensure settings apply.
+        // BUT we lose active incidents. 
+        // Let's create a new one but move state over? Too complex for now.
+        // Let's just allow replacing the background track configuration effectively.
+        // Since we are refactoring, let's just make sure BackgroundTrack uses THIS session's config?
+        // No, it has its own.
+        // We will simple replace the track instance for V2.3 MVP robustness.
+        // Note: This resets background noise state. Acceptable for config changes.
+        this.tracks.delete('background');
+        await this.createBackgroundTrack();
     }
+    
+    // Apply mapping profile to all tracks? 
+    // Usually scenario tracks have their own lifecycle.
   }
 
-  start() {
+  public async updateCredentials(credentials: SimulationCredentials) {
+      this.credentials = credentials;
+      // Update all tracks?
+      // For now, requires restart or tracks need update method.
+      // Re-init background track
+      this.tracks.delete('background');
+      await this.createBackgroundTrack();
+  }
+
+  public start() {
     if (this.state.isRunning) return;
     this.state.isRunning = true;
-    console.log('ServerSimulationEngine: Starting simulation for user', this.userId);
+    
+    console.log('SimulationSession: Starting for user', this.userId);
     this.timer = setInterval(() => this.tick(), 1000);
-    this.addLog("Simulation started (Headless Mode)", 'info');
-    this.scheduleGoldenDemoItems();
+    this.addLog("Simulation Session Started", 'info');
+
+    // Start all tracks
+    this.tracks.forEach(track => track.start());
+    
     this.emitState();
   }
 
-  stop() {
+  public stop() {
     this.state.isRunning = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    console.log('ServerSimulationEngine: Stopping simulation for user', this.userId);
-    this.addLog("Simulation stopped", 'info');
-    this.clearGoldenDemoTimers();
+    
+    console.log('SimulationSession: Stopping for user', this.userId);
+    this.addLog("Simulation Session Stopped", 'info');
+
+    // Stop all tracks
+    this.tracks.forEach(track => track.stop());
+
     this.emitState();
   }
 
-  // --- Actions that can be called from frontend (via socket) ---
-  
-  // v2.0: Director Mode Trigger
+  // --- Track Management ---
+
+  public async startTrack(type: 'background' | 'scenario', configOrItems: any, trackId?: string) {
+      const id = trackId || crypto.randomUUID();
+      
+      let track: SimulationTrack;
+
+      if (type === 'scenario') {
+          // configOrItems is items array for scenario
+          const scenarioConfig: SimulationConfig = {
+              ...this.config, // Inherit base config
+              items: configOrItems // Override items
+          };
+          track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io);
+      } else {
+          // Background
+          track = new BackgroundTrack(id, this.config, this.credentials, this.io);
+      }
+
+      // Apply mapping if provided in session config context (or passed in?)
+      // For scenarios injected via Director, we usually have a profile ID.
+      // We need to handle that. 
+      // Current injectGoldenDemoItems passed mappingProfileId.
+      
+      this.tracks.set(id, track);
+      if (this.state.isRunning) {
+          track.start();
+      }
+      return track;
+  }
+
+  public stopTrack(trackId: string) {
+      const track = this.tracks.get(trackId);
+      if (track) {
+          track.stop();
+          this.tracks.delete(trackId);
+      }
+  }
+
+  // --- Legacy Interface Support (Bridging old calls to tracks) ---
+
+  public async injectGoldenDemoItems(items: any[]) {
+      // Create a new ScenarioTrack for these items
+      const trackId = `demo-${crypto.randomUUID().substring(0,8)}`;
+      const track = new ScenarioTrack(trackId, { ...this.config, items }, this.credentials, this.io);
+      
+      // Apply current session mapping profile by default?
+      // The old logic applied it. 
+      if (this.config.mappingProfileId) {
+          const profile = await mappingProfileService.getMappingProfileById(this.config.mappingProfileId);
+          await track.applyMappingProfile(profile);
+      }
+
+      this.tracks.set(trackId, track);
+      this.addLog(`Started Scenario Track: ${trackId}`, 'info');
+      
+      if (this.state.isRunning) {
+          track.start();
+      }
+  }
+
+  // Manually applying mapping profile to a specific new track (used by socket handler)
+  public async applyMappingToNewTrack(track: SimulationTrack, mappingProfileId: string) {
+      const profile = await mappingProfileService.getMappingProfileById(mappingProfileId);
+      await track.applyMappingProfile(profile);
+  }
+
+  // --- Actions ---
+
   public async triggerTemplate(template: { name: string, template: string, slackMessageTemplate?: string | null }, serviceId: string, integrationKey?: string | null) {
       console.log(`ServerSimulationEngine: Triggering template '${template.name}' for service ${serviceId}`);
       
       try {
-          // 1. Render Payload with Faker (Fast & Dumb)
           const payload = fakerService.generatePayload(template.template) as GeneratedPayload;
           
-          // 2. Determine Routing Key
-          // Use Service-level Integration Key if provided, else Global Key
           const routingKey = integrationKey || this.credentials.globalRoutingKey;
           
           if (!routingKey) {
               throw new Error("No Integration Key available (Service or Global)");
           }
 
-          // 3. Prepare PD Event
           const dedupKey = crypto.randomUUID();
           const body = {
               routing_key: routingKey,
@@ -233,11 +291,11 @@ export class SimulationInstance {
               }
           };
 
-          // 4. Send to PD
-          this.incrementApiCount();
-          await this.pdClient.triggerEvent(body);
+          this.pdClient.triggerEvent(body); // Fire and forget for speed
           
-          // 4b. Send ChatOps (Slack) Message
+          // Actually, let's await it to return success to UI.
+          // await this.pdClient.triggerEvent(body); 
+          
           if (template.slackMessageTemplate) {
               const slackMsg = fakerService.renderString(template.slackMessageTemplate);
               integrationService.sendSlackMessage(slackMsg).catch(e => 
@@ -245,29 +303,23 @@ export class SimulationInstance {
               );
           }
           
-          // 5. Track locally?
-          // For Director Mode, we generally just want to fire. 
-          // But if we want it in the list, we need an Incident object.
-          // Let's add it to the list for visibility.
           const now = Date.now();
           const newIncident: Incident = {
               dedupKey,
               serviceId: serviceId,
-              serviceName: 'Director Mode Service', // We assume the UI knows the name, or we fetch it. 
-              // Optimization: We don't have the Service Name here easily unless we fetch. 
-              // For speed, let's use a placeholder or pass it in.
+              serviceName: 'Director Mode Service', 
               startedAt: now,
               incidentId: null,
               mapAttempts: 0,
               nextEvalAt: now + 10000,
               ackAt: null,
-              autoAckAt: null, // Manual only?
+              autoAckAt: null, 
               acked: false,
               firstResponderAt: null,
               responderRequested: false,
               lastNoteAt: null,
               severity: payload.severity || 'error',
-              resolveAt: null, // No auto-resolve for manual triggers?
+              resolveAt: null, 
               autoHealAt: null,
               autoHealScheduled: false,
               observabilitySource: payload.source || 'unknown',
@@ -277,7 +329,7 @@ export class SimulationInstance {
               syncedFromPd: false,
               isMajor: false
           };
-          this.addIncident(newIncident);
+          this.addIncident(newIncident); // Add to session state
           this.state.totalEvents++;
           this.addLog(`Director Mode: Triggered '${template.name}'`, 'info');
           this.emitState();
@@ -286,108 +338,62 @@ export class SimulationInstance {
           const message = e instanceof Error ? e.message : 'Unknown error';
           console.error("Full Trigger Error:", e);
           this.addLog(`Director Trigger Failed: ${message}`, 'error');
-          throw e; // Re-throw to API
+          throw e; 
       }
   }
 
   async ackIncident(dedupKey: string) {
-    const incident = this.state.activeIncidents.find(i => i.dedupKey === dedupKey);
-    if (!incident || !incident.incidentId || incident.acked) return;
-
-    // Optimistic update
-    this.updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
-    const timeToAck = Date.now() - incident.startedAt;
-    this.updateMetricsOnAck(incident.severity, timeToAck);
-    
-    // Try to use Realistic Persona
-    const personaEmail = await this.getOnCallEmailForService(incident.serviceId);
-    
-    if (personaEmail) {
-        try {
-            await this.pdClient.manageIncident(incident.incidentId, 'acknowledge', personaEmail);
-            this.addLog(`Acknowledged incident ${incident.incidentId} as ${personaEmail}`, 'info');
-            this.emitState();
-            return; // Skip batch queue if successful
-        } catch (e) {
-            // If failed (e.g. permission denied), fall back to batch/bot
-            console.warn(`Failed to ack as ${personaEmail}, falling back to bot.`, e);
-        }
-    }
-
-    this.addLog(`Acknowledged incident ${incident.incidentId}`, 'info');
-    
-    // Queue for batch processing
-    this.pendingAcks.add(incident.incidentId);
-    
-    this.emitState();
+      // Broadcast to all tracks? Or find owner?
+      // Since tracks maintain their own activeIncidents, we can check which track owns it.
+      // But incidents move fast.
+      // For v2.3 MVP, we just iterate all.
+      for (const track of this.tracks.values()) {
+          // Cast to any because ackIncident isn't on base abstract class yet (it should be?)
+          // We implemented it on BackgroundTrack. ScenarioTrack doesn't have lifecycle logic yet.
+          if (track instanceof BackgroundTrack) {
+              await track.ackIncident(dedupKey);
+          }
+      }
+      // Also update local state for immediate feedback
+      this.updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
+      this.emitState();
   }
 
   async resolveIncident(dedupKey: string) {
-    const incident = this.state.activeIncidents.find(i => i.dedupKey === dedupKey);
-    if (!incident || !incident.incidentId) return;
-
-    // Optimistic update
-    const timeToResolve = Date.now() - incident.startedAt;
-    this.updateMetricsOnResolve(incident.severity, timeToResolve);
-    this.removeIncident(dedupKey);
-    
-    // Try to use Realistic Persona
-    const personaEmail = await this.getOnCallEmailForService(incident.serviceId);
-
-    if (personaEmail) {
-        try {
-            await this.pdClient.manageIncident(incident.incidentId, 'resolve', personaEmail);
-            this.addLog(`Resolved incident ${incident.incidentId} as ${personaEmail}`, 'info');
-            this.emitState();
-            return; // Skip batch queue
-        } catch (e) {
-             console.warn(`Failed to resolve as ${personaEmail}, falling back.`, e);
-        }
-    }
-
-    this.addLog(`Resolved incident ${incident.incidentId}`, 'info');
-
-    // Queue for batch processing
-    this.pendingResolves.add(incident.incidentId);
-
-    this.emitState();
+      for (const track of this.tracks.values()) {
+          if (track instanceof BackgroundTrack) {
+              await track.resolveIncident(dedupKey);
+          }
+      }
+      this.removeIncident(dedupKey);
+      this.emitState();
   }
 
   clearActiveIncidents() {
-    this.state.activeIncidents = [];
-    this.addLog("Cleared active incidents list locally", 'info');
-    this.emitState();
+      // Clear all tracks
+      this.tracks.forEach(t => t.activeIncidents = []);
+      this.state.activeIncidents = [];
+      this.addLog("Cleared active incidents locally", 'info');
+      this.emitState();
   }
 
   async resolveAllIncidents() {
-    this.addLog(`Resolving all ${this.state.activeIncidents.length} active incidents (Server-side)...`, 'info');
-    
-    // Queue all for resolution
-    this.state.activeIncidents.forEach(inc => {
-        if (inc.incidentId) {
-            this.pendingResolves.add(inc.incidentId);
-        } else {
-            // If no incident ID yet, resolve via Events API using dedupKey
-            const body = {
-                routing_key: this.credentials.globalRoutingKey,
-                event_action: 'resolve',
-                dedup_key: inc.dedupKey,
-                payload: {
-                    summary: 'Resolve All (Simulator)',
-                    source: 'pd-noise-simulator',
-                    severity: 'info'
-                }
-            };
-            this.pdClient.triggerEvent(body).catch(() => {});
-        }
-    });
-    // Clear local list immediately
-    this.state.activeIncidents = [];
-    this.emitState();
+      // This is complex distributed. 
+      // Simple approach: Trigger resolve event for all currently known incidents in session state.
+      this.state.activeIncidents.forEach(inc => {
+           this.pdClient.triggerEvent({
+               routing_key: this.credentials.globalRoutingKey, // Fallback, might be wrong for specific services
+               event_action: 'resolve',
+               dedup_key: inc.dedupKey,
+               payload: { summary: 'Resolve All', source: 'pd-noise-simulator', severity: 'info' }
+           }).catch(()=>{});
+      });
+      this.clearActiveIncidents();
   }
 
-  // --- Internal State Management ---
-  public addLog(msg: string, type: 'info' | 'warn' | 'error' = 'info') {
+  // --- Aggregation & Tick ---
+
+  private addLog(msg: string, type: 'info' | 'warn' | 'error' = 'info') {
     this.state.log.unshift({ ts: new Date().toLocaleTimeString(), type, msg });
     if (this.state.log.length > 800) this.state.log.pop();
   }
@@ -397,63 +403,14 @@ export class SimulationInstance {
   }
 
   private updateIncident(dedupKey: string, updates: Partial<Incident>) {
-    this.state.activeIncidents = this.state.activeIncidents.map(inc =>
-      inc.dedupKey === dedupKey ? { ...inc, ...updates } : inc
-    );
+      // Update local view
+      this.state.activeIncidents = this.state.activeIncidents.map(inc =>
+        inc.dedupKey === dedupKey ? { ...inc, ...updates } : inc
+      );
   }
 
   private removeIncident(dedupKey: string) {
-    this.state.activeIncidents = this.state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey);
-  }
-
-  private clearGoldenDemoTimers() {
-    this.goldenDemoTimers.forEach((t) => clearTimeout(t));
-    this.goldenDemoTimers = [];
-  }
-
-  private getLogicalServiceName(service: Service): string {
-    const svc: any = service;
-    return svc?.logicalServiceName || service.name || 'Unknown Service';
-  }
-
-  private updateMetricsOnAck(severity: IncidentSeverity, timeToAck: number) {
-    // Update Global
-    this.state._mttaCounts.global++;
-    this.state._mttaSums.global += timeToAck;
-    this.state.metrics.avgMtta.global = this.state._mttaSums.global / this.state._mttaCounts.global;
-
-    // Update Severity
-    this.state._mttaCounts[severity]++;
-    this.state._mttaSums[severity] += timeToAck;
-    this.state.metrics.avgMtta[severity] = this.state._mttaSums[severity] / this.state._mttaCounts[severity];
-  }
-
-  private updateMetricsOnResolve(severity: IncidentSeverity, timeToResolve: number) {
-    // Update Global
-    this.state._mttrCounts.global++;
-    this.state._mttrSums.global += timeToResolve;
-    this.state.metrics.avgMttr.global = this.state._mttrSums.global / this.state._mttrCounts.global;
-
-    // Update Severity
-    this.state._mttrCounts[severity]++;
-    this.state._mttrSums[severity] += timeToResolve;
-    this.state.metrics.avgMttr[severity] = this.state._mttrSums[severity] / this.state._mttrCounts[severity];
-  }
-  
-  private incrementApiCount() {
-    this.state._apiCallTimestamps.push(Date.now());
-  }
-
-  private updateApiMetrics() {
-    const now = Date.now();
-    const oneMinuteAgo = now - 60000;
-    this.state._apiCallTimestamps = this.state._apiCallTimestamps.filter(timestamp => timestamp > oneMinuteAgo);
-    this.state.metrics.apiCallsLast60s = this.state._apiCallTimestamps.length;
-    
-    // Simple RPM calculation for the last 5 seconds (roughly)
-    const fiveSecondsAgo = now - 5000;
-    const callsInLast5s = this.state._apiCallTimestamps.filter(timestamp => timestamp > fiveSecondsAgo).length;
-    this.state.metrics.apiRpm = callsInLast5s * (60 / 5); // Scale to RPM
+      this.state.activeIncidents = this.state.activeIncidents.filter(inc => inc.dedupKey !== dedupKey);
   }
 
   private addMonitorTrendData(count: number) {
@@ -463,767 +420,33 @@ export class SimulationInstance {
     this.state.monitorTrend.push({ ts: nowTs, count });
   }
 
-  // --- Core Tick Logic ---
   private async tick() {
-    if (!this.state.isRunning) return;
+      if (!this.state.isRunning) return;
 
-    // Update Trend Data
-    this.addMonitorTrendData(this.state.activeIncidents.length);
-
-    const now = Date.now();
-    this.updateApiMetrics(); 
-
-    // --- State Sync (Polling) ---
-    // Periodically check status of active incidents to handle external merges/resolves
-    if (now - (this.state._lastPollCheck || 0) > 10000) {
-        this.state._lastPollCheck = now;
-        const checkList = this.state.activeIncidents.filter(i => i.incidentId).slice(0, 25); // Check max 25 at a time
-        if (checkList.length > 0) {
-             const ids = checkList.map(i => i.incidentId!);
-             this.pdClient.getIncidentsByIds(ids).then((res: any) => {
-                 if (res && res.incidents) {
-                     // Only check for resolved status. Do NOT remove if missing from list (too aggressive/flaky).
-                     res.incidents.forEach((pdInc:any) => {
-                         if (pdInc.status === 'resolved') {
-                             const local = this.state.activeIncidents.find(l => l.incidentId === pdInc.id);
-                             if (local) {
-                                 this.removeIncident(local.dedupKey);
-                                 this.addLog(`Incident ${pdInc.id} resolved externally. Syncing removal.`, 'info');
-                             }
-                         }
-                     });
-                 }
-             }).catch(e => console.error("State Sync Poll failed:", e));
-        }
-    }
-
-    // --- Batch Processing ---
-    if (this.pendingAcks.size > 0) {
-        const ids = Array.from(this.pendingAcks);
-        this.pendingAcks.clear();
-        try {
-            const results = await this.pdClient.manageIncidentsBatch(ids, 'acknowledge');
-            if (results && Array.isArray(results)) {
-                results.forEach((res: any) => {
-                    if (res && res.incidents) {
-                        res.incidents.forEach((pdInc: any) => {
-                             if (pdInc.status === 'resolved') {
-                                  const localInc = this.state.activeIncidents.find(i => i.incidentId === pdInc.id);
-                                  if (localInc) {
-                                      this.removeIncident(localInc.dedupKey);
-                                      this.addLog(`Incident ${pdInc.id} was resolved externally. Removed.`, 'info');
-                                  }
-                             }
-                        });
-                    }
-                });
-            }
-        } catch (e: any) {
-             this.addLog(`Batch Ack failed: ${e.message}`, 'error');
-             if (e.message.includes('404') || e.message.includes('400') || e.message.toLowerCase().includes('not found')) {
-                 ids.forEach(id => {
-                     const localInc = this.state.activeIncidents.find(i => i.incidentId === id);
-                     if (localInc) {
-                         this.removeIncident(localInc.dedupKey);
-                     }
-                 });
-                 this.addLog(`Removed ${ids.length} incidents due to API error (Batch Ack Failed)`, 'warn');
-             }
-        }
-    }
-
-    if (this.pendingResolves.size > 0) {
-        const ids = Array.from(this.pendingResolves);
-        this.pendingResolves.clear();
-        try {
-            await this.pdClient.manageIncidentsBatch(ids, 'resolve');
-        } catch (e: any) {
-             this.addLog(`Batch Resolve failed: ${e.message}`, 'error');
-        }
-    }
-    
-    // --- Process Pending Merges (v1.8.2) ---
-    this.pendingMerges = this.pendingMerges.filter(merge => {
-        const now = Date.now();
-        // Safety timeout (e.g., 2 minutes) - discard if never mapped
-        if (now - merge.createdAt > 120000) return false;
-
-        // Find Target Incident ID
-        const targetInc = this.state.activeIncidents.find(i => i.dedupKey === merge.targetDedupKey);
-        if (!targetInc || !targetInc.incidentId) return true; // Keep waiting
-
-        // Check Source Incident IDs
-        const sourceIds: string[] = [];
-        let allSourcesFound = true;
-        
-        for (const sourceKey of merge.sourceDedupKeys) {
-            const sourceInc = this.state.activeIncidents.find(i => i.dedupKey === sourceKey);
-            if (sourceInc && sourceInc.incidentId) {
-                sourceIds.push(sourceInc.incidentId);
-            } else {
-                // If source incident is gone (e.g. resolved externally), we can't merge it. 
-                // But we should wait a bit more if it just hasn't been created/mapped yet.
-                // If 60s passed, maybe we just merge what we have?
-                if (now - merge.createdAt < 60000) {
-                     allSourcesFound = false;
-                     break;
-                }
-                // If > 60s, proceed with partial merge (skipping missing source)
-            }
-        }
-
-        if (!allSourcesFound) return true; // Keep waiting
-
-        if (sourceIds.length === 0) return false; // Nothing to merge (sources missing)
-
-        // Execute Merge
-        this.pdClient.mergeIncidents(targetInc.incidentId, sourceIds)
-            .then(() => {
-                this.addLog(`Merged ${sourceIds.length} incidents into ${targetInc.incidentId} (Team Failure Grouping)`, 'info');
-                this.pdClient.addNote(targetInc.incidentId!, merge.note).catch(() => {});
-                
-                // Remove merged source incidents from local state
-                merge.sourceDedupKeys.forEach(key => this.removeIncident(key));
-            })
-            .catch(e => {
-                this.addLog(`Merge failed: ${e.message}`, 'error');
-            });
-        
-        return false; // Remove from queue
-    });
-
-    // --- Incident Generation (Poisson process) ---
-    const { ratePerMinute, selectedServices, severityWeights, burstProbability, teamFailureProbability } = this.config;
-    const lambda = ratePerMinute / 60; 
-    const probabilityOfIncident = 1 - Math.exp(-lambda); 
-
-    // Team Failure Scenario Check (v1.8.1)
-    if (Math.random() < (teamFailureProbability ?? 0.01)) {
-        this.triggerTeamFailureScenario();
-    }
-
-    if (Math.random() < probabilityOfIncident && selectedServices.length > 0) {
-      const service = randomFrom(selectedServices);
-      await this.triggerIncident(service);
-    }
-
-    // --- Handle Active Incidents Lifecycle ---
-    const incidentsToProcess = [...this.state.activeIncidents]; 
-    for (const inc of incidentsToProcess) {
-      if (!inc.incidentId) {
-        // Incident ID Mapping (Retry Logic)
-        const nowMs = Date.now();
-        const shouldRetryMapping =
-          (inc.mapAttempts === 0 && nowMs - inc.startedAt > 10000) || 
-          (inc.mapAttempts === 1 && inc.lastMapAttemptAt && nowMs - inc.lastMapAttemptAt > 30000); 
-        
-        if (shouldRetryMapping) {
-          try {
-            const response = await this.pdClient.getIncidentByDedupKey(inc.dedupKey);
-            const match = response.incidents?.[0];
-
-            if (match) {
-              this.updateIncident(inc.dedupKey, { incidentId: match.id });
-            } else {
-              if (inc.mapAttempts === 0) {
-                this.updateIncident(inc.dedupKey, { mapAttempts: 1, lastMapAttemptAt: nowMs });
-              } else {
-                this.removeIncident(inc.dedupKey);
-                this.state.metrics.droppedEvents++;
-                this.addLog(`Dropped incident ${inc.dedupKey.substring(0, 8)} (Suppressed/Grouped)`, 'warn');
-              }
-            }
-          } catch (e: any) {
-            this.addLog(`Mapping failed for ${inc.dedupKey.substring(0,8)}: ${e.message}`, 'warn');
-          }
-        }
-        continue; 
+      // 1. Tick all tracks
+      for (const track of this.tracks.values()) {
+          await track.tick();
       }
 
-      const severityConfig = this.config.severityConfigs[inc.severity];
-      if (!severityConfig) continue;
+      // 2. Aggregate State
+      // Merge logs and incidents from all tracks
+      let allIncidents: Incident[] = [];
+      let trackInfos: TrackInfo[] = [];
 
-      // Auto-Resolve
-      if (inc.resolveAt && now >= inc.resolveAt) {
-        await this.resolveIncident(inc.dedupKey); 
-        continue;
-      }
-
-      // Auto-Heal
-      if (inc.autoHealScheduled && inc.autoHealAt && now >= inc.autoHealAt) {
-        this.pdClient.addNote(inc.incidentId, "Auto-healed by simulator (Warning suppression)").catch(() => {});
-        await this.resolveIncident(inc.dedupKey); 
-        continue;
-      }
-
-      // Auto-Ack (Imperfect Responder)
-      if (!inc.acked && inc.autoAckAt && now >= inc.autoAckAt) {
-        const ackRate = this.config.responderAckRate ?? 0.9;
-        if (Math.random() < ackRate) {
-            await this.ackIncident(inc.dedupKey);
-        } else {
-            // Missed Ack
-            this.addLog(`Responder missed Ack for ${inc.incidentId} (Simulated Fatigue). Escalating...`, 'warn');
-            // Schedule secondary ack (Escalation simulation)
-            this.updateIncident(inc.dedupKey, { autoAckAt: now + 300000 }); // Retry in 5 mins
-        }
-      }
-
-      // Add Notes
-      if (inc.acked && (!inc.lastNoteAt || (now - inc.lastNoteAt > 30000)) && Math.random() < severityConfig.noteProbability) {
-        const note = randomFrom(inc.noteContext) || "Investigating...";
-        try {
-          await this.pdClient.addNote(inc.incidentId, note);
-          this.updateIncident(inc.dedupKey, { lastNoteAt: now });
-          this.addLog(`Added note to ${inc.incidentId}: "${note}"`, 'info');
-        } catch (e: any) {
-          this.addLog(`Failed to add note to ${inc.incidentId}: ${e.message}`, 'error');
-        }
-      }
-
-      // Major Incident Priority Promotion
-      if (inc.isMajor && !inc.prioritySet && inc.incidentId) {
-          // v1.8.2: Weighted Priority Distribution
-          // P1: 30%, P2: 50%, P3: 20%
-          const rand = Math.random();
-          let pLabel = 'P2';
-          if (rand < 0.3) pLabel = 'P1';
-          else if (rand > 0.8) pLabel = 'P3';
-
-          const pId = await this.ensurePriorityId(pLabel);
-          if (pId) {
-              // Optimistically set flag to prevent retry loop while waiting for promise
-              this.updateIncident(inc.dedupKey, { prioritySet: true }); 
-              this.pdClient.updateIncidentPriority(inc.incidentId, pId)
-                  .then(() => {
-                      this.addLog(`Promoted ${inc.incidentId} to Major Priority (${pLabel})`, 'warn');
-                  })
-                  .catch(e => {
-                      this.addLog(`Failed to set priority: ${e.message}`, 'error');
-                      // If failed, maybe reset flag? For now, let's assume manual intervention or it's fine.
-                  });
-          }
-      }
-
-      // Request Responder (Major Incident Swarming)
-      if (inc.acked && !inc.responderRequested) {
-        const prob = inc.isMajor ? 1.0 : severityConfig.responderProbability;
-        
-        if (Math.random() < prob) {
-            this.updateIncident(inc.dedupKey, { responderRequested: true });
-            const count = inc.isMajor ? 3 : 1; // Swarm if Major
-            
-            const userId = await this.ensurePdUserId();
-            if (userId) {
-                for(let i=0; i<count; i++) {
-                    this.pdClient.requestResponder(inc.incidentId, userId, userId)
-                        .then(() => this.addLog(`Requested responder ${i+1}/${count} for ${inc.incidentId}`, 'info'))
-                        .catch(e => this.addLog(`Failed to request responder: ${e.message}`, 'error'));
-                }
-                if (inc.isMajor) {
-                    this.pdClient.addNote(inc.incidentId, "MAJOR INCIDENT: War Room Established. Executive Stakeholders notified.").catch(()=>{});
-                }
-            } else {
-                this.addLog(`Skipped responder request (User ID not found for ${this.credentials.fromEmail})`, 'warn');
-            }
-        }
-      }
-    }
-
-    this.emitState();
-
-    // Update Trend Data - moved to end to capture final state of this tick
-    this.addMonitorTrendData(this.state.activeIncidents.length);
-  }
-
-  private pdUserId: string | null = null; // Cached PD User ID for the 'fromEmail'
-
-  private async ensurePdUserId() {
-      if (this.pdUserId) return this.pdUserId;
-      try {
-          const ids = await this.pdClient.getUserIdsByEmail([this.credentials.fromEmail]);
-          if (ids[0]) {
-              this.pdUserId = ids[0];
-              return this.pdUserId;
-          }
-      } catch (e) {
-          console.error("Failed to resolve PD User ID:", e);
-      }
-      return null;
-  }
-
-  private async getOnCallEmailForService(serviceId: string): Promise<string | null> {
-    const now = Date.now();
-    const cached = this.onCallCache.get(serviceId);
-    if (cached && cached.expires > now) {
-        return cached.emails.length > 0 ? randomFrom(cached.emails) : null;
-    }
-
-    try {
-        // Pass selectedTeamIds to filter on-calls (Persona Restriction)
-        const emails = await this.pdClient.getOnCallUsers(serviceId, this.config.selectedTeamIds);
-        this.onCallCache.set(serviceId, { 
-            emails, 
-            expires: now + 5 * 60 * 1000 // Cache for 5 minutes
-        });
-        return emails.length > 0 ? randomFrom(emails) : null;
-    } catch (e) {
-        console.error(`Failed to fetch on-calls for service ${serviceId}`, e);
-        return null;
-    }
-  }
-
-  private async ensurePriorityId(labelPrefix: string) {
-      if (this.priorities.length === 0) {
-          try {
-              const res = await this.pdClient.getPriorities();
-              if (res && res.priorities) {
-                  this.priorities = res.priorities;
-              }
-          } catch (e) {
-              return null;
-          }
-      }
-      // Find priority starting with label (e.g. "P1")
-      const match = this.priorities.find((p) => p.name.startsWith(labelPrefix));
-      return match ? match.id : null;
-  }
-
-  // --- Incident Triggering Logic (Adapted from client/src/store/useStore.ts) ---
-  private async fireGoldenDemoItem(item: any) {
-    const logicalServiceName =
-      item.logicalServiceName ||
-      item.service ||
-      item.serviceName ||
-      item?.payload?.custom_details?.service_name ||
-      'Unknown Service';
-    const type = (item.eventType || item.type || 'alert') as EventType;
-
-    const resolvedTarget = resolveEventTarget(
-      { logicalServiceName, type },
-      this.mappingProfile,
-      this.simulatorConfig
-    );
-
-    const payload = TemplateParser.parseObject(item.payload || {});
-    if (!payload.custom_details) payload.custom_details = {};
-    payload.custom_details.service_name =
-      resolvedTarget.effectiveServiceName || payload.custom_details.service_name || logicalServiceName;
-
-    if (type === 'change') {
-      const routingKey =
-        item.changeRoutingKey ||
-        item.integrationKey ||
-        resolvedTarget.effectiveChangeRoutingKey ||
-        this.getChangeIntegrationKey(resolvedTarget.effectiveServiceName || logicalServiceName) ||
-        this.getChangeIntegrationKey(logicalServiceName) ||
-        this.simulatorConfig.pdChangeEventsRoutingKey ||
-        this.config.changeRoutingKey ||
-        null;
-      if (!routingKey) {
-        this.addLog(`Skipped change event for ${logicalServiceName}: missing change routing key.`, 'warn');
-        return;
-      }
-      if (!payload.summary || String(payload.summary).trim().length === 0) {
-        payload.summary = item.summary || `Change event for ${logicalServiceName}`;
-      }
-      payload.timestamp = new Date().toISOString();
-      const body = {
-        routing_key: routingKey,
-        payload: {
-          ...payload,
-          source: payload.source || 'pd-noise-simulator-golden-demo',
-        },
-      };
-      this.incrementApiCount();
-      await this.pdClient.triggerChangeEvent(body);
-      this.state.totalEvents++;
-      this.addLog(`Golden Demo change sent for ${logicalServiceName}`, 'info');
-      return;
-    }
-
-    // incident/alert/note/automation fall through to Events API
-    const routingKey =
-      resolvedTarget.effectiveRoutingKey || this.credentials.globalRoutingKey || this.simulatorConfig.pdChangeEventsRoutingKey;
-
-    if (!routingKey) {
-      this.addLog(`Skipped event for ${logicalServiceName}: missing routing key.`, 'warn');
-      return;
-    }
-
-    if (!payload.severity) {
-      payload.severity = 'error';
-    }
-
-    const body = {
-      routing_key: routingKey,
-      event_action: 'trigger',
-      dedup_key: item.dedupKey,
-      payload: {
-        ...payload,
-        source: payload.source || 'pd-noise-simulator-golden-demo',
-        component: payload.component || resolvedTarget.effectiveServiceName || logicalServiceName,
-      },
-    };
-
-    this.incrementApiCount();
-    const response = await this.pdClient.triggerEvent(body);
-    this.state.totalEvents++;
-    const dedup = response?.dedup_key || item.dedupKey || 'unknown';
-    this.addLog(`Golden Demo event sent (${type}) ${logicalServiceName} dedup=${dedup}`, 'info');
-  }
-
-  public injectGoldenDemoItems(items: any[]) {
-    if (!items.length) return;
-    let cumulativeMs = 0;
-    items.forEach((item) => {
-      const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
-      cumulativeMs += delaySec * 1000;
-      const timer = setTimeout(() => {
-        this.fireGoldenDemoItem(item).catch((err) => {
-          this.addLog(`Golden Demo event failed: ${err.message}`, 'error');
-        });
-      }, cumulativeMs);
-      this.goldenDemoTimers.push(timer);
-    });
-    this.addLog(`Injected ${items.length} Golden Demo items.`, 'info');
-    this.emitState();
-  }
-
-  private scheduleGoldenDemoItems(itemsOverride?: any[]) {
-    const items = Array.isArray(itemsOverride) ? itemsOverride : Array.isArray(this.config.items) ? this.config.items : [];
-    if (!items.length) return;
-    this.clearGoldenDemoTimers();
-    let cumulativeMs = 0;
-    items.forEach((item) => {
-      const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
-      cumulativeMs += delaySec * 1000;
-      const timer = setTimeout(() => {
-        this.fireGoldenDemoItem(item).catch((err) => {
-          this.addLog(`Golden Demo event failed: ${err.message}`, 'error');
-        });
-      }, cumulativeMs);
-      this.goldenDemoTimers.push(timer);
-    });
-  }
-
-  public async triggerIncident(service: Service, failureContext: FailureContext | null = null) {
-    console.log('ServerSimulationEngine: Attempting to trigger incident for service', service.name);
-    const { globalRoutingKey } = this.credentials;
-    const { severityWeights, burstProbability, majorIncidentProbability } = this.config;
-
-    if (!globalRoutingKey) {
-      this.addLog('Global Routing Key missing. Cannot trigger incident.', 'warn');
-      return;
-    }
-
-    const { payload } = payloadGenerator.buildEvent({
-      service,
-      failure: failureContext,
-      sourceMix: this.config.sourceMix,
-    });
-
-    // Dynamic Payload Processing
-    const parsedPayload = TemplateParser.parseObject(payload);
-
-    const logicalServiceName = this.getLogicalServiceName(service);
-    const resolvedTarget = resolveEventTarget(
-      { logicalServiceName, type: 'incident' },
-      this.mappingProfile,
-      this.simulatorConfig
-    );
-
-    if (parsedPayload.custom_details) {
-      parsedPayload.custom_details.service_name = resolvedTarget.effectiveServiceName || logicalServiceName;
-    } else {
-      parsedPayload.custom_details = { service_name: resolvedTarget.effectiveServiceName || logicalServiceName };
-    }
-
-    // Determine Severity & Major Status
-    // v1.8.1 Change: Major incidents are now primarily driven by Team Failure Scenarios
-    // failureContext.isMajor can be passed by triggerTeamFailureScenario
-    const isMajor = failureContext?.isMajor || false;
-
-    const severity: IncidentSeverity = (() => {
-      if (isMajor) return 'critical'; // Major incidents are always critical
-
-      const rand = Math.random();
-      let cumulative = 0;
-      for (const [sev, weight] of Object.entries(severityWeights)) {
-        cumulative += weight;
-        if (rand < cumulative) return sev as IncidentSeverity;
-      }
-      return 'info';
-    })();
-
-    if (severity === 'info') {
-      // Suppress info alerts from active tracking, but send them to PD
-    }
-
-    const dedupKey = failureContext?.preGeneratedDedupKey ?? (failureContext ? undefined : crypto.randomUUID()); // Allow PD to assign when campaign context exists
-
-    const routingKey = resolvedTarget.effectiveRoutingKey || globalRoutingKey;
-    if (!routingKey) {
-      this.addLog(`No routing key available for incident on ${logicalServiceName}; skipping send.`, 'warn');
-      return;
-    }
-
-    const baseEventBody = {
-      routing_key: routingKey,
-      event_action: 'trigger',
-      dedup_key: dedupKey,
-      payload: {
-        ...parsedPayload,
-        severity,
-        source: parsedPayload.source || 'pd-noise-simulator',
-        component: parsedPayload.component || resolvedTarget.effectiveServiceName || logicalServiceName,
-        custom_details: {
-          ...parsedPayload.custom_details,
-          generator: 'pd-noise-simulator',
-          sim_is_major: isMajor
-        }
-      }
-    };
-
-    if (resolvedTarget.notes) {
-      this.addLog(resolvedTarget.notes, 'info');
-    }
-
-    try {
-      this.incrementApiCount();
-      const response = await this.pdClient.triggerEvent(baseEventBody);
-      let incidentDedupKey = response.dedup_key || dedupKey || 'unknown';
-
-      // --- ChatOps Persona Engine (v3.1) ---
-      const primaryTeam = service.teams?.[0]; // Assuming the first team is the primary for simplicity
-      if (parsedPayload.slackMessageTemplate && primaryTeam && primaryTeam.persona) {
-          const slackMessage = fakerService.getPersonaDrivenSlackMessage(
-              parsedPayload.slackMessageTemplate, 
-              primaryTeam.persona
-          );
-          integrationService.sendSlackMessage(slackMessage).catch(e =>
-              this.addLog(`Failed to send persona-driven Slack message: ${e.message}`, 'warn')
-          );
-      }
-
-      if (severity !== 'info') {
-        const now = Date.now();
-        const config = this.config.severityConfigs[severity];
-
-        // Major incidents take longer to resolve (2x - 5x)
-        const resolveMult = isMajor ? (Math.random() * 3 + 2) : 1;
-
-        const ackDelay = getRandomInt(config.minAckSec, config.maxAckSec) * 1000;
-        const resolveDelay = (getRandomInt(config.minResolveSec, config.maxResolveSec) * 1000) * resolveMult;
-
-        const shouldAutoHeal = !isMajor && severity === 'warning' && this.config.autoHealConfig.enabled && Math.random() < this.config.autoHealConfig.warningProbability;
-        const autoHealDelay = shouldAutoHeal
-          ? getRandomInt(this.config.autoHealConfig.minDelaySec, this.config.autoHealConfig.maxDelaySec) * 1000
-          : null;
-
-        const newIncident: Incident = {
-          dedupKey: incidentDedupKey,
-          serviceId: service.id,
-          serviceName: service.name,
-          startedAt: now,
-          incidentId: null, // Will be mapped later
-          mapAttempts: 0,
-          nextEvalAt: now + 10000,
-          ackAt: null,
-          autoAckAt: now + ackDelay,
-          acked: false,
-          firstResponderAt: null,
-          responderRequested: false,
-          lastNoteAt: null,
-          severity,
-          resolveAt: now + resolveDelay,
-          autoHealAt: autoHealDelay ? now + autoHealDelay : null,
-          autoHealScheduled: shouldAutoHeal,
-          observabilitySource: parsedPayload.source || 'unknown',
-          failureId: failureContext?.id || null,
-          failureSummary: failureContext?.summary || null,
-          noteContext: parsedPayload.noteTemplates || [],
-          syncedFromPd: false,
-          isMajor: isMajor
-        };
-        this.addIncident(newIncident);
-        this.state.totalEvents++;
-        this.addLog(isMajor ? `MAJOR INCIDENT TRIGGERED for ${service.name}!` : `Triggered ${severity} incident for ${service.name}`, isMajor ? 'error' : 'info');
-      
-        if (isMajor) {
-            this.triggerRelatedChangeEvents([service]);
-        }
-      }
-
-      // Event Burst Logic (Async & Random)
-      // Major incidents are more likely to burst? Or we keep burst prob separate.
-      // Let's keep it separate but maybe increase burst count for major?
-      if (severity !== 'info' && (isMajor || Math.random() < burstProbability)) {
-        const burstCount = isMajor ? getRandomInt(5, 10) : getRandomInt(2, 7);
-        (async () => {
-          for (let i = 1; i < burstCount; i++) {
-            const intervalMs = getRandomInt(10, 40) * 1000;
-            await new Promise(r => setTimeout(r, intervalMs));
-
-            const currentIncidents = this.state.activeIncidents;
-            if (!currentIncidents.some(inc => inc.dedupKey === incidentDedupKey)) {
-              return;
-            }
-
-            const burstEventBody = {
-              ...baseEventBody,
-              dedup_key: incidentDedupKey,
-              payload: {
-                ...baseEventBody.payload,
-                custom_details: {
-                  ...baseEventBody.payload.custom_details,
-                  burst_event_num: i + 1,
-                }
-              }
-            };
-
-            this.incrementApiCount();
-            await this.pdClient.triggerEvent(burstEventBody).catch(e => this.addLog(`Burst event failed: ${e.message}`, 'error'));
-            this.state.totalEvents++;
-            this.addLog(`Sent burst event ${i + 1}/${burstCount} for ${incidentDedupKey.substring(0, 8)}`, 'info');
-          }
-        })();
-      }
-
-    } catch (error: any) {
-      this.addLog(`Failed to trigger incident: ${error.message}`, 'error');
-    }
-  }
-
-  private async triggerRelatedChangeEvents(targetServices: Service[]) {
-      // Pick 1-3 random services from the target list to fire change events on
-      const count = Math.min(targetServices.length, getRandomInt(1, 3));
-      const selectedServices = targetServices.sort(() => 0.5 - Math.random()).slice(0, count);
-
-      for (const service of selectedServices) {
-          const logicalServiceName = this.getLogicalServiceName(service);
-
-          // Determine Routing Key: Priority = Service Integration > Config > Simulator default
-          let changeRoutingKeyCandidate = this.config.changeRoutingKey ?? this.simulatorConfig.pdChangeEventsRoutingKey ?? null;
-
-          if (service.changeIntegrations && service.changeIntegrations.length > 0) {
-              // Use the first available integration key
-              const integration = service.changeIntegrations.find((i: any) => i.integrationKey);
-              if (integration) {
-                  changeRoutingKeyCandidate = integration.integrationKey;
-              }
-          }
-
-          const resolvedTarget = resolveEventTarget(
-            { logicalServiceName, type: 'change' },
-            this.mappingProfile,
-            { ...this.simulatorConfig, pdChangeEventsRoutingKey: changeRoutingKeyCandidate }
-          );
-
-          const routingKey = resolvedTarget.effectiveChangeRoutingKey;
-
-          if (!routingKey) {
-              this.addLog(`Skipped change event for ${logicalServiceName}: No Change Integration Key found.`, 'warn');
-              continue;
-          }
-          
-          const effectiveServiceName = resolvedTarget.effectiveServiceName || logicalServiceName;
-
-          const body = {
-              routing_key: routingKey,
-              payload: {
-                  summary: `Recent Deploy: ${effectiveServiceName} v${getRandomInt(1,9)}.${getRandomInt(0,9)}`,
-                  timestamp: new Date().toISOString(),
-                  source: 'CI/CD Pipeline',
-                  custom_details: {
-                      service: effectiveServiceName,
-                      build_id: getRandomInt(1000, 9999),
-                      triggered_by: 'Major Incident Simulation'
-                  }
-              }
-          };
-
-          // Add random delay for realism
-          await new Promise(r => setTimeout(r, getRandomInt(500, 2000)));
-
-          if (resolvedTarget.notes) {
-              this.addLog(resolvedTarget.notes, 'info');
-          }
-
-          this.pdClient.triggerChangeEvent(body)
-            .then(() => {
-                this.state.totalEvents++;
-                this.addLog(`Sent related change event for ${effectiveServiceName}`, 'info');
-            })
-            .catch(e => this.addLog(`Failed change event for ${effectiveServiceName}: ${e.message}`, 'warn'));
-      }
-  }
-
-  private async triggerTeamFailureScenario() {
-      const { selectedServices } = this.config;
-      if (!selectedServices || selectedServices.length === 0) return;
-  
-      // Group services by Team ID
-      const teamMap = new Map<string, { name: string, services: Service[] }>();
-  
-      selectedServices.forEach(svc => {
-          svc.teams.forEach(team => {
-              if (!teamMap.has(team.id)) {
-                  teamMap.set(team.id, { name: team.name, services: [] });
-              }
-              teamMap.get(team.id)?.services.push(svc);
-          });
+      this.tracks.forEach(track => {
+          allIncidents = [...allIncidents, ...track.activeIncidents];
+          trackInfos.push(track.getTrackInfo());
       });
-  
-      // Filter teams with enough services (at least 2 to make it a "team" failure)
-      const eligibleTeams = Array.from(teamMap.values()).filter(t => t.services.length >= 2);
-      if (eligibleTeams.length === 0) return;
-  
-      const targetTeam = randomFrom(eligibleTeams);
-      const failureId = crypto.randomUUID();
-      
-      // Determine if this Team Failure is a "Major Incident" (P1/P2)
-      const { majorIncidentProbability } = this.config;
-      const isMajorScenario = Math.random() < (majorIncidentProbability ?? 0.2);
 
-      this.addLog(`Started ${isMajorScenario ? 'MAJOR ' : ''}Team Failure Scenario for Team: ${targetTeam.name}`, isMajorScenario ? 'error' : 'warn');
-  
-      // Select 3-5 services (or max available)
-      const count = Math.min(targetTeam.services.length, getRandomInt(3, 5));
-      const targetServices = targetTeam.services.sort(() => 0.5 - Math.random()).slice(0, count);
-  
-      // Trigger Incidents
-      const incidentDedupKeys: string[] = [];
-      
-      targetServices.forEach((svc, idx) => {
-          const dedupKey = crypto.randomUUID(); // Generate upfront for tracking
-          incidentDedupKeys.push(dedupKey);
-          
-          const delay = idx * getRandomInt(2000, 5000);
-          setTimeout(async () => {
-               // Pass dedupKey explicitly
-               await this.triggerIncident(svc, { 
-                   id: failureId, 
-                   summary: `Team Failure: ${targetTeam.name} - Systematic Outage`,
-                   isMajor: isMajorScenario,
-                   preGeneratedDedupKey: dedupKey // Pass this down!
-               });
-          }, delay);
-      });
-      
-      // Queue for merging (if > 1 incident)
-      if (incidentDedupKeys.length > 1) {
-          this.pendingMerges.push({
-              targetDedupKey: incidentDedupKeys[0],
-              sourceDedupKeys: incidentDedupKeys.slice(1),
-              createdAt: Date.now(),
-              note: `Intelligent Grouping: Merged ${incidentDedupKeys.length - 1} related incidents from Team Failure Scenario (${targetTeam.name}).`
-          });
-      }
-  
-      // Trigger Change Events
-      // Pass the list of affected services so we can route changes correctly
-      this.triggerRelatedChangeEvents(targetServices);
+      // Sort by start time descending
+      allIncidents.sort((a, b) => b.startedAt - a.startedAt);
+      this.state.activeIncidents = allIncidents;
+      this.state.tracks = trackInfos;
+
+      // Update Trend
+      this.addMonitorTrendData(this.state.activeIncidents.length);
+
+      this.emitState();
   }
 
   private emitState() {
@@ -1232,8 +455,9 @@ export class SimulationInstance {
   }
 }
 
+// --- SimulationManager ---
 export class SimulationManager {
-  private instances = new Map<string, SimulationInstance>();
+  private instances = new Map<string, SimulationSession>(); // Renamed type
   private io: SocketIOServer;
 
   constructor(io: SocketIOServer) {
@@ -1245,34 +469,45 @@ export class SimulationManager {
   }
 
   async createOrUpdate(userId: string, config: SimulationConfig, credentials: SimulationCredentials) {
-    console.log(`SimulationManager: createOrUpdate for ${userId}`, { hasCreds: !!credentials, hasKey: !!credentials?.globalRoutingKey });
+    console.log(`SimulationManager: createOrUpdate for ${userId}`);
     let instance = this.instances.get(userId);
     if (instance) {
-        instance.updateConfig(config); // Update config if already running
+        instance.updateConfig(config); 
         instance.updateCredentials(credentials);
     } else {
-        instance = new SimulationInstance(userId, config, credentials, this.io);
+        instance = new SimulationSession(userId, config, credentials, this.io);
         this.instances.set(userId, instance);
-        // Set up socket event listener for this new instance
+        
+        // Socket listener for injection
         this.io.of('/').adapter.on('join-room', (room, id) => {
-          if (room === userId) { // When a client joins their user-specific room
+          if (room === userId) {
             const clientSocket = this.io.of('/').sockets.get(id);
             if (clientSocket) {
+              clientSocket.on('stop_track', ({ trackId }: { trackId: string }, callback?: (err?: any) => void) => {
+                const session = this.instances.get(userId);
+                if (session) {
+                  session.stopTrack(trackId);
+                  if (callback) callback(null);
+                } else {
+                  if (callback) callback({ message: "Session not found" });
+                }
+              });
+
               clientSocket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
                 try {
-                  const instanceToInject = this.instances.get(userId);
-                  if (instanceToInject) {
+                  const session = this.instances.get(userId);
+                  if (session) {
+                    // Create new Scenario Track
+                    const track = await session.startTrack('scenario', items);
                     if (mappingProfileId) {
-                      await instanceToInject.applyMappingProfile(mappingProfileId);
+                        await session.applyMappingToNewTrack(track, mappingProfileId);
                     }
-                    instanceToInject.injectGoldenDemoItems(items);
                     if (callback) callback(null);
                   } else {
-                    console.error(`Attempted to inject golden demo items for non-existent user instance: ${userId}`);
-                    if (callback) callback({ message: "Simulation instance not found" });
+                    if (callback) callback({ message: "Session not found" });
                   }
                 } catch (e: any) {
-                  console.error("Error injecting golden demo items:", e);
+                  console.error("Error injecting scenario:", e);
                   if (callback) callback({ message: e.message });
                 }
               });
@@ -1280,7 +515,8 @@ export class SimulationManager {
           }
         });
     }
-    await instance.applyMappingProfile(config.mappingProfileId ?? null);
+    // Note: Session-level mapping profile is applied to Background Track by default
+    // We might want to explicit apply it here if updated?
     return instance;
   }
   

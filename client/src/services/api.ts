@@ -1,4 +1,4 @@
-import { useStore, ImportedCampaign } from '../store/useStore';
+import { useStore } from '../store/useStore';
 
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
@@ -74,6 +74,12 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
+    }),
+  addMappingsToProfile: (id: string, mappings: any[]) =>
+    fetchFromProxy(`/api/mapping-profiles/${id}/mappings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mappings),
     }),
   deleteMappingProfile: (id: string) =>
     fetchFromProxy(`/api/mapping-profiles/${id}`, {
@@ -191,46 +197,6 @@ export const api = {
           status: action === 'acknowledge' ? 'acknowledged' : 'resolved'
         }
       })
-    }),
-
-  // --- Campaigns ---
-  getCampaigns: () => fetchFromProxy('/api/campaigns'),
-
-  createCampaign: (campaign: Omit<ImportedCampaign, 'id' | 'source'>) =>
-    fetchFromProxy('/api/campaigns', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(campaign),
-    }),
-
-  updateCampaign: (id: string, campaign: Partial<Omit<ImportedCampaign, 'id' | 'source'>>) =>
-    fetchFromProxy(`/api/campaigns/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(campaign),
-    }),
-
-  triggerCampaign: (id: string, opts?: { routingKey?: string | null; changeRoutingKey?: string | null }) => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (opts?.routingKey) headers['x-pd-routing-key'] = opts.routingKey;
-    if (opts?.changeRoutingKey) headers['x-pd-change-routing-key'] = opts.changeRoutingKey;
-
-    return fetchFromProxy(`/api/campaigns/${id}/trigger`, {
-      method: 'POST',
-      headers,
-    });
-  },
-
-  deleteCampaign: (id: string) =>
-    fetchFromProxy(`/api/campaigns/${id}`, {
-      method: 'DELETE',
-    }),
-
-  importCampaigns: (json: any) =>
-    fetchFromProxy('/api/campaigns/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(json),
     }),
 
   // --- Agent ---

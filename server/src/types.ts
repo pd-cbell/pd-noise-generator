@@ -142,6 +142,13 @@ export interface MonitorTrendPoint {
   count: number;
 }
 
+export interface TrackInfo {
+  id: string;
+  type: 'background' | 'scenario';
+  name?: string;
+  status: 'running' | 'completed' | 'stopped';
+}
+
 export interface SimulationState {
   isRunning: boolean;
   activeIncidents: Incident[];
@@ -149,6 +156,7 @@ export interface SimulationState {
   log: SimulationLogEntry[];
   monitorTrend: MonitorTrendPoint[];
   metrics: Metrics;
+  tracks: TrackInfo[]; // Added tracks info
   _mttaSums: SeverityMetrics;
   _mttaCounts: SeverityMetrics;
   _mttrSums: SeverityMetrics;

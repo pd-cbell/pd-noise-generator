@@ -11,6 +11,7 @@ interface ServerSimulationState {
   totalEvents: number;
   log: any[];
   monitorTrend: any[];
+  tracks: any[]; // Added tracks info
 }
 
 interface SimulationContextType {
@@ -18,7 +19,8 @@ interface SimulationContextType {
   isSimRunning: boolean;
   startSimulation: (overrideConfig?: any) => void;
   stopSimulation: () => void;
-  injectGoldenDemo: (items: any[], mappingProfileId?: string) => void; // Added for injecting Golden Demo items
+  stopTrack: (trackId: string) => void; // Added stopTrack
+  injectGoldenDemo: (items: any[], mappingProfileId?: string) => void; 
   isLoading: boolean;
   ackIncident: (dedupKey: string) => void;
   resolveIncident: (dedupKey: string) => void;
@@ -58,7 +60,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         responderAckRate: state.responderAckRate,
         teamFailureProbability: state.teamFailureProbability,
         severityConfigs: state.severityConfigs,
-        changeRoutingKey: state.campaignConfig.importedChangeRoutingKey,
+        changeRoutingKey: undefined,
         selectedServices: state.services.filter(svc => svc.include),
         selectedTeamIds: state.selectedTeamIds,
         mappingProfileId: state.selectedMappingProfileId,
@@ -89,6 +91,16 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (socketRef.current) {
       setIsLoading(true);
       socketRef.current.emit('stop_simulation');
+    }
+  }, []);
+
+  const stopTrack = useCallback((trackId: string) => {
+    if (socketRef.current) {
+      socketRef.current.emit('stop_track', { trackId }, (err: any) => {
+        if (err) {
+          console.error('SimulationProvider: stop_track callback error', err);
+        }
+      });
     }
   }, []);
 
@@ -194,7 +206,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   return (
     <SimulationContext.Provider value={{ 
-        currentSimState, isSimRunning, startSimulation, stopSimulation, injectGoldenDemo, isLoading,
+        currentSimState, isSimRunning, startSimulation, stopSimulation, stopTrack, injectGoldenDemo, isLoading,
         ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents
     }}>
       {children}

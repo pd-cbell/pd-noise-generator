@@ -114,6 +114,61 @@ export class MappingProfileService {
     });
   }
 
+  async addMappingsToProfile(
+    id: string,
+    mappings: ServiceMappingInput[]
+  ): Promise<MappingProfileWithMappings> {
+    return prisma.$transaction(async (tx) => {
+      const existingProfile = await tx.mappingProfile.findUnique({ where: { id } });
+      if (!existingProfile) {
+        throw new Error('Mapping Profile not found');
+      }
+
+      for (const mapping of mappings) {
+        const existingMapping = await tx.serviceMapping.findFirst({
+          where: {
+            mappingProfileId: id,
+            logicalServiceName: mapping.logicalServiceName,
+          },
+        });
+
+        if (existingMapping) {
+          await tx.serviceMapping.update({
+            where: { id: existingMapping.id },
+            data: {
+              incidentServiceId: mapping.incidentServiceId ?? null,
+              incidentServiceName: mapping.incidentServiceName ?? null,
+              incidentRoutingKeyOverride: mapping.incidentRoutingKeyOverride ?? null,
+              changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
+              changeServiceId: mapping.changeServiceId ?? null,
+              changeServiceName: mapping.changeServiceName ?? null,
+              useIncidentForChange: mapping.useIncidentForChange ?? true,
+            },
+          });
+        } else {
+          await tx.serviceMapping.create({
+            data: {
+              mappingProfileId: id,
+              logicalServiceName: mapping.logicalServiceName,
+              incidentServiceId: mapping.incidentServiceId ?? null,
+              incidentServiceName: mapping.incidentServiceName ?? null,
+              incidentRoutingKeyOverride: mapping.incidentRoutingKeyOverride ?? null,
+              changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
+              changeServiceId: mapping.changeServiceId ?? null,
+              changeServiceName: mapping.changeServiceName ?? null,
+              useIncidentForChange: mapping.useIncidentForChange ?? true,
+            },
+          });
+        }
+      }
+
+      return tx.mappingProfile.findUniqueOrThrow({
+        where: { id },
+        include: { serviceMappings: true },
+      });
+    });
+  }
+
   async deleteMappingProfile(id: string): Promise<void> {
     await prisma.mappingProfile.delete({
       where: { id },
