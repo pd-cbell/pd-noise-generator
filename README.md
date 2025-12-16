@@ -4,7 +4,7 @@
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.3.1-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
 ## 🚀 New in v2.3: Multi-Sim & Director Control
 
