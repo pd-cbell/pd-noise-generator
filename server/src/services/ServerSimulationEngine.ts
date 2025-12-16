@@ -25,6 +25,43 @@ import { integrationService } from './IntegrationService';
 const mappingProfileService = new MappingProfileService();
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
 
+export type TrackRunState = {
+  trackRunId: string;
+  goldenDemoId?: string;
+  startedAt: number;
+  finishedAt?: number;
+  mappingProfileId?: string | null;
+  sentEvents: Array<{
+    id: string;
+    type: string;
+    logicalServiceName: string;
+    effectiveServiceName?: string;
+    dedupKey?: string | null;
+    sentAt: number;
+    status: 'sent' | 'error';
+    error?: string;
+  }>;
+  incidentsByDedupKey: Record<string, {
+    dedupKey: string;
+    incidentId?: string;
+    incidentNumber?: number;
+    htmlUrl?: string;
+    serviceName?: string;
+    title?: string;
+    status?: string;
+    urgency?: string;
+    createdAt?: string;
+    lastUpdatedAt?: string;
+    lastFetchedAt?: number;
+    firstSeenAt?: number;
+    ackedAt?: number;
+    resolvedAt?: number;
+  }>;
+  lastPollAt?: number;
+  isActive: boolean;
+  errors?: string[];
+};
+
 type GeneratedPayload = {
   summary?: string;
   source?: string;
@@ -45,6 +82,8 @@ export class SimulationSession {
   private timer: NodeJS.Timeout | null = null;
   private io: SocketIOServer; 
   private pdClient: PagerDutyClient; // Still needed for some session-level ops or just passing to tracks
+  private trackRuns: Map<string, TrackRunState> = new Map();
+  private trackRunByTrackId: Map<string, string> = new Map();
 
   constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
     this.userId = userId;
@@ -87,6 +126,85 @@ export class SimulationSession {
 
     // Initialize Default Background Track
     this.createBackgroundTrack();
+  }
+  private emitTrackRunStarted(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null) {
+    const payload = {
+      trackRunId,
+      goldenDemoId: goldenDemoId || null,
+      mappingProfileId: mappingProfileId || null,
+      startedAt: Date.now(),
+    };
+    this.io.to(this.userId).emit('track_run_started', payload);
+  }
+
+  private emitTrackRunUpdate(run: TrackRunState) {
+    this.io.to(this.userId).emit('track_run_update', run);
+  }
+
+  private emitTrackRunFinished(run: TrackRunState) {
+    this.io.to(this.userId).emit('track_run_finished', run);
+  }
+
+  private initializeTrackRun(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null) {
+    const run: TrackRunState = {
+      trackRunId,
+      goldenDemoId,
+      mappingProfileId: mappingProfileId || null,
+      startedAt: Date.now(),
+      sentEvents: [],
+      incidentsByDedupKey: {},
+      isActive: true,
+      errors: [],
+    };
+    this.trackRuns.set(trackRunId, run);
+  }
+
+  private registerTrackEvent(
+    trackRunId: string,
+    payload: {
+      eventId: string;
+      type: string;
+      logicalServiceName: string;
+      effectiveServiceName?: string;
+      dedupKey?: string | null;
+      threadKey?: string;
+      isSeed?: boolean;
+      seedDedupKey?: string;
+    }
+  ) {
+    const run = this.trackRuns.get(trackRunId);
+    if (!run) return;
+    const now = Date.now();
+    run.sentEvents.push({
+      id: payload.eventId,
+      type: payload.type,
+      logicalServiceName: payload.logicalServiceName,
+      effectiveServiceName: payload.effectiveServiceName,
+      dedupKey: payload.dedupKey,
+      sentAt: now,
+      status: 'sent',
+    });
+
+    if (payload.dedupKey) {
+      if (payload.isSeed && (payload.type === 'incident' || payload.type === 'alert')) {
+        if (!run.incidentsByDedupKey[payload.dedupKey]) {
+          run.incidentsByDedupKey[payload.dedupKey] = {
+            dedupKey: payload.dedupKey,
+            serviceName: payload.effectiveServiceName || payload.logicalServiceName,
+            firstSeenAt: now,
+          };
+        }
+      }
+    }
+    this.emitTrackRunUpdate(run);
+  }
+
+  private finishTrackRun(trackRunId: string) {
+    const run = this.trackRuns.get(trackRunId);
+    if (!run) return;
+    run.finishedAt = Date.now();
+    run.isActive = true; // keep polling until resolved
+    this.emitTrackRunUpdate(run);
   }
 
   private normalizeSourceMix(sourceMix: SourceMix | Partial<SourceMix> | undefined): SourceMix {
@@ -205,7 +323,15 @@ export class SimulationSession {
               ...this.config, // Inherit base config
               items: configOrItems // Override items
           };
-          track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io);
+          const trackRunId = crypto.randomUUID();
+          this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
+          track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io, {
+            trackRunId,
+            onEventSent: (payload) => this.registerTrackEvent(trackRunId, payload),
+            onComplete: () => this.finishTrackRun(trackRunId),
+          });
+          this.trackRunByTrackId.set(id, trackRunId);
+          this.emitTrackRunStarted(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
       } else {
           // Background
           track = new BackgroundTrack(id, this.config, this.credentials, this.io);
@@ -228,6 +354,11 @@ export class SimulationSession {
       if (track) {
           track.stop();
           this.tracks.delete(trackId);
+          const runId = this.trackRunByTrackId.get(trackId);
+          if (runId) {
+            this.finishTrackRun(runId);
+            this.trackRunByTrackId.delete(trackId);
+          }
       }
   }
 
@@ -446,7 +577,92 @@ export class SimulationSession {
       // Update Trend
       this.addMonitorTrendData(this.state.activeIncidents.length);
 
+      await this.pollTrackRuns();
+
       this.emitState();
+  }
+
+  private async pollTrackRuns() {
+    const now = Date.now();
+    for (const run of this.trackRuns.values()) {
+      const incidents = Object.values(run.incidentsByDedupKey || {});
+      const unresolved = incidents.some((i) => i.status !== 'resolved');
+      const shouldPoll = run.isActive || unresolved;
+      if (!shouldPoll) continue;
+
+      const interval = run.isActive ? 4000 : 12000;
+      if (run.lastPollAt && now - run.lastPollAt < interval) continue;
+      run.lastPollAt = now;
+
+      try {
+        // Discover incidents by dedup key
+        const needIds = incidents.filter((i) => !i.incidentId && i.dedupKey).slice(0, 8);
+        for (const inc of needIds) {
+          try {
+            const res = await this.pdClient.getIncidentByDedupKey(inc.dedupKey);
+            const found = res?.incidents?.[0];
+            if (found) {
+              this.updateRunIncident(run, found, inc.dedupKey);
+            }
+          } catch (e: any) {
+            run.errors = run.errors || [];
+            run.errors.push(`Lookup failed for ${inc.dedupKey}: ${e.message}`);
+          }
+        }
+
+        // Refresh known incidents
+        const knownIds = incidents.map((i) => i.incidentId).filter(Boolean) as string[];
+        if (knownIds.length > 0) {
+          const res = await this.pdClient.getIncidentsByIds(Array.from(new Set(knownIds)));
+          if (res?.incidents) {
+            res.incidents.forEach((pdInc: any) => this.updateRunIncident(run, pdInc, undefined));
+          }
+        }
+      } catch (e: any) {
+        run.errors = run.errors || [];
+        run.errors.push(e.message || 'Track run poll failed');
+      }
+
+      const stillUnresolved = Object.values(run.incidentsByDedupKey || {}).some((i) => i.status !== 'resolved');
+      if (run.finishedAt && !stillUnresolved) {
+        run.isActive = false;
+        this.emitTrackRunFinished(run);
+      } else {
+        this.emitTrackRunUpdate(run);
+      }
+    }
+  }
+
+  private updateRunIncident(run: TrackRunState, pdIncident: any, dedupKeyOverride?: string) {
+    const dedupKey = dedupKeyOverride || pdIncident?.incident_key || pdIncident?.dedup_key;
+    if (!dedupKey) return;
+    const existing = run.incidentsByDedupKey[dedupKey] || { dedupKey };
+    const status = pdIncident.status;
+
+    const ackedAt =
+      existing.ackedAt ||
+      (status === 'acknowledged' ? Date.parse(pdIncident?.acknowledgements?.[0]?.at || pdIncident?.last_status_change_at || '') || Date.now() : undefined);
+    const resolvedAt =
+      existing.resolvedAt ||
+      (status === 'resolved' ? Date.parse(pdIncident?.resolved_at || pdIncident?.last_status_change_at || '') || Date.now() : undefined);
+
+    run.incidentsByDedupKey[dedupKey] = {
+      ...existing,
+      dedupKey,
+      incidentId: pdIncident.id,
+      incidentNumber: pdIncident.incident_number,
+      htmlUrl: pdIncident.html_url,
+      serviceName: pdIncident.service?.summary || existing.serviceName,
+      title: pdIncident.title || existing.title,
+      status,
+      urgency: pdIncident.urgency,
+      createdAt: pdIncident.created_at,
+      lastUpdatedAt: pdIncident.last_status_change_at,
+      lastFetchedAt: Date.now(),
+      firstSeenAt: existing.firstSeenAt || Date.now(),
+      ackedAt,
+      resolvedAt,
+    };
   }
 
   private emitState() {

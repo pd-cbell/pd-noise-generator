@@ -2,10 +2,42 @@ import { SimulationTrack } from './SimulationTrack';
 import { EventType } from '../MappingResolver';
 import { TemplateParser } from '../../utils/TemplateParser';
 import { resolveEventTarget } from '../MappingResolver';
+import crypto from 'crypto';
 
 export class ScenarioTrack extends SimulationTrack {
   public type: 'background' | 'scenario' = 'scenario';
   private timers: NodeJS.Timeout[] = [];
+  private onEventSent?: (payload: {
+    trackRunId?: string;
+    eventId: string;
+    type: EventType;
+    logicalServiceName: string;
+    effectiveServiceName?: string;
+    dedupKey?: string | null;
+    threadKey?: string;
+    isSeed?: boolean;
+    seedDedupKey?: string;
+  }) => void;
+  private onComplete?: () => void;
+  private trackRunId?: string;
+  private threadState: Map<string, { seedDedupKey?: string; sequence: number }> = new Map();
+
+  constructor(
+    id: string,
+    config: any,
+    credentials: any,
+    io: any,
+    options?: {
+      trackRunId?: string;
+      onEventSent?: ScenarioTrack['onEventSent'];
+      onComplete?: () => void;
+    }
+  ) {
+    super(id, config, credentials, io);
+    this.trackRunId = options?.trackRunId;
+    this.onEventSent = options?.onEventSent;
+    this.onComplete = options?.onComplete;
+  }
 
   public start(): void {
     this.status = 'running';
@@ -48,20 +80,26 @@ export class ScenarioTrack extends SimulationTrack {
 
   private scheduleItems(items: any[]) {
     let cumulativeMs = 0;
-    items.forEach((item) => {
+    items.forEach((item, idx) => {
       const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
       cumulativeMs += delaySec * 1000;
       const timer = setTimeout(() => {
-        this.fireItem(item).catch((err) => {
+        this.fireItem(item, idx).catch((err) => {
           this.addLog(`Scenario event failed: ${err.message}`, 'error');
         });
       }, cumulativeMs);
       this.timers.push(timer);
     });
     this.addLog(`Scheduled ${items.length} scenario items.`, 'info');
+    if (items.length > 0 && this.onComplete) {
+      const finalTimer = setTimeout(() => {
+        this.onComplete?.();
+      }, cumulativeMs + 250);
+      this.timers.push(finalTimer);
+    }
   }
 
-  private async fireItem(item: any) {
+  private async fireItem(item: any, index: number) {
     const logicalServiceName =
       item.logicalServiceName ||
       item.service ||
@@ -123,10 +161,37 @@ export class ScenarioTrack extends SimulationTrack {
       payload.severity = 'error';
     }
 
+    const eventId = item.id || item.stepName || item.summary || `evt-${index}`;
+    const threadKey =
+      item.threadKey ||
+      eventId ||
+      `${index}-${logicalServiceName}-${(item.summary || '').substring(0, 20)}`;
+
+    const state = this.threadState.get(threadKey) || { seedDedupKey: undefined, sequence: 0 };
+    const isIncidentType = type === 'incident' || type === 'alert';
+    let dedupKey: string | null = null;
+    let isSeed = false;
+
+    if (isIncidentType) {
+      if (!state.seedDedupKey) {
+        dedupKey = `gd:${this.trackRunId || this.id}:${threadKey}:seed`;
+        state.seedDedupKey = dedupKey;
+        state.sequence = 0;
+        isSeed = true;
+      } else {
+        state.sequence += 1;
+        const rand = crypto.randomUUID().substring(0, 8);
+        dedupKey = `gd:${this.trackRunId || this.id}:${threadKey}:${state.sequence}:${rand}`;
+      }
+      this.threadState.set(threadKey, state);
+    } else {
+      dedupKey = item.dedupKey || null;
+    }
+
     const body = {
       routing_key: routingKey,
       event_action: 'trigger',
-      dedup_key: item.dedupKey,
+      dedup_key: dedupKey,
       payload: {
         ...payload,
         source: payload.source || 'pd-noise-simulator-scenario',
@@ -135,8 +200,19 @@ export class ScenarioTrack extends SimulationTrack {
     };
 
     const response = await this.pdClient.triggerEvent(body);
-    const dedup = response?.dedup_key || item.dedupKey || 'unknown';
+    const dedup = response?.dedup_key || dedupKey || 'unknown';
     this.addLog(`Scenario event sent (${type}) ${logicalServiceName} dedup=${dedup}`, 'info');
+    this.onEventSent?.({
+      trackRunId: this.trackRunId,
+      eventId,
+      type,
+      logicalServiceName,
+      effectiveServiceName: resolvedTarget.effectiveServiceName,
+      dedupKey: dedup,
+      threadKey,
+      isSeed,
+      seedDedupKey: state.seedDedupKey,
+    });
     
     // Track incident if it's a trigger
     if (type === 'incident' || type === 'alert') {

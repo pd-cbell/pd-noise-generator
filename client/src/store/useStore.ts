@@ -27,6 +27,42 @@ export type ServiceMappingInput = {
   useIncidentForChange?: boolean;
 };
 
+export type TrackRunState = {
+  trackRunId: string;
+  goldenDemoId?: string | null;
+  mappingProfileId?: string | null;
+  startedAt: number;
+  finishedAt?: number;
+  isActive?: boolean;
+  sentEvents?: Array<{
+    id: string;
+    type: string;
+    logicalServiceName: string;
+    effectiveServiceName?: string;
+    dedupKey?: string | null;
+    sentAt: number;
+    status: 'sent' | 'error';
+    error?: string;
+  }>;
+  incidentsByDedupKey?: Record<string, {
+    dedupKey: string;
+    incidentId?: string;
+    incidentNumber?: number;
+    htmlUrl?: string;
+    serviceName?: string;
+    title?: string;
+    status?: string;
+    urgency?: string;
+    createdAt?: string;
+    lastUpdatedAt?: string;
+    lastFetchedAt?: number;
+    firstSeenAt?: number;
+    ackedAt?: number;
+    resolvedAt?: number;
+  }>;
+  errors?: string[];
+};
+
 export interface MappingProfile {
   id: string;
   name: string;
@@ -270,6 +306,14 @@ interface AppState extends SimulationState, ConfigurationState {
   createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
   updateMappingProfile: (id: string, profile: { name?: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
   deleteMappingProfile: (id: string) => Promise<void>;
+
+  trackRunsById: Record<string, TrackRunState>;
+  activeTrackRunId: string | null;
+  upsertTrackRun: (run: TrackRunState) => void;
+  finishTrackRun: (runId: string) => void;
+  selectedTrackRunId: string | 'all' | null;
+  trackSelectionMode: 'auto' | 'manual';
+  setSelectedTrackRunId: (id: string | 'all' | null, mode?: 'auto' | 'manual') => void;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
@@ -342,6 +386,12 @@ export const useStore = create<AppState>()(
       mappingProfiles: [],
       selectedMappingProfileId: null,
       isLoadingMappingProfiles: false,
+
+      // --- Track Runs ---
+      trackRunsById: {},
+      activeTrackRunId: null,
+      selectedTrackRunId: null,
+      trackSelectionMode: 'auto',
 
       // --- Session Slice Defaults ---
       activeSessionId: null,
@@ -672,6 +722,35 @@ export const useStore = create<AppState>()(
           selectedMappingProfileId: state.selectedMappingProfileId === id ? null : state.selectedMappingProfileId,
         }));
         get().addLog('Deleted mapping profile', 'info');
+      },
+
+      upsertTrackRun: (run) => {
+        set((state) => ({
+          trackRunsById: { ...state.trackRunsById, [run.trackRunId]: { ...(state.trackRunsById[run.trackRunId] || {}), ...run } },
+          activeTrackRunId: run.trackRunId,
+          selectedTrackRunId: state.trackSelectionMode === 'auto' ? run.trackRunId : state.selectedTrackRunId,
+        }));
+      },
+
+      finishTrackRun: (runId) => {
+        set((state) => {
+          const existing = state.trackRunsById[runId];
+          if (!existing) return state;
+          return {
+            trackRunsById: {
+              ...state.trackRunsById,
+              [runId]: { ...existing, isActive: false, finishedAt: existing.finishedAt || Date.now() },
+            },
+            activeTrackRunId: state.activeTrackRunId === runId ? null : state.activeTrackRunId,
+          };
+        });
+      },
+
+      setSelectedTrackRunId: (id, mode = 'manual') => {
+        set(() => ({
+          selectedTrackRunId: id,
+          trackSelectionMode: mode,
+        }));
       },
 
       startSession: async (data) => {

@@ -213,11 +213,24 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setIsLoading(false);
     });
 
-    socket.on('sim_stopped', () => {
-      setIsSimRunning(false);
-      setIsLoading(false);
-      // Don't clear state, let user see final stats
-    });
+      socket.on('sim_stopped', () => {
+        setIsSimRunning(false);
+        setIsLoading(false);
+        // Don't clear state, let user see final stats
+      });
+
+      socket.on('track_run_started', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+      });
+
+      socket.on('track_run_update', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+      });
+
+      socket.on('track_run_finished', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+        useStore.getState().finishTrackRun(run.trackRunId);
+      });
 
     socketRef.current = socket;
   }, [user]);

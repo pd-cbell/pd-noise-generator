@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore, Incident } from '../store/useStore'; 
+import { useStore, Incident, TrackRunState } from '../store/useStore'; 
 import { TrendChart } from './TrendChart';
 import { PlayCircle, StopCircle, Zap } from 'lucide-react';
 import { useServerSimulation } from '../hooks/useServerSimulation';
@@ -7,10 +7,28 @@ import { useServerSimulation } from '../hooks/useServerSimulation';
 export const MonitorDashboard: React.FC = () => {
   const { pdSubdomain } = useStore(); // Only need non-sim state from global store
   const { currentSimState, isSimRunning, socketStatus, socketError, reconnectSocket, requestSimState, stopTrack, ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents } = useServerSimulation();
+  const { trackRunsById, selectedTrackRunId, setSelectedTrackRunId, activeTrackRunId, trackSelectionMode } = useStore();
   
   const logContainerRef = useRef<HTMLDivElement>(null);
   const [selectedTrackId, setSelectedTrackId] = React.useState<string>('all');
   const tracks = currentSimState?.tracks || [];
+  const trackRuns: TrackRunState[] = React.useMemo(
+    () => Object.values(trackRunsById || {}).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0)),
+    [trackRunsById]
+  );
+
+  const runLabel = (run: TrackRunState) => {
+    const base = run.goldenDemoId ? `Demo ${run.goldenDemoId.slice(0, 8)}` : 'Scenario';
+    return `${base} (${(run.trackRunId || '').slice(0, 8)})`;
+  };
+
+  useEffect(() => {
+    if (!selectedTrackRunId && activeTrackRunId) {
+      setSelectedTrackRunId(activeTrackRunId, 'auto');
+    } else if (trackSelectionMode === 'auto' && activeTrackRunId && selectedTrackRunId !== activeTrackRunId) {
+      setSelectedTrackRunId(activeTrackRunId, 'auto');
+    }
+  }, [selectedTrackRunId, activeTrackRunId, trackSelectionMode, setSelectedTrackRunId]);
 
   // Safely access state from ServerSimulationState
   const activeIncidents = currentSimState?.activeIncidents || [];
@@ -108,6 +126,128 @@ export const MonitorDashboard: React.FC = () => {
           </button>
         </div>
       )}
+
+      <div className="bg-white border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-gray-600">Golden Demo Track</span>
+          <select
+            className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+            value={selectedTrackRunId || 'all'}
+            onChange={(e) => setSelectedTrackRunId(e.target.value === 'all' ? 'all' : e.target.value)}
+          >
+            <option value="all">All Tracks</option>
+            {trackRuns.map((run) => (
+              <option key={run.trackRunId} value={run.trackRunId}>
+                {runLabel(run)} {run.isActive ? '• Active' : '• Finished'}
+              </option>
+            ))}
+          </select>
+        </div>
+        {selectedTrackRunId && selectedTrackRunId !== 'all' && (
+          <span className={`text-xs px-2 py-1 rounded ${trackRuns.find(r => r.trackRunId === selectedTrackRunId)?.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+            {trackRuns.find(r => r.trackRunId === selectedTrackRunId)?.isActive ? 'Active' : 'Finished'}
+          </span>
+        )}
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">Golden Demo Lifecycle</h3>
+            <p className="text-xs text-gray-500">Track incidents triggered by Golden Demo runs.</p>
+          </div>
+        </div>
+        {trackRuns.length === 0 ? (
+          <p className="text-sm text-gray-500">No Golden Demo runs yet.</p>
+        ) : (
+          (() => {
+            const selectedRuns = selectedTrackRunId && selectedTrackRunId !== 'all'
+              ? trackRuns.filter(r => r.trackRunId === selectedTrackRunId)
+              : trackRuns;
+            type RunIncidentRow = { run: TrackRunState; inc?: any; empty?: boolean };
+            const rows: RunIncidentRow[] = [];
+            selectedRuns.forEach((run) => {
+              const incidents = Object.values(run.incidentsByDedupKey || {});
+              if (incidents.length === 0) {
+                rows.push({ run, empty: true });
+              } else {
+                incidents.forEach((inc) => rows.push({ run, inc }));
+              }
+            });
+
+            return rows.length === 0 ? (
+              <p className="text-sm text-gray-500">No tracked incidents yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      {selectedTrackRunId === 'all' || !selectedTrackRunId ? (
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Run</th>
+                      ) : null}
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Service</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Title</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Dedup</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {rows.map((row, idx) => {
+                      if (row.empty) {
+                        const run = row.run;
+                        return (
+                          <tr key={`empty-${run.trackRunId}-${idx}`}>
+                            {selectedTrackRunId === 'all' || !selectedTrackRunId ? (
+                              <td className="px-3 py-2 text-xs text-gray-500">
+                                <button
+                                  className="text-indigo-600 hover:underline"
+                                  onClick={() => setSelectedTrackRunId(run.trackRunId)}
+                                >
+                                  {runLabel(run)}
+                                </button>
+                              </td>
+                            ) : null}
+                            <td className="px-3 py-2 text-sm text-gray-500" colSpan={4}>No incidents yet.</td>
+                          </tr>
+                        );
+                      }
+                      const { run, inc } = row;
+                      return (
+                        <tr key={`${run.trackRunId}-${inc?.dedupKey || idx}`}>
+                          {selectedTrackRunId === 'all' || !selectedTrackRunId ? (
+                            <td className="px-3 py-2 text-xs text-gray-500">
+                              <button
+                                className="text-indigo-600 hover:underline"
+                                onClick={() => setSelectedTrackRunId(run.trackRunId)}
+                              >
+                                {runLabel(run)}
+                              </button>
+                            </td>
+                          ) : null}
+                          <td className="px-3 py-2">{inc?.status || 'pending'}</td>
+                          <td className="px-3 py-2">{inc?.serviceName || 'n/a'}</td>
+                          <td className="px-3 py-2">
+                            {inc?.htmlUrl ? (
+                              <a className="text-indigo-600 hover:underline" href={inc.htmlUrl} target="_blank" rel="noreferrer">
+                                {inc.title || 'Incident'}
+                              </a>
+                            ) : (
+                              inc?.title || 'Incident'
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500 truncate max-w-[180px]">{inc?.dedupKey}</td>
+                          <td className="px-3 py-2 text-xs text-gray-500">{inc?.lastUpdatedAt || '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()
+        )}
+      </div>
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Activity & Status */}
