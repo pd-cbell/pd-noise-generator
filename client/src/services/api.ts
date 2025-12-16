@@ -50,6 +50,16 @@ export const api = {
       headers: getHeaders(config)
     }),
 
+  // --- Users (RBAC) ---
+  getUsers: () => fetchFromProxy('/api/users'),
+  
+  updateUserRole: (id: string, role: string) =>
+    fetchFromProxy(`/api/users/${id}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    }),
+
   // --- Mapping Profiles ---
   getMappingProfiles: () => fetchFromProxy('/api/mapping-profiles'),
   getMappingProfile: (id: string) => fetchFromProxy(`/api/mapping-profiles/${id}`),

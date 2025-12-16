@@ -14,6 +14,7 @@ import simulationRouter from './routes/simulation';
 import authRouter from './routes/auth';
 import goldenDemosRouter from './routes/goldenDemos';
 import mappingProfilesRouter from './routes/mappingProfiles';
+import usersRouter from './routes/users'; // New import
 import { SimulationManager } from './services/ServerSimulationEngine';
 import { GoldenDemoService } from './services/GoldenDemoService'; // New import
 import { AgentService } from './services/AgentService'; // New import
@@ -133,6 +134,7 @@ app.use('/api/simulation', simulationRouter);
 app.use('/auth', authRouter);
 app.use('/api/golden-demos', goldenDemosRouter); // New route
 app.use('/api/mapping-profiles', mappingProfilesRouter);
+app.use('/api/users', usersRouter); // New route
 
 app.get('/', (req, res) => {
   res.send('PD Noise Simulator API is running!');

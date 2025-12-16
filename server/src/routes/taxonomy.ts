@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import prisma from '../prisma';
-import { authenticateUser, AuthRequest } from '../middleware/auth';
+import { authenticateUser } from '../middleware/auth';
+import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
+import { UserRole } from '@prisma/client'; // Import UserRole enum
 
 const router = Router();
 router.use(authenticateUser);
 
 // --- Domains ---
-router.get('/domains', async (req, res) => {
+router.get('/domains', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
     const domains = await prisma.domain.findMany({
       include: {
@@ -27,7 +29,7 @@ router.get('/domains', async (req, res) => {
   }
 });
 
-router.post('/domains', async (req: any, res: any) => {
+router.post('/domains', checkRole([UserRole.ADMIN]), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "Name is required" });
   
@@ -40,7 +42,7 @@ router.post('/domains', async (req: any, res: any) => {
 });
 
 // --- Teams ---
-router.post('/teams', async (req: any, res: any) => {
+router.post('/teams', checkRole([UserRole.ADMIN]), async (req, res) => {
   const { name, persona, domainId } = req.body;
   if (!name || !domainId) return res.status(400).json({ error: "Name and DomainId are required" });
 
@@ -55,7 +57,7 @@ router.post('/teams', async (req: any, res: any) => {
 });
 
 // --- Services ---
-router.post('/services', async (req: any, res: any) => {
+router.post('/services', checkRole([UserRole.ADMIN]), async (req, res) => {
   const { name, teamId, integrationKey } = req.body;
   if (!name || !teamId) return res.status(400).json({ error: "Name and TeamId are required" });
 
@@ -70,7 +72,7 @@ router.post('/services', async (req: any, res: any) => {
 });
 
 // --- Templates ---
-router.post('/templates', async (req: any, res: any) => {
+router.post('/templates', checkRole([UserRole.ADMIN]), async (req, res) => {
   const { name, template, serviceId, description, isDraft } = req.body;
   if (!name || !template || !serviceId) return res.status(400).json({ error: "Name, Template, and ServiceId are required" });
 

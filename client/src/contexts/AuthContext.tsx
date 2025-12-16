@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  EDITOR = 'EDITOR',
+  VIEWER = 'VIEWER',
+}
+
 interface User {
   id: string;
   email: string;
   name: string;
   avatarUrl: string;
+  role: UserRole;
 }
 
 interface Credentials {

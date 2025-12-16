@@ -1,9 +1,24 @@
-import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers, Map as MapIcon } from 'lucide-react';
+import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers, Map as MapIcon, Shield } from 'lucide-react';
 import { useStore } from '../store/useStore'; // Still need for global config
 import { useServerSimulation } from '../hooks/useServerSimulation'; // New
+import { useAuth, UserRole } from '../contexts/AuthContext';
 
 export const Header: React.FC<{ activePage: string; onNavigate: (page: string) => void; isSimRunning: boolean }> = ({ activePage, onNavigate, isSimRunning }) => {
   const { startSimulation, stopSimulation } = useServerSimulation();
+  const { user } = useAuth();
+
+  const navItems = [
+    { id: 'configure', label: 'Configure', icon: Settings },
+    { id: 'monitor', label: 'Monitor', icon: Activity },
+    { id: 'golden-demos', label: 'Golden Demos', icon: Layers },
+    { id: 'agent', label: 'Agent', icon: Bot },
+    { id: 'director', label: 'Director', icon: Layers },
+    { id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon },
+  ];
+
+  if (user?.role === UserRole.ADMIN) {
+    navItems.push({ id: 'admin', label: 'Admin', icon: Shield });
+  }
 
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
@@ -18,14 +33,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
       </div>
 
       <nav className="flex items-center bg-gray-100 p-1 rounded-lg">
-        {[
-          { id: 'configure', label: 'Configure', icon: Settings },
-          { id: 'monitor', label: 'Monitor', icon: Activity },
-          { id: 'golden-demos', label: 'Golden Demos', icon: Layers },
-          { id: 'agent', label: 'Agent', icon: Bot },
-          { id: 'director', label: 'Director', icon: Layers },
-          { id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon },
-        ].map((tab) => (
+        {navItems.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onNavigate(tab.id)}

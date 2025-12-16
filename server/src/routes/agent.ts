@@ -1,10 +1,15 @@
 import { Router } from 'express';
-import { AgentService } from '../services/AgentService'; // Change import to type
+import { AgentService } from '../services/AgentService';
+import { authenticateUser } from '../middleware/auth'; // Import authenticateUser
+import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
+import { UserRole } from '@prisma/client'; // Import UserRole enum
 
-export default (agentService: AgentService) => { // Export a function that takes AgentService
+export default (agentService: AgentService) => {
   const router = Router();
 
-  router.post('/proposal', async (req, res) => {
+  router.use(authenticateUser); // All agent routes require authentication
+
+  router.post('/proposal', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
     const { prompt, provider, services, vertical, maturityLevel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
@@ -23,7 +28,7 @@ export default (agentService: AgentService) => { // Export a function that takes
     }
   });
 
-  router.post('/build', async (req, res) => {
+  router.post('/build', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
     const { 
         prompt, 
         approvedPlan, 
@@ -36,8 +41,9 @@ export default (agentService: AgentService) => { // Export a function that takes
         maturityLevel,
         narrative,
         personaNotes,
-        createdByUserId
+        // createdByUserId // This will come from req.user
     } = req.body;
+    const { userId } = req.user!; // Get userId from authenticated user
 
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
@@ -54,7 +60,7 @@ export default (agentService: AgentService) => { // Export a function that takes
           maturityLevel,
           narrative,
           personaNotes,
-          createdByUserId
+          createdByUserId: userId // Use userId from req.user
       });
       res.json(campaign);
     } catch (error: any) {
@@ -63,5 +69,5 @@ export default (agentService: AgentService) => { // Export a function that takes
     }
   });
 
-  return router; // Return the configured router
+  return router;
 };

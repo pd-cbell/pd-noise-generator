@@ -11,43 +11,24 @@ datasource db {
 }
 
 model User {
-
   id            String    @id @default(cuid())
-
   email         String    @unique
-
   googleId      String    @unique
-
   name          String?
-
   avatarUrl     String?
-
-  pdRegion      String?   @default("US") // New: PagerDuty region for API endpoints (US/EU)
-
-  
+  pdRegion      String?   @default("US")
+  role          Role      @default(EDITOR) // New: User role for RBAC
 
   // Encrypted Credentials
-
   encryptedPagerDutyApiToken String?
-
   encryptedGlobalRoutingKey  String?
-
   encryptedFromEmail         String?
 
-
-
   createdAt     DateTime  @default(now())
-
   updatedAt     DateTime  @updatedAt
 
-
-
   profiles      Profile[]
-
-  campaigns     Campaign[]
-
   goldenDemos   GoldenDemo[] // Inverse relation for GoldenDemo
-
 }
 
 model Profile {
@@ -60,38 +41,6 @@ model Profile {
 
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
-}
-
-model Campaign {
-  id             String         @id @default(cuid())
-  name           String
-  description    String?
-  source         String? // Optional: to track origin (e.g., filename)
-  integrationKey String? // Campaign-level Incident Routing Key
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  items          CampaignItem[]
-
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
-}
-
-model CampaignItem {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  order      Int // To maintain execution sequence
-
-  stepName       String? // New: Optional name for the step
-  payload        Json // Raw event payload
-  eventAction    String  @default("trigger")
-  eventType      String  @default("alert") // "alert" or "change"
-  dedupKey       String?
-  integrationKey String? // New: Optional override for change events
-
-  delaySeconds    Int @default(0)
-  repeatCount     Int @default(1) // Renamed from 'times' for clarity
-  intervalSeconds Int @default(0)
 }
 
 // v2.0 Taxonomy Models
@@ -192,4 +141,10 @@ model ServiceMapping {
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
   mappingProfile            MappingProfile  @relation(fields: [mappingProfileId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
 }

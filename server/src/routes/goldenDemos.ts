@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { GoldenDemoService } from '../services/GoldenDemoService';
 import { authenticateUser } from '../middleware/auth';
+import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
+import { UserRole } from '@prisma/client'; // Import UserRole enum
 import { z } from 'zod'; // For validation
 import { simulationManager } from '../index';
 import { serverConfig } from '../config';
@@ -28,9 +30,10 @@ const updateGoldenDemoSchema = z.object({
   personaNotes: z.string().max(1000).optional(),
 });
 
-router.use(authenticateUser); // All Golden Demo routes require authentication
+// All Golden Demo routes require authentication, then role-based checks
+router.use(authenticateUser); 
 
-// --- Webhook trigger (public) ---
+// --- Webhook trigger (public, no role check) ---
 router.post('/:id/trigger', async (req, res) => {
   try {
     const { id } = req.params;
@@ -39,7 +42,13 @@ router.post('/:id/trigger', async (req, res) => {
       (req.body && req.body.mappingProfileId) ||
       null;
 
-    const demo = await goldenDemoService.getGoldenDemo(id, undefined as any);
+    // Webhook does not require authentication, so userId might be undefined
+    // For now, we allow trigger for anyone. If GoldenDemo is user-specific,
+    // this will trigger with the ID of the user who created the Golden Demo.
+    // If anonymous, pass undefined
+    const userId = (req as any).user?.userId; 
+
+    const demo = await goldenDemoService.getGoldenDemo(id, undefined as any); // Don't filter by userId for public trigger
     if (!demo) {
       return res.status(404).json({ message: 'Golden Demo not found' });
     }
@@ -72,6 +81,7 @@ router.post('/:id/trigger', async (req, res) => {
       goldenDemoId: demo.id,
     };
 
+    // Use the userId from the Golden Demo creator for the simulation session
     const instance = await simulationManager.createOrUpdate(demo.createdByUserId, simConfig, credentials);
     instance.start();
 
@@ -89,9 +99,9 @@ router.post('/:id/trigger', async (req, res) => {
 });
 
 // GET /api/golden-demos - List all golden demos for the authenticated user
-router.get('/', async (req, res) => {
+router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.id;
+    const userId = (req as any).user!.userId; // Access userId from req.user
     const { vertical } = req.query;
     const goldenDemos = await goldenDemoService.listGoldenDemos(
       userId,
@@ -105,9 +115,9 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/golden-demos/:id - Get a specific golden demo
-router.get('/:id', async (req, res) => {
+router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.id;
+    const userId = (req as any).user!.userId; // Access userId from req.user
     const { id } = req.params;
     const goldenDemo = await goldenDemoService.getGoldenDemo(id, userId);
     if (!goldenDemo) {
@@ -121,9 +131,9 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/golden-demos - Create a new golden demo
-router.post('/', async (req, res) => {
+router.post('/', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.id;
+    const userId = (req as any).user!.userId; // Access userId from req.user
     const validation = createGoldenDemoSchema.safeParse(req.body);
 
     if (!validation.success) {
@@ -142,9 +152,9 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/golden-demos/:id - Update an existing golden demo
-router.put('/:id', async (req, res) => {
+router.put('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.id;
+    const userId = (req as any).user!.userId; // Access userId from req.user
     const { id } = req.params;
     const validation = updateGoldenDemoSchema.safeParse(req.body);
 
@@ -165,9 +175,9 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/golden-demos/:id - Delete a golden demo
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.id;
+    const userId = (req as any).user!.userId; // Access userId from req.user
     const { id } = req.params;
     await goldenDemoService.deleteGoldenDemo(id, userId);
     res.status(204).send(); // No content

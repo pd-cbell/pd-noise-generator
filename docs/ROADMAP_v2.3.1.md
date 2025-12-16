@@ -14,7 +14,7 @@ Implement basic Role-Based Access Control to manage user permissions and system 
 -   **User Management:** Simple list of users with role assignment.
 
 ### Tasks
-- [ ] **Database:** Update `User` model in Prisma to include `role` (enum: ADMIN, EDITOR, VIEWER, default: EDITOR).
+- [x] **Database:** Update `User` model in Prisma to include `role` (enum: ADMIN, EDITOR, VIEWER, default: EDITOR).
 - [ ] **Server:** Middleware to check roles for sensitive routes (e.g., `POST /api/golden-demos`, `PUT /api/config`).
 - [ ] **Client:**
     -   Create `AdminDashboard.tsx` for user management.
