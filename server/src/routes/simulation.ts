@@ -2,14 +2,14 @@ import { Router, Response } from 'express';
 import prisma from '../prisma';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 import { simulationManager } from '../index';
 import { fakerService } from '../services/FakerService';
 
 const router = Router();
 router.use(authenticateUser);
 
-router.post('/trigger-template', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.post('/trigger-template', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
     const { userId } = req.user!;
     const { templateId } = req.body;
 
@@ -46,7 +46,7 @@ router.post('/trigger-template', checkRole([UserRole.EDITOR, UserRole.ADMIN]), a
     }
 });
 
-router.post('/preview-template', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.post('/preview-template', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
     const { userId } = req.user!; // Ensure userId is available, though not used here
     const { templateId } = req.body;
     if (!templateId) return res.status(400).json({ error: "templateId is required" });

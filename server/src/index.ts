@@ -80,6 +80,53 @@ io.on('connection', (socket) => {
       socket.emit('sim_state', existingSim.state);
   }
 
+  socket.on('request_sim_state', (callback?: (payload: any) => void) => {
+    try {
+      const sim = simulationManager.get(userId);
+      if (sim) {
+        socket.emit('sim_state', sim.state);
+        if (callback) callback({ ok: true });
+      } else {
+        if (callback) callback({ ok: false, message: 'No active simulation' });
+      }
+    } catch (err: any) {
+      if (callback) callback({ ok: false, message: err?.message || 'Failed to fetch sim state' });
+    }
+  });
+
+  socket.on('stop_track', ({ trackId }: { trackId: string }, callback?: (err?: any) => void) => {
+    try {
+      const session = simulationManager.get(userId);
+      if (!session) {
+        if (callback) callback({ message: 'Session not found' });
+        return;
+      }
+      session.stopTrack(trackId);
+      if (callback) callback(null);
+    } catch (err: any) {
+      console.error('stop_track error:', err);
+      if (callback) callback({ message: err?.message || 'Failed to stop track' });
+    }
+  });
+
+  socket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
+    try {
+      const session = simulationManager.get(userId);
+      if (!session) {
+        if (callback) callback({ message: 'Session not found' });
+        return;
+      }
+      const track = await session.startTrack('scenario', items);
+      if (mappingProfileId) {
+        await session.applyMappingToNewTrack(track, mappingProfileId);
+      }
+      if (callback) callback(null);
+    } catch (err: any) {
+      console.error('inject_golden_demo_items error:', err);
+      if (callback) callback({ message: err?.message || 'Failed to inject demo items' });
+    }
+  });
+
   socket.on('start_simulation', async (data) => {
       try {
         const sim = await simulationManager.createOrUpdate(userId, data.config, data.credentials);

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useStore, GoldenDemo, Beat } from '../store/useStore';
+import { useEffect, useState } from 'react';
+import { useStore, Beat } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { Play, CheckCircle, ChevronRight, Clock, AlertTriangle, StopCircle } from 'lucide-react';
 import { api } from '../services/api';
@@ -20,45 +20,26 @@ export const PresenterDashboard: React.FC = () => {
   // We should fetch the session on mount.
 
   useEffect(() => {
-    if (activeSessionId) {
-        api.getSessions().then(sessions => {
-            // This is a list, we need getSession(id) really, but for now filter
-            // Wait, api.getSessions filters by user. 
-            // Ideally we add getSession(id) to api.ts but I missed that in the frontend API update.
-            // I'll just use the list and find it for now, or assume the user just started it.
-            // Better: use the GoldenDemo from the store if we know which one it was.
-            // BUT, we don't store "activeGoldenDemoId".
-            
-            // Let's rely on the fact that if we are here, we probably just launched it.
-            // If we refreshed, we need to fetch.
-            // Let's implement a simple fetch in useEffect.
-            
-            // Correction: I added getSession to backend but not frontend api.ts? 
-            // Let me check... I added `getSessions` (list) but not `getSession` (single).
-            // I'll just iterate the goldenDemos to find one that matches the session? No, session has the link.
-            
-            // Workaround: We will fetch the session details from the backend using the ID.
-            // I'll add `getSession` to api.ts in a sec, or just fetch all and filter.
-            // Let's try fetching all for the user and finding the active one.
-             api.getSessions().then((data: any) => {
-                 const session = data.find((s: any) => s.id === activeSessionId);
-                 if (session) {
-                     setSessionData(session);
-                 }
-             });
-        });
-    }
+    if (!activeSessionId) return;
+    api.getSessions().then((data: any) => {
+      const session = data.find((s: any) => s.id === activeSessionId);
+      if (session) {
+        setSessionData(session);
+      }
+    });
   }, [activeSessionId]);
 
   // Timer
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (activeSessionId) {
       interval = setInterval(() => {
         setSessionDuration(prev => prev + 1);
       }, 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [activeSessionId]);
 
   const activeDemo = goldenDemos.find(d => d.id === sessionData?.goldenDemoId);
@@ -95,8 +76,6 @@ export const PresenterDashboard: React.FC = () => {
   if (!activeDemo) {
       return <div className="p-8">Loading Session Details...</div>;
   }
-
-  const currentBeat = beats[currentBeatIndex];
 
   return (
     <div className="h-[calc(100vh-80px)] flex flex-col bg-gray-50">

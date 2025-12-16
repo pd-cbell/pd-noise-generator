@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useStore } from '../store/useStore';
-import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
-import { Loader2, Plus, Edit, Trash2, Play } from 'lucide-react';
+import { useStore, GoldenDemo } from '../store/useStore';
+import { Loader2, Plus, Edit, Trash2 } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
 import { GoldenDemoEditorV2 } from './GoldenDemoEditorV2';
 import { useAuth, UserRole } from '../contexts/AuthContext';

@@ -3,7 +3,7 @@ import { SessionService } from '../services/SessionService';
 import { SimulationManager } from '../services/ServerSimulationEngine';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 
 const sessionService = new SessionService();
 
@@ -12,7 +12,7 @@ export default (simulationManager: SimulationManager) => {
   router.use(authenticateUser);
 
   // POST /api/sessions/start
-  router.post('/start', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.post('/start', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     try {
       const { goldenDemoId, name, notes } = req.body;
       const userId = req.user!.userId;
@@ -36,7 +36,7 @@ export default (simulationManager: SimulationManager) => {
   });
 
   // POST /api/sessions/:id/end
-  router.post('/:id/end', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.post('/:id/end', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     try {
       const { id } = req.params;
       const { notes } = req.body;
@@ -68,7 +68,7 @@ export default (simulationManager: SimulationManager) => {
   });
 
   // GET /api/sessions
-  router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
     try {
       const userId = req.user!.userId;
       const { goldenDemoId } = req.query;
@@ -81,7 +81,7 @@ export default (simulationManager: SimulationManager) => {
   });
 
   // GET /api/sessions/:id
-  router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
       try {
           const session = await sessionService.getSession(req.params.id);
           if (!session) return res.status(404).json({ message: 'Session not found' });

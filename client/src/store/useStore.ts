@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; 
-import { GoldenDemo, Session } from '../../../server/src/types'; 
-import { payloadRegistry, payloadGenerator, loadImportedCampaignBundles } from '../utils/payloads';
+import { GoldenDemo } from '../../../server/src/types'; 
+export type { GoldenDemo, Beat } from '../../../server/src/types';
 
 // --- Mapping Profiles ---
 export interface ServiceMapping {
@@ -16,6 +16,16 @@ export interface ServiceMapping {
   changeServiceName?: string | null;
   useIncidentForChange?: boolean;
 }
+
+export type ServiceMappingInput = {
+  logicalServiceName: string;
+  incidentServiceId?: string | null;
+  incidentServiceName?: string | null;
+  incidentRoutingKeyOverride?: string | null;
+  changeServiceId?: string | null;
+  changeServiceName?: string | null;
+  useIncidentForChange?: boolean;
+};
 
 export interface MappingProfile {
   id: string;
@@ -235,8 +245,11 @@ export interface ConfigurationState {
 interface AppState extends SimulationState, ConfigurationState {
   profiles: Profile[];
   activeProfileId: string | null;
+  isLoadingProfiles: boolean;
+  fetchProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => void;
   saveProfile: (profile: Profile) => void;
+  deleteProfile: (id: string) => Promise<void>;
 
   goldenDemos: GoldenDemo[]; 
   isLoadingGoldenDemos: boolean; 
@@ -252,9 +265,10 @@ interface AppState extends SimulationState, ConfigurationState {
   mappingProfiles: MappingProfile[];
   selectedMappingProfileId: string | null;
   fetchMappingProfiles: () => Promise<void>;
+  isLoadingMappingProfiles: boolean;
   setSelectedMappingProfileId: (id: string | null) => void;
-  createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMapping[] }) => Promise<MappingProfile>;
-  updateMappingProfile: (id: string, profile: Partial<Omit<MappingProfile, 'id'>>) => Promise<MappingProfile>;
+  createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
+  updateMappingProfile: (id: string, profile: { name?: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
   deleteMappingProfile: (id: string) => Promise<void>;
 }
 
@@ -327,6 +341,7 @@ export const useStore = create<AppState>()(
       // --- Mapping Profiles ---
       mappingProfiles: [],
       selectedMappingProfileId: null,
+      isLoadingMappingProfiles: false,
 
       // --- Session Slice Defaults ---
       activeSessionId: null,
@@ -495,15 +510,15 @@ export const useStore = create<AppState>()(
         // Client-side simulation logic (mostly deprecated/unused if server simulation is active)
       },
 
-      triggerIncident: async (service: Service, failureContext: any = null) => {
+      triggerIncident: async (_service: Service, _failureContext: any = null) => {
          // Deprecated client-side logic
       },
 
-      ackIncident: async (dedupKey: string) => {
+      ackIncident: async (_dedupKey: string) => {
          // Deprecated client-side logic
       },
 
-      resolveIncident: async (dedupKey: string) => {
+      resolveIncident: async (_dedupKey: string) => {
          // Deprecated client-side logic
       },
 
@@ -512,6 +527,18 @@ export const useStore = create<AppState>()(
       },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),
+
+      fetchProfiles: async () => {
+        set({ isLoadingProfiles: true });
+        try {
+          const profiles = await api.getProfiles();
+          set({ profiles });
+        } catch (error: any) {
+          get().addLog(`Failed to load profiles: ${error.message}`, 'error');
+        } finally {
+          set({ isLoadingProfiles: false });
+        }
+      },
       
       saveProfile: async (profileData) => {
         const { profiles } = get();
@@ -540,7 +567,7 @@ export const useStore = create<AppState>()(
         }
       },
 
-      deleteProfile: async (id) => {
+      deleteProfile: async (id: string) => {
         try {
           await api.deleteProfile(id);
           get().addLog('Profile deleted.', 'info');

@@ -118,7 +118,6 @@ const handleAddMapping = () => {
       incidentServiceId: '',
       incidentServiceName: '',
       incidentRoutingKeyOverride: '',
-      changeRoutingKeyOverride: '',
       changeServiceId: '',
       changeServiceName: '',
       useIncidentForChange: true,
@@ -148,7 +147,6 @@ const handleAddMapping = () => {
             incidentServiceId: m.incidentServiceId || undefined,
             incidentServiceName: m.incidentServiceName || undefined,
             incidentRoutingKeyOverride: m.incidentRoutingKeyOverride || undefined,
-            changeRoutingKeyOverride: m.changeRoutingKeyOverride || undefined,
             changeServiceId: m.useIncidentForChange ? undefined : m.changeServiceId || undefined,
             changeServiceName: m.useIncidentForChange ? undefined : m.changeServiceName || undefined,
             useIncidentForChange: m.useIncidentForChange ?? true,
@@ -312,7 +310,6 @@ const handleAddMapping = () => {
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Logical Service</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Incident Service</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Incident Routing Key</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Change Routing Key</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Change Service</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Use Incident?</th>
                     <th className="px-3 py-2"></th>
@@ -356,15 +353,6 @@ const handleAddMapping = () => {
                           />
                         </td>
                         <td className="px-3 py-2 align-top">
-                          <input
-                            type="text"
-                            className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
-                            value={mapping.changeRoutingKeyOverride || ''}
-                            onChange={(e) => handleMappingChange(idx, { changeRoutingKeyOverride: e.target.value })}
-                            placeholder="Optional change key override"
-                          />
-                        </td>
-                        <td className="px-3 py-2 align-top">
                           {mapping.useIncidentForChange ? (
                             <div className="text-xs text-gray-500 italic">Using incident service</div>
                           ) : (
@@ -392,7 +380,7 @@ const handleAddMapping = () => {
                               handleMappingChange(idx, {
                                 useIncidentForChange: e.target.checked,
                                 ...(e.target.checked
-                                  ? { changeServiceId: '', changeServiceName: '', changeRoutingKeyOverride: '' }
+                                  ? { changeServiceId: '', changeServiceName: '' }
                                   : {}),
                               })
                             }

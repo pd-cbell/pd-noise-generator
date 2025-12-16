@@ -38,6 +38,8 @@ const safeStringify = (obj: any) => {
   }
 };
 
+const maturityOptions = ['Reactive', 'Proactive', 'Preventative'];
+
 const normalizeEvents = (items: any[] | undefined): EditableEvent[] => {
   if (!items || !Array.isArray(items)) return [];
   return items.map((item, idx) => {
@@ -110,8 +112,8 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
 
   const [meta, setMeta] = useState({
     name: demo.name,
-    vertical: demo.vertical,
-    maturityLevel: demo.maturityLevel,
+    vertical: demo.vertical || '',
+    maturityLevel: demo.maturityLevel || '',
     narrative: demo.narrative,
     personaNotes: demo.personaNotes || '',
     description: demo.configJson?.description || '',
@@ -127,7 +129,6 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const [importPreview, setImportPreview] = useState<EditableEvent[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
-  const [importType, setImportType] = useState<'campaign' | 'crux'>('campaign');
   const [importBaseOffset, setImportBaseOffset] = useState<number>(0);
 
   useEffect(() => {
@@ -215,7 +216,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       return {
         ...existingMatch,
         id: evt.id,
-        stepName: evt.summary || evt.stepName,
+        stepName: evt.summary || existingMatch.stepName,
         service: evt.logicalServiceName,
         logicalServiceName: evt.logicalServiceName,
         delaySeconds,
@@ -250,6 +251,14 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const handleSave = async () => {
     if (!meta.name.trim()) {
       setError('Name is required.');
+      return;
+    }
+    if (!meta.vertical.trim()) {
+      setError('Vertical is required.');
+      return;
+    }
+    if (!meta.maturityLevel.trim()) {
+      setError('Maturity is required.');
       return;
     }
     for (const evt of events) {
@@ -355,16 +364,23 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                   value={meta.vertical}
                   onChange={(e) => setMeta({ ...meta, vertical: e.target.value })}
+                  required
+                  placeholder="Retail, FSI, Tech..."
                 />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Maturity</label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                <select
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
                   value={meta.maturityLevel}
                   onChange={(e) => setMeta({ ...meta, maturityLevel: e.target.value })}
-                />
+                  required
+                >
+                  <option value="">Select maturity</option>
+                  {maturityOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Description</label>

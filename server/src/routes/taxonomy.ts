@@ -2,13 +2,13 @@ import { Router } from 'express';
 import prisma from '../prisma';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 
 const router = Router();
 router.use(authenticateUser);
 
 // --- Domains ---
-router.get('/domains', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.get('/domains', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     const domains = await prisma.domain.findMany({
       include: {
@@ -29,7 +29,7 @@ router.get('/domains', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADM
   }
 });
 
-router.post('/domains', checkRole([UserRole.ADMIN]), async (req, res) => {
+router.post('/domains', checkRole([Role.ADMIN]), async (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ error: "Name is required" });
   
@@ -42,7 +42,7 @@ router.post('/domains', checkRole([UserRole.ADMIN]), async (req, res) => {
 });
 
 // --- Teams ---
-router.post('/teams', checkRole([UserRole.ADMIN]), async (req, res) => {
+router.post('/teams', checkRole([Role.ADMIN]), async (req, res) => {
   const { name, persona, domainId } = req.body;
   if (!name || !domainId) return res.status(400).json({ error: "Name and DomainId are required" });
 
@@ -57,7 +57,7 @@ router.post('/teams', checkRole([UserRole.ADMIN]), async (req, res) => {
 });
 
 // --- Services ---
-router.post('/services', checkRole([UserRole.ADMIN]), async (req, res) => {
+router.post('/services', checkRole([Role.ADMIN]), async (req, res) => {
   const { name, teamId, integrationKey } = req.body;
   if (!name || !teamId) return res.status(400).json({ error: "Name and TeamId are required" });
 
@@ -72,7 +72,7 @@ router.post('/services', checkRole([UserRole.ADMIN]), async (req, res) => {
 });
 
 // --- Templates ---
-router.post('/templates', checkRole([UserRole.ADMIN]), async (req, res) => {
+router.post('/templates', checkRole([Role.ADMIN]), async (req, res) => {
   const { name, template, serviceId, description, isDraft } = req.body;
   if (!name || !template || !serviceId) return res.status(400).json({ error: "Name, Template, and ServiceId are required" });
 

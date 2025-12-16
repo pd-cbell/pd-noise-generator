@@ -2,12 +2,12 @@ import { Router } from 'express';
 import prisma from '../prisma';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac';
-import { UserRole } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
 router.use(authenticateUser);
-router.use(checkRole([UserRole.ADMIN]));
+router.use(checkRole([Role.ADMIN]));
 
 // GET /api/users - List all users
 router.get('/', async (req, res) => {
@@ -33,7 +33,7 @@ router.get('/', async (req, res) => {
 router.put('/:id/role', async (req, res) => {
   const { role } = req.body;
   
-  if (!Object.values(UserRole).includes(role)) {
+  if (!Object.values(Role).includes(role)) {
     return res.status(400).json({ error: 'Invalid role' });
   }
 

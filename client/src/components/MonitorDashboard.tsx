@@ -1,14 +1,16 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore, IncidentSeverity, Incident } from '../store/useStore'; 
+import { useStore, Incident } from '../store/useStore'; 
 import { TrendChart } from './TrendChart';
-import { Activity, PauseCircle, PlayCircle, StopCircle, Zap } from 'lucide-react';
+import { PlayCircle, StopCircle, Zap } from 'lucide-react';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 
 export const MonitorDashboard: React.FC = () => {
   const { pdSubdomain } = useStore(); // Only need non-sim state from global store
-  const { currentSimState, isSimRunning, ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents } = useServerSimulation();
+  const { currentSimState, isSimRunning, socketStatus, socketError, reconnectSocket, requestSimState, stopTrack, ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents } = useServerSimulation();
   
   const logContainerRef = useRef<HTMLDivElement>(null);
+  const [selectedTrackId, setSelectedTrackId] = React.useState<string>('all');
+  const tracks = currentSimState?.tracks || [];
 
   // Safely access state from ServerSimulationState
   const activeIncidents = currentSimState?.activeIncidents || [];
@@ -61,6 +63,51 @@ export const MonitorDashboard: React.FC = () => {
 
   return (
     <div className="p-6 h-full flex flex-col gap-6">
+      {(socketStatus !== 'connected' || socketError) && (
+        <div className="p-3 rounded-lg border border-yellow-300 bg-yellow-50 text-sm text-yellow-800 flex justify-between items-center">
+          <div>
+            <strong>Monitor not connected.</strong>{' '}
+            {socketError ? `(${socketError})` : 'Awaiting socket connection to simulation.'}
+          </div>
+          <button
+            className="px-3 py-1 text-xs font-semibold text-yellow-900 bg-yellow-200 rounded hover:bg-yellow-300"
+            onClick={reconnectSocket}
+          >
+            Reconnect
+          </button>
+        </div>
+      )}
+      {socketStatus === 'connected' && (
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-2 text-xs text-gray-600">
+            <span className="font-semibold">Active tracks:</span>
+            <select
+              className="border border-gray-300 rounded px-2 py-1 text-xs bg-white"
+              value={selectedTrackId}
+              onChange={(e) => setSelectedTrackId(e.target.value)}
+            >
+              <option value="all">All</option>
+              {tracks.map((t) => (
+                <option key={t.id} value={t.id}>{t.name || t.id}</option>
+              ))}
+            </select>
+            {selectedTrackId !== 'all' && (
+              <button
+                className="px-2 py-1 text-[11px] font-semibold text-red-700 bg-red-100 border border-red-200 rounded hover:bg-red-200"
+                onClick={() => stopTrack(selectedTrackId)}
+              >
+                Stop Track
+              </button>
+            )}
+          </div>
+          <button
+            className="px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-200 rounded hover:bg-gray-200"
+            onClick={requestSimState}
+          >
+            Sync State
+          </button>
+        </div>
+      )}
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Activity & Status */}

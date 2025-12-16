@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ConfigurationForm } from './components/ConfigurationForm';
 import { MonitorDashboard } from './components/MonitorDashboard';
@@ -12,7 +12,7 @@ import MappingProfilesPage from './components/MappingProfilesPage';
 import { useAuth, UserRole } from './contexts/AuthContext'; // Import UserRole
 import { useServerSimulation } from './hooks/useServerSimulation';
 import { useStore } from './store/useStore';
-import { GoldenDemo } from '../../server/src/types';
+import { GoldenDemo } from './store/useStore';
 
 function App() {
   const { user, isLoading: isAuthLoading } = useAuth();

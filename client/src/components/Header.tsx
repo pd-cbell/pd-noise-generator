@@ -1,10 +1,9 @@
-import { Activity, Settings, Users, Play, Square, Pause, Bot, Layers, Map as MapIcon, Shield } from 'lucide-react';
-import { useStore } from '../store/useStore'; // Still need for global config
+import { Activity, Settings, Play, Square, Bot, Layers, Map as MapIcon, Shield } from 'lucide-react';
 import { useServerSimulation } from '../hooks/useServerSimulation'; // New
 import { useAuth, UserRole } from '../contexts/AuthContext';
 
 export const Header: React.FC<{ activePage: string; onNavigate: (page: string) => void; isSimRunning: boolean }> = ({ activePage, onNavigate, isSimRunning }) => {
-  const { startSimulation, stopSimulation } = useServerSimulation();
+  const { startSimulation, stopSimulation, socketStatus, socketError, isLoading } = useServerSimulation();
   const { user } = useAuth();
 
   const navItems = [
@@ -52,14 +51,23 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
 
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-           {/* Simulation Status Indicator */}
-           <span className={`w-3 h-3 rounded-full ${isSimRunning ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-           <span className="text-xs text-gray-500">{isSimRunning ? 'Running' : 'Stopped'}</span>
+           <span className={`w-3 h-3 rounded-full ${
+             socketStatus === 'connected' ? 'bg-green-500' :
+             socketStatus === 'connecting' ? 'bg-yellow-400' :
+             socketStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'
+           }`}></span>
+           <span className="text-xs text-gray-500">
+             {socketStatus === 'connected' ? (isSimRunning ? 'Running' : 'Ready') :
+              socketStatus === 'connecting' ? 'Connecting...' :
+              socketStatus === 'error' ? 'Socket Error' :
+              'Disconnected'}
+           </span>
         </div>
         
         {!isSimRunning ? (
           <button
             onClick={() => startSimulation()}
+            disabled={socketStatus !== 'connected' || isLoading}
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-white shadow-md transition-colors bg-green-600 hover:bg-green-700"
           >
             <Play className="w-4 h-4 fill-current" />
@@ -73,6 +81,9 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
             <Square className="w-4 h-4 fill-current" />
             Stop
           </button>
+        )}
+        {socketError && (
+          <span className="text-xs text-red-600">{socketError}</span>
         )}
       </div>
     </header>

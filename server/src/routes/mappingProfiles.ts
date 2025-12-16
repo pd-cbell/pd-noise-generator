@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 import { MappingProfileService } from '../services/MappingProfileService';
 
 const router = Router();
@@ -35,7 +35,7 @@ const updateProfileSchema = z.object({
 
 router.use(authenticateUser);
 
-router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (_req, res) => {
+router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (_req, res) => {
   try {
     const profiles = await mappingProfileService.getMappingProfiles();
     res.json(profiles);
@@ -48,7 +48,7 @@ router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), a
   }
 });
 
-router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     const profile = await mappingProfileService.getMappingProfileById(req.params.id);
     if (!profile) {
@@ -64,7 +64,7 @@ router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN])
   }
 });
 
-router.post('/', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     const validation = createProfileSchema.safeParse(req.body);
     if (!validation.success) {
@@ -84,7 +84,7 @@ router.post('/', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) 
   }
 });
 
-router.put('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     const validation = updateProfileSchema.safeParse(req.body);
     if (!validation.success) {
@@ -110,7 +110,7 @@ router.put('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res
   }
 });
 
-router.post('/:id/mappings', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.post('/:id/mappings', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     const mappingsSchema = z.array(serviceMappingSchema);
     const validation = mappingsSchema.safeParse(req.body);
@@ -138,7 +138,7 @@ router.post('/:id/mappings', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async
   }
 });
 
-router.delete('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+router.delete('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
     await mappingProfileService.deleteMappingProfile(req.params.id);
     res.status(204).send();

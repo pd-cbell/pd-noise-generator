@@ -2,14 +2,14 @@ import { Router } from 'express';
 import { AgentService } from '../services/AgentService';
 import { authenticateUser } from '../middleware/auth'; // Import authenticateUser
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 
 export default (agentService: AgentService) => {
   const router = Router();
 
   router.use(authenticateUser); // All agent routes require authentication
 
-  router.post('/proposal', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.post('/proposal', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     const { prompt, provider, services, vertical, maturityLevel } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
@@ -28,7 +28,7 @@ export default (agentService: AgentService) => {
     }
   });
 
-  router.post('/build', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res) => {
+  router.post('/build', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     const { 
         prompt, 
         approvedPlan, 

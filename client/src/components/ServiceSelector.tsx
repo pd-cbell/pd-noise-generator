@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Server, Users, Search, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, ChevronRight, Users, Search, Eye, EyeOff } from 'lucide-react';
 import { Service } from '../store/useStore';
 
 interface ServiceSelectorProps {
@@ -81,7 +81,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({ services, sele
     }
   };
 
-  const handleTeamToggle = (groupName: string, groupServices: Service[]) => {
+  const handleTeamToggle = (_groupName: string, groupServices: Service[]) => {
     const groupIds = groupServices.map(s => s.id);
     const allSelected = groupIds.every(id => selectedIds.includes(id));
 
@@ -193,7 +193,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({ services, sele
                       />
                       <div className="min-w-0">
                           <p className="text-xs font-medium text-gray-700 truncate">{svc.name}</p>
-                          {svc.changeIntegrationKey && <p className="text-[10px] text-green-600 leading-none">Change Enabled</p>}
+                          {svc.changeIntegrations?.length ? <p className="text-[10px] text-green-600 leading-none">Change Enabled</p> : null}
                       </div>
                     </label>
                   ))}

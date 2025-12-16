@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { GoldenDemo, MappingProfile, useStore, Service } from '../store/useStore';
+import { GoldenDemo, MappingProfile, useStore } from '../store/useStore';
 import { resolveServicePreview, EventType, SimulatorConfig } from '../utils/mappingLogic';
 import { Play, CheckCircle, XCircle, Info, Zap, Layers, AlertTriangle, Edit2, Save, X, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';

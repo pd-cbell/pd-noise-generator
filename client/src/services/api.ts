@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore';
+import type { ServiceMappingInput } from '../store/useStore';
 
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
@@ -67,7 +68,7 @@ export const api = {
     name: string;
     description?: string | null;
     globalIncidentRoutingKey?: string | null;
-    serviceMappings?: any[];
+    serviceMappings?: ServiceMappingInput[];
   }) =>
     fetchFromProxy('/api/mapping-profiles', {
       method: 'POST',
@@ -78,7 +79,7 @@ export const api = {
     name?: string;
     description?: string | null;
     globalIncidentRoutingKey?: string | null;
-    serviceMappings?: any[];
+    serviceMappings?: ServiceMappingInput[];
   }) =>
     fetchFromProxy(`/api/mapping-profiles/${id}`, {
       method: 'PUT',

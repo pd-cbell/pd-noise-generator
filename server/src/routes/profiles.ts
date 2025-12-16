@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../prisma';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { UserRole } from '@prisma/client'; // Import UserRole enum
+import { Role } from '@prisma/client'; // Import Role enum
 
 const router = Router();
 
@@ -10,7 +10,7 @@ const router = Router();
 router.use(authenticateUser);
 
 // GET /api/profiles - List all profiles for the logged-in user
-router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
   const { userId } = req.user!;
   try {
     const profiles = await prisma.profile.findMany({
@@ -24,7 +24,7 @@ router.get('/', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), a
 });
 
 // GET /api/profiles/:id - Get a single profile (scoped)
-router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
   const { userId } = req.user!;
   try {
     const profile = await prisma.profile.findFirst({
@@ -40,7 +40,7 @@ router.get('/:id', checkRole([UserRole.VIEWER, UserRole.EDITOR, UserRole.ADMIN])
 });
 
 // POST /api/profiles - Create a new profile
-router.post('/', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
   const { userId } = req.user!;
   try {
     const { name, description, settings } = req.body;
@@ -59,7 +59,7 @@ router.post('/', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: 
 });
 
 // PUT /api/profiles/:id - Update a profile
-router.put('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
   const { userId } = req.user!;
   try {
     // Ensure ownership
@@ -82,7 +82,7 @@ router.put('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res
 });
 
 // DELETE /api/profiles/:id - Delete a profile
-router.delete('/:id', checkRole([UserRole.EDITOR, UserRole.ADMIN]), async (req, res: Response) => {
+router.delete('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
   const { userId } = req.user!;
   try {
     // Ensure ownership

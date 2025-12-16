@@ -205,6 +205,9 @@ export interface GoldenDemoConfig {
   description: string;
   items: any[]; // CampaignItem[] - Loosely typed for now, can be more specific
   beats?: Beat[]; // Array of narrative beats
+  narrative?: {
+    stages?: Record<string, { text?: string }>;
+  };
 }
 
 // Prisma Client already generates a type for GoldenDemo, but defining an interface

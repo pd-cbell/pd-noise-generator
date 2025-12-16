@@ -477,43 +477,6 @@ export class SimulationManager {
     } else {
         instance = new SimulationSession(userId, config, credentials, this.io);
         this.instances.set(userId, instance);
-        
-        // Socket listener for injection
-        this.io.of('/').adapter.on('join-room', (room, id) => {
-          if (room === userId) {
-            const clientSocket = this.io.of('/').sockets.get(id);
-            if (clientSocket) {
-              clientSocket.on('stop_track', ({ trackId }: { trackId: string }, callback?: (err?: any) => void) => {
-                const session = this.instances.get(userId);
-                if (session) {
-                  session.stopTrack(trackId);
-                  if (callback) callback(null);
-                } else {
-                  if (callback) callback({ message: "Session not found" });
-                }
-              });
-
-              clientSocket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
-                try {
-                  const session = this.instances.get(userId);
-                  if (session) {
-                    // Create new Scenario Track
-                    const track = await session.startTrack('scenario', items);
-                    if (mappingProfileId) {
-                        await session.applyMappingToNewTrack(track, mappingProfileId);
-                    }
-                    if (callback) callback(null);
-                  } else {
-                    if (callback) callback({ message: "Session not found" });
-                  }
-                } catch (e: any) {
-                  console.error("Error injecting scenario:", e);
-                  if (callback) callback({ message: e.message });
-                }
-              });
-            }
-          }
-        });
     }
     // Note: Session-level mapping profile is applied to Background Track by default
     // We might want to explicit apply it here if updated?

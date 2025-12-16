@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Play, Layers, AlertTriangle, Zap, CheckCircle, X, Loader2, ListEnd } from 'lucide-react'; // Added ListEnd icon
+import { Play, Layers, AlertTriangle, Loader2, ListEnd } from 'lucide-react'; // Added ListEnd icon
 import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
@@ -7,7 +7,7 @@ import { ActiveTracksPanel } from './ActiveTracksPanel';
 
 export const DirectorDashboard: React.FC = () => {
   const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos, mappingProfiles, fetchMappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
-  const { startSimulation, injectGoldenDemo } = useServerSimulation();
+  const { injectGoldenDemo } = useServerSimulation();
   
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
