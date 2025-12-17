@@ -12,6 +12,8 @@ const GoldenDemoLibrary: React.FC = () => {
     fetchGoldenDemos,
     deleteGoldenDemo,
     addLog,
+    pendingEditGoldenDemoId,
+    clearEditGoldenDemoRequest,
   } = useStore();
   
   const { user } = useAuth();
@@ -25,6 +27,32 @@ const GoldenDemoLibrary: React.FC = () => {
   useEffect(() => {
     fetchGoldenDemos();
   }, [fetchGoldenDemos]);
+
+  useEffect(() => {
+    if (!pendingEditGoldenDemoId) return;
+
+    const requestedDemo = goldenDemos.find((demo) => demo.id === pendingEditGoldenDemoId);
+    if (!requestedDemo) {
+      if (!isLoadingGoldenDemos) {
+        fetchGoldenDemos();
+      }
+      return;
+    }
+
+    setSelectedDemoId(requestedDemo.id);
+    if (canEdit) {
+      setDraftDemo(requestedDemo);
+      setIsEditing(true);
+    }
+    clearEditGoldenDemoRequest();
+  }, [
+    pendingEditGoldenDemoId,
+    goldenDemos,
+    isLoadingGoldenDemos,
+    fetchGoldenDemos,
+    canEdit,
+    clearEditGoldenDemoRequest,
+  ]);
 
   const handleDelete = async (id: string, name: string) => {
     if (window.confirm(`Are you sure you want to delete "${name}"?`)) {

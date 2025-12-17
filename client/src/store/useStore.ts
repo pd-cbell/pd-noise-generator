@@ -293,6 +293,10 @@ interface AppState extends SimulationState, ConfigurationState {
   createGoldenDemo: (goldenDemo: Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>) => Promise<GoldenDemo>;
   updateGoldenDemo: (id: string, goldenDemo: Partial<Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>>) => Promise<GoldenDemo>;
   deleteGoldenDemo: (id: string) => Promise<void>;
+  upsertGoldenDemo: (goldenDemo: GoldenDemo) => void;
+  pendingEditGoldenDemoId: string | null;
+  requestEditGoldenDemo: (id: string) => void;
+  clearEditGoldenDemoRequest: () => void;
 
   activeSessionId: string | null;
   startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) => Promise<void>;
@@ -381,6 +385,7 @@ export const useStore = create<AppState>()(
       // --- Golden Demo Slice Defaults ---
       goldenDemos: [],
       isLoadingGoldenDemos: false,
+      pendingEditGoldenDemoId: null,
 
       // --- Mapping Profiles ---
       mappingProfiles: [],
@@ -677,6 +682,21 @@ export const useStore = create<AppState>()(
           throw error;
         }
       },
+
+      upsertGoldenDemo: (goldenDemo) => {
+        set((state) => {
+          const existingIndex = state.goldenDemos.findIndex((d) => d.id === goldenDemo.id);
+          if (existingIndex === -1) {
+            return { goldenDemos: [goldenDemo, ...state.goldenDemos] };
+          }
+          const updated = [...state.goldenDemos];
+          updated[existingIndex] = goldenDemo;
+          return { goldenDemos: updated };
+        });
+      },
+
+      requestEditGoldenDemo: (id) => set({ pendingEditGoldenDemoId: id }),
+      clearEditGoldenDemoRequest: () => set({ pendingEditGoldenDemoId: null }),
 
       fetchMappingProfiles: async () => {
         set({ isLoadingMappingProfiles: true });

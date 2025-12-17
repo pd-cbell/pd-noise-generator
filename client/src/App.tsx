@@ -17,7 +17,7 @@ import { GoldenDemo } from './store/useStore';
 function App() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); 
-  const { activeSessionId } = useStore();
+  const { activeSessionId, upsertGoldenDemo, requestEditGoldenDemo } = useStore();
   const [activePage, setActivePage] = useState('configure');
 
   // Auto-switch to presenter view when a session starts
@@ -33,6 +33,9 @@ function App() {
 
   const handleAgentBuildComplete = async (goldenDemo: GoldenDemo) => {
     console.log("Agent built Golden Demo:", goldenDemo.name);
+    upsertGoldenDemo(goldenDemo);
+    requestEditGoldenDemo(goldenDemo.id);
+    setActivePage('golden-demos');
   };
 
   if (isAuthLoading || isSimLoading) {
