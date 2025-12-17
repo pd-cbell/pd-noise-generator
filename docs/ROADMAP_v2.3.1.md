@@ -15,13 +15,9 @@ Implement basic Role-Based Access Control to manage user permissions and system 
 
 ### Tasks
 - [x] **Database:** Update `User` model in Prisma to include `role` (enum: ADMIN, EDITOR, VIEWER, default: EDITOR).
-- [ ] **Server:** Middleware to check roles for sensitive routes (e.g., `POST /api/golden-demos`, `PUT /api/config`).
-- [ ] **Client:**
-    -   Create `AdminDashboard.tsx` for user management.
-    -   Update `AuthContext` to expose user role.
-    -   Gate UI elements (Edit buttons, Delete actions) based on role.
-    -   Add "Admin" tab to Header (visible only to Admins).
+- [~] **Server:** Basic RBAC middleware wiring exists; remaining hardening moved to v2.3.2.
+- [~] **Client:** Basic role gating exists; full Admin UX/role management moved to v2.3.2.
 
 ## 2. Migration Steps
 1.  **Database Migration:** Add roles to User schema.
-2.  **Implement RBAC:** Add middleware and UI gating.
+2.  **Implement RBAC:** Complete middleware + Admin UX in v2.3.2.
