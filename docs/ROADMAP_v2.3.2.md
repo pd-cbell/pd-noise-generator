@@ -10,6 +10,7 @@
 - Auth loads user + role.
 - RBAC helpers exist and are used in some areas, but coverage/consistency needs verification.
 - Track lifecycle monitoring exists (server polling + socket updates), but UI/guide is deferred to v2.4.
+- Agentic Campaign Builder creates Golden Demos and immediately opens them in the editor for review/edit/save.
 
 ## 1) Server — RBAC Enforcement
 ### 1.1 Route coverage audit
