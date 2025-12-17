@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import prisma from '../prisma';
-import { authenticateUser, AuthRequest } from '../middleware/auth';
+import { authenticateUser } from '../middleware/auth';
+import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
+import { Role } from '@prisma/client'; // Import Role enum
 
 const router = Router();
 
@@ -8,8 +10,8 @@ const router = Router();
 router.use(authenticateUser);
 
 // GET /api/profiles - List all profiles for the logged-in user
-router.get('/', async (req: any, res: Response) => {
-  const { userId } = (req as AuthRequest).user!;
+router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
+  const { userId } = req.user!;
   try {
     const profiles = await prisma.profile.findMany({
       where: { userId },
@@ -22,8 +24,8 @@ router.get('/', async (req: any, res: Response) => {
 });
 
 // GET /api/profiles/:id - Get a single profile (scoped)
-router.get('/:id', async (req: any, res: Response) => {
-  const { userId } = (req as AuthRequest).user!;
+router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
+  const { userId } = req.user!;
   try {
     const profile = await prisma.profile.findFirst({
       where: { id: req.params.id, userId },
@@ -38,8 +40,8 @@ router.get('/:id', async (req: any, res: Response) => {
 });
 
 // POST /api/profiles - Create a new profile
-router.post('/', async (req: any, res: Response) => {
-  const { userId } = (req as AuthRequest).user!;
+router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
+  const { userId } = req.user!;
   try {
     const { name, description, settings } = req.body;
     const profile = await prisma.profile.create({
@@ -57,8 +59,8 @@ router.post('/', async (req: any, res: Response) => {
 });
 
 // PUT /api/profiles/:id - Update a profile
-router.put('/:id', async (req: any, res: Response) => {
-  const { userId } = (req as AuthRequest).user!;
+router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
+  const { userId } = req.user!;
   try {
     // Ensure ownership
     const existing = await prisma.profile.findFirst({ where: { id: req.params.id, userId } });
@@ -80,8 +82,8 @@ router.put('/:id', async (req: any, res: Response) => {
 });
 
 // DELETE /api/profiles/:id - Delete a profile
-router.delete('/:id', async (req: any, res: Response) => {
-  const { userId } = (req as AuthRequest).user!;
+router.delete('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res: Response) => {
+  const { userId } = req.user!;
   try {
     // Ensure ownership
     const existing = await prisma.profile.findFirst({ where: { id: req.params.id, userId } });

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api'; 
-import { GoldenDemo, Session } from '../../../server/src/types'; 
-import { payloadRegistry, payloadGenerator, loadImportedCampaignBundles } from '../utils/payloads';
+import { GoldenDemo } from '../../../server/src/types'; 
+export type { GoldenDemo, Beat } from '../../../server/src/types';
 
 // --- Mapping Profiles ---
 export interface ServiceMapping {
@@ -16,6 +16,52 @@ export interface ServiceMapping {
   changeServiceName?: string | null;
   useIncidentForChange?: boolean;
 }
+
+export type ServiceMappingInput = {
+  logicalServiceName: string;
+  incidentServiceId?: string | null;
+  incidentServiceName?: string | null;
+  incidentRoutingKeyOverride?: string | null;
+  changeServiceId?: string | null;
+  changeServiceName?: string | null;
+  useIncidentForChange?: boolean;
+};
+
+export type TrackRunState = {
+  trackRunId: string;
+  goldenDemoId?: string | null;
+  mappingProfileId?: string | null;
+  startedAt: number;
+  finishedAt?: number;
+  isActive?: boolean;
+  sentEvents?: Array<{
+    id: string;
+    type: string;
+    logicalServiceName: string;
+    effectiveServiceName?: string;
+    dedupKey?: string | null;
+    sentAt: number;
+    status: 'sent' | 'error';
+    error?: string;
+  }>;
+  incidentsByDedupKey?: Record<string, {
+    dedupKey: string;
+    incidentId?: string;
+    incidentNumber?: number;
+    htmlUrl?: string;
+    serviceName?: string;
+    title?: string;
+    status?: string;
+    urgency?: string;
+    createdAt?: string;
+    lastUpdatedAt?: string;
+    lastFetchedAt?: number;
+    firstSeenAt?: number;
+    ackedAt?: number;
+    resolvedAt?: number;
+  }>;
+  errors?: string[];
+};
 
 export interface MappingProfile {
   id: string;
@@ -235,8 +281,11 @@ export interface ConfigurationState {
 interface AppState extends SimulationState, ConfigurationState {
   profiles: Profile[];
   activeProfileId: string | null;
+  isLoadingProfiles: boolean;
+  fetchProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => void;
   saveProfile: (profile: Profile) => void;
+  deleteProfile: (id: string) => Promise<void>;
 
   goldenDemos: GoldenDemo[]; 
   isLoadingGoldenDemos: boolean; 
@@ -244,6 +293,10 @@ interface AppState extends SimulationState, ConfigurationState {
   createGoldenDemo: (goldenDemo: Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>) => Promise<GoldenDemo>;
   updateGoldenDemo: (id: string, goldenDemo: Partial<Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'>>) => Promise<GoldenDemo>;
   deleteGoldenDemo: (id: string) => Promise<void>;
+  upsertGoldenDemo: (goldenDemo: GoldenDemo) => void;
+  pendingEditGoldenDemoId: string | null;
+  requestEditGoldenDemo: (id: string) => void;
+  clearEditGoldenDemoRequest: () => void;
 
   activeSessionId: string | null;
   startSession: (data: { goldenDemoId: string; name?: string; notes?: string }) => Promise<void>;
@@ -252,10 +305,19 @@ interface AppState extends SimulationState, ConfigurationState {
   mappingProfiles: MappingProfile[];
   selectedMappingProfileId: string | null;
   fetchMappingProfiles: () => Promise<void>;
+  isLoadingMappingProfiles: boolean;
   setSelectedMappingProfileId: (id: string | null) => void;
-  createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMapping[] }) => Promise<MappingProfile>;
-  updateMappingProfile: (id: string, profile: Partial<Omit<MappingProfile, 'id'>>) => Promise<MappingProfile>;
+  createMappingProfile: (profile: { name: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
+  updateMappingProfile: (id: string, profile: { name?: string; description?: string | null; globalIncidentRoutingKey?: string | null; serviceMappings?: ServiceMappingInput[] }) => Promise<MappingProfile>;
   deleteMappingProfile: (id: string) => Promise<void>;
+
+  trackRunsById: Record<string, TrackRunState>;
+  activeTrackRunId: string | null;
+  upsertTrackRun: (run: TrackRunState) => void;
+  finishTrackRun: (runId: string) => void;
+  selectedTrackRunId: string | 'all' | null;
+  trackSelectionMode: 'auto' | 'manual';
+  setSelectedTrackRunId: (id: string | 'all' | null, mode?: 'auto' | 'manual') => void;
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
@@ -323,10 +385,18 @@ export const useStore = create<AppState>()(
       // --- Golden Demo Slice Defaults ---
       goldenDemos: [],
       isLoadingGoldenDemos: false,
+      pendingEditGoldenDemoId: null,
 
       // --- Mapping Profiles ---
       mappingProfiles: [],
       selectedMappingProfileId: null,
+      isLoadingMappingProfiles: false,
+
+      // --- Track Runs ---
+      trackRunsById: {},
+      activeTrackRunId: null,
+      selectedTrackRunId: null,
+      trackSelectionMode: 'auto',
 
       // --- Session Slice Defaults ---
       activeSessionId: null,
@@ -495,15 +565,15 @@ export const useStore = create<AppState>()(
         // Client-side simulation logic (mostly deprecated/unused if server simulation is active)
       },
 
-      triggerIncident: async (service: Service, failureContext: any = null) => {
+      triggerIncident: async (_service: Service, _failureContext: any = null) => {
          // Deprecated client-side logic
       },
 
-      ackIncident: async (dedupKey: string) => {
+      ackIncident: async (_dedupKey: string) => {
          // Deprecated client-side logic
       },
 
-      resolveIncident: async (dedupKey: string) => {
+      resolveIncident: async (_dedupKey: string) => {
          // Deprecated client-side logic
       },
 
@@ -512,6 +582,18 @@ export const useStore = create<AppState>()(
       },
 
       setActiveProfile: (id) => set({ activeProfileId: id }),
+
+      fetchProfiles: async () => {
+        set({ isLoadingProfiles: true });
+        try {
+          const profiles = await api.getProfiles();
+          set({ profiles });
+        } catch (error: any) {
+          get().addLog(`Failed to load profiles: ${error.message}`, 'error');
+        } finally {
+          set({ isLoadingProfiles: false });
+        }
+      },
       
       saveProfile: async (profileData) => {
         const { profiles } = get();
@@ -540,7 +622,7 @@ export const useStore = create<AppState>()(
         }
       },
 
-      deleteProfile: async (id) => {
+      deleteProfile: async (id: string) => {
         try {
           await api.deleteProfile(id);
           get().addLog('Profile deleted.', 'info');
@@ -601,6 +683,21 @@ export const useStore = create<AppState>()(
         }
       },
 
+      upsertGoldenDemo: (goldenDemo) => {
+        set((state) => {
+          const existingIndex = state.goldenDemos.findIndex((d) => d.id === goldenDemo.id);
+          if (existingIndex === -1) {
+            return { goldenDemos: [goldenDemo, ...state.goldenDemos] };
+          }
+          const updated = [...state.goldenDemos];
+          updated[existingIndex] = goldenDemo;
+          return { goldenDemos: updated };
+        });
+      },
+
+      requestEditGoldenDemo: (id) => set({ pendingEditGoldenDemoId: id }),
+      clearEditGoldenDemoRequest: () => set({ pendingEditGoldenDemoId: null }),
+
       fetchMappingProfiles: async () => {
         set({ isLoadingMappingProfiles: true });
         try {
@@ -645,6 +742,35 @@ export const useStore = create<AppState>()(
           selectedMappingProfileId: state.selectedMappingProfileId === id ? null : state.selectedMappingProfileId,
         }));
         get().addLog('Deleted mapping profile', 'info');
+      },
+
+      upsertTrackRun: (run) => {
+        set((state) => ({
+          trackRunsById: { ...state.trackRunsById, [run.trackRunId]: { ...(state.trackRunsById[run.trackRunId] || {}), ...run } },
+          activeTrackRunId: run.trackRunId,
+          selectedTrackRunId: state.trackSelectionMode === 'auto' ? run.trackRunId : state.selectedTrackRunId,
+        }));
+      },
+
+      finishTrackRun: (runId) => {
+        set((state) => {
+          const existing = state.trackRunsById[runId];
+          if (!existing) return state;
+          return {
+            trackRunsById: {
+              ...state.trackRunsById,
+              [runId]: { ...existing, isActive: false, finishedAt: existing.finishedAt || Date.now() },
+            },
+            activeTrackRunId: state.activeTrackRunId === runId ? null : state.activeTrackRunId,
+          };
+        });
+      },
+
+      setSelectedTrackRunId: (id, mode = 'manual') => {
+        set(() => ({
+          selectedTrackRunId: id,
+          trackSelectionMode: mode,
+        }));
       },
 
       startSession: async (data) => {

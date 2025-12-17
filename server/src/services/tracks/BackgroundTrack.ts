@@ -175,7 +175,9 @@ export class BackgroundTrack extends SimulationTrack {
     const probabilityOfIncident = 1 - Math.exp(-lambda); 
 
     // Team Failure Scenario Check
-    if (Math.random() < (teamFailureProbability ?? 0.01)) {
+    const teamFailurePerMinute = Math.max(0, Math.min(teamFailureProbability ?? 0.01, 1));
+    const teamFailurePerTick = 1 - Math.exp(-teamFailurePerMinute / 60); // normalize to 1-second ticks
+    if (Math.random() < teamFailurePerTick) {
         this.triggerTeamFailureScenario();
     }
 

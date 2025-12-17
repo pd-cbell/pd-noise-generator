@@ -12,11 +12,16 @@ interface ServerSimulationState {
   log: any[];
   monitorTrend: any[];
   tracks: any[]; // Added tracks info
+  metrics?: any;
 }
 
 interface SimulationContextType {
   currentSimState: ServerSimulationState | null;
   isSimRunning: boolean;
+  socketStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
+  socketError: string | null;
+  reconnectSocket: () => void;
+  requestSimState: () => void;
   startSimulation: (overrideConfig?: any) => void;
   stopSimulation: () => void;
   stopTrack: (trackId: string) => void; // Added stopTrack
@@ -36,55 +41,69 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [currentSimState, setCurrentSimState] = useState<ServerSimulationState | null>(null);
   const [isSimRunning, setIsSimRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [socketStatus, setSocketStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
+  const [socketError, setSocketError] = useState<string | null>(null);
 
   const startSimulation = useCallback((overrideConfig?: any) => {
-    if (socketRef.current && user && credentials) {
-      setIsLoading(true);
-      const state = useStore.getState();
-
-      // Ignore accidental event objects passed from onClick
-      const overrideSafe =
-        overrideConfig && typeof overrideConfig === 'object' && 'target' in overrideConfig
-          ? undefined
-          : overrideConfig;
-      
-      // Use override config (Golden Demo) or current store config
-      const simConfig = overrideSafe || {
-        ratePerMinute: state.ratePerMinute,
-        severityWeights: state.severityWeights,
-        autoHealConfig: state.autoHealConfig,
-        resumeExistingEnabled: state.resumeExistingEnabled,
-        sourceMix: state.sourceMix,
-        burstProbability: state.burstProbability,
-        majorIncidentProbability: state.majorIncidentProbability,
-        responderAckRate: state.responderAckRate,
-        teamFailureProbability: state.teamFailureProbability,
-        severityConfigs: state.severityConfigs,
-        changeRoutingKey: undefined,
-        selectedServices: state.services.filter(svc => svc.include),
-        selectedTeamIds: state.selectedTeamIds,
-        mappingProfileId: state.selectedMappingProfileId,
-      };
-
-      // Merge pdRegion into credentials
-      const fullCredentials = {
-          ...credentials,
-          pdRegion: state.pdRegion
-      };
-
-      // Clone to strip any non-serializable references
-      const payload = {
-        config: JSON.parse(JSON.stringify(simConfig)),
-        credentials: JSON.parse(JSON.stringify(fullCredentials)),
-      };
-
-      socketRef.current.emit('start_simulation', payload, (err: any) => {
-        if (err) {
-          console.error('SimulationProvider: start_simulation callback error', err);
-          setIsLoading(false);
-        }
-      });
+    if (!(user && credentials)) {
+      console.warn('Start simulation requested without authenticated user or credentials');
+      setIsLoading(false);
+      return;
     }
+
+    if (!socketRef.current) {
+      console.warn('Start simulation requested before socket connection is ready');
+      setSocketStatus('error');
+      setSocketError('Socket not connected');
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const state = useStore.getState();
+
+    // Ignore accidental event objects passed from onClick
+    const overrideSafe =
+      overrideConfig && typeof overrideConfig === 'object' && 'target' in overrideConfig
+        ? undefined
+        : overrideConfig;
+    
+    // Use override config (Golden Demo) or current store config
+    const simConfig = overrideSafe || {
+      ratePerMinute: state.ratePerMinute,
+      severityWeights: state.severityWeights,
+      autoHealConfig: state.autoHealConfig,
+      resumeExistingEnabled: state.resumeExistingEnabled,
+      sourceMix: state.sourceMix,
+      burstProbability: state.burstProbability,
+      majorIncidentProbability: state.majorIncidentProbability,
+      responderAckRate: state.responderAckRate,
+      teamFailureProbability: state.teamFailureProbability,
+      severityConfigs: state.severityConfigs,
+      changeRoutingKey: undefined,
+      selectedServices: state.services.filter(svc => svc.include),
+      selectedTeamIds: state.selectedTeamIds,
+      mappingProfileId: state.selectedMappingProfileId,
+    };
+
+    // Merge pdRegion into credentials
+    const fullCredentials = {
+        ...credentials,
+        pdRegion: state.pdRegion
+    };
+
+    // Clone to strip any non-serializable references
+    const payload = {
+      config: JSON.parse(JSON.stringify(simConfig)),
+      credentials: JSON.parse(JSON.stringify(fullCredentials)),
+    };
+
+    socketRef.current.emit('start_simulation', payload, (err: any) => {
+      if (err) {
+        console.error('SimulationProvider: start_simulation callback error', err);
+        setIsLoading(false);
+      }
+    });
   }, [user, credentials]);
 
   const stopSimulation = useCallback(() => {
@@ -133,51 +152,66 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
 
-  useEffect(() => {
-    if (user && !socketRef.current) {
-      setIsLoading(true);
-      const socket = io(API_BASE, {
-        withCredentials: true,
-      });
+  const connectSocket = useCallback(() => {
+    if (!user) {
+      setSocketStatus('disconnected');
+      setSocketError(null);
+      return;
+    }
+    if (socketRef.current) return;
 
-      socket.on('connect', () => {
-        console.log('SimulationProvider: Socket Connected');
-        setIsLoading(false);
-      });
+    setSocketStatus('connecting');
+    setSocketError(null);
+    setIsLoading(true);
+    const socket = io(API_BASE, {
+      withCredentials: true,
+      transports: ['websocket', 'polling']
+    });
 
-      socket.on('connect_error', (err) => {
-        console.error('SimulationProvider: Socket Connection Error', err);
-      });
+    socket.on('connect', () => {
+      console.log('SimulationProvider: Socket Connected');
+      setSocketStatus('connected');
+      setSocketError(null);
+      setIsLoading(false);
+      socket.emit('request_sim_state');
+    });
 
-      socket.on('disconnect', () => {
+    socket.on('connect_error', (err) => {
+      console.error('SimulationProvider: Socket Connection Error', err);
+      setSocketStatus('error');
+      setSocketError(err?.message || 'Socket connection failed');
+      setIsLoading(false);
+    });
+
+    socket.on('disconnect', () => {
         console.log('SimulationProvider: Socket Disconnected');
+        setSocketStatus('disconnected');
         setCurrentSimState(null);
         setIsSimRunning(false);
         setIsLoading(false);
       });
 
-      socket.on('sim_state', (state: ServerSimulationState) => {
-        console.log('SimulationProvider: State Sync', state);
-        setCurrentSimState(state);
-        setIsSimRunning(state.isRunning);
-        setIsLoading(false);
-      });
+    socket.on('sim_state', (state: ServerSimulationState) => {
+      console.log('SimulationProvider: State Sync', state);
+      setCurrentSimState(state);
+      setIsSimRunning(state.isRunning);
+      setIsLoading(false);
+    });
 
-      socket.on('sim_tick', (state: ServerSimulationState) => {
-        console.log('SimulationProvider: Tick', state);
-        setCurrentSimState(state);
-        setIsSimRunning(state.isRunning);
-      });
+    socket.on('sim_tick', (state: ServerSimulationState) => {
+      setCurrentSimState(state);
+      setIsSimRunning(state.isRunning);
+    });
 
-      socket.on('sim_started', () => {
-        setIsSimRunning(true);
-        setIsLoading(false);
-      });
+    socket.on('sim_started', () => {
+      setIsSimRunning(true);
+      setIsLoading(false);
+    });
 
-      socket.on('sim_error', (payload: any) => {
-        console.error('SimulationProvider: sim_error', payload);
-        setIsLoading(false);
-      });
+    socket.on('sim_error', (payload: any) => {
+      console.error('SimulationProvider: sim_error', payload);
+      setIsLoading(false);
+    });
 
       socket.on('sim_stopped', () => {
         setIsSimRunning(false);
@@ -185,28 +219,56 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // Don't clear state, let user see final stats
       });
 
-      socketRef.current = socket;
-    } else if (!user && socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsLoading(false);
-    } else if (!user) {
-        setIsLoading(false);
+      socket.on('track_run_started', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+      });
+
+      socket.on('track_run_update', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+      });
+
+      socket.on('track_run_finished', (run: any) => {
+        useStore.getState().upsertTrackRun(run);
+        useStore.getState().finishTrackRun(run.trackRunId);
+      });
+
+    socketRef.current = socket;
+  }, [user]);
+
+  useEffect(() => {
+    connectSocket();
+    if (!user) {
+      setSocketStatus('disconnected');
+      setSocketError(null);
+      setIsLoading(false);
     }
 
     return () => {
-      // We generally don't want to disconnect on unmount if we want background persistence across navigation,
-      // but since the Provider wraps App, unmount means closing app.
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
-  }, [user]);
+  }, [user, connectSocket]);
+
+  const requestSimState = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.emit('request_sim_state');
+    }
+  }, []);
+
+  const reconnectSocket = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    connectSocket();
+  }, [connectSocket]);
 
   return (
     <SimulationContext.Provider value={{ 
-        currentSimState, isSimRunning, startSimulation, stopSimulation, stopTrack, injectGoldenDemo, isLoading,
+        currentSimState, isSimRunning, socketStatus, socketError, reconnectSocket, requestSimState,
+        startSimulation, stopSimulation, stopTrack, injectGoldenDemo, isLoading,
         ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents
     }}>
       {children}

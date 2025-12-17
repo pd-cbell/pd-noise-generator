@@ -1,4 +1,4 @@
-import { MappingProfile, ServiceMapping } from '../store/useStore';
+import { MappingProfile } from '../store/useStore';
 
 export type EventType = 'incident' | 'alert' | 'change' | 'note' | 'automation';
 
@@ -68,7 +68,7 @@ export function resolveServicePreview(
       ? mapping.incidentServiceName ?? logicalServiceName
       : mapping.changeServiceName ?? logicalServiceName;
     const effectiveChangeId = useIncidentMapping ? mapping.incidentServiceId : mapping.changeServiceId;
-    const effectiveChangeRoutingKey = mapping.changeRoutingKeyOverride ?? simulatorConfig.pdChangeEventsRoutingKey ?? null;
+    const effectiveChangeRoutingKey = simulatorConfig.pdChangeEventsRoutingKey ?? null;
 
 
     return {

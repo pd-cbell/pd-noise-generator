@@ -1,5 +1,5 @@
 import React from 'react';
-import { GoldenDemo } from '../../../server/src/types';
+import { GoldenDemo } from '../store/useStore';
 import { Play, History, Link as LinkIcon, Copy, Shield } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
 import { useStore } from '../store/useStore';

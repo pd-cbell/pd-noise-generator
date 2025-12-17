@@ -18,25 +18,13 @@ const NOTE_LIBRARY = {
   ],
 };
 
-const FAILURE_NARRATIVES = [
-  "Shared database latency impacting dependent services",
-  "Downstream cache cluster eviction storm",
-  "Regional network flap observed by backbone monitors",
-  "Partial deploy stuck across AZs",
-  "Throttling on shared integration endpoint",
-];
-
-function randomFailureSummary(teamName: string | undefined): string {
-  const base = randomFrom(FAILURE_NARRATIVES);
-  return teamName ? `${base} (${teamName})` : base;
-}
-
 // --- Payload Registry Types ---
 export interface PayloadAdapter {
   id: string;
   label: string;
   group?: string;
   mixKey?: string;
+  uiMixOption?: boolean;
   hidden?: boolean;
   supportsCampaigns?: boolean;
   defaultWeight?: number;

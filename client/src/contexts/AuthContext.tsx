@@ -1,10 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  EDITOR = 'EDITOR',
+  VIEWER = 'VIEWER',
+}
+
 interface User {
   id: string;
   email: string;
   name: string;
   avatarUrl: string;
+  role: UserRole;
 }
 
 interface Credentials {
@@ -25,8 +32,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// TODO: Move API_BASE to a shared config
-const API_BASE = 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+const fetchSession = async (baseUrl: string, setter: {
+  setUser: (u: User | null) => void;
+  setCredentials: (c: Credentials | null) => void;
+}) => {
+  try {
+    const res = await fetch(`${baseUrl}/auth/me`, {
+      method: 'GET',
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setter.setUser(data.user);
+      setter.setCredentials(data.credentials);
+      return true;
+    }
+  } catch (_e) {
+    // ignore and fall through
+  }
+  setter.setUser(null);
+  setter.setCredentials(null);
+  return false;
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -35,21 +64,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const checkSession = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/auth/me`, {
-            method: 'GET',
-            credentials: 'include' 
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setUser(data.user);
-          setCredentials(data.credentials);
-        }
-      } catch (e) {
-        // Session invalid or network error, user remains null
-      } finally {
-        setIsLoading(false);
-      }
+      setIsLoading(true);
+      await fetchSession(API_BASE, { setUser, setCredentials });
+      setIsLoading(false);
     };
     checkSession();
   }, []);
@@ -66,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     const data = await res.json();
     setUser(data.user);
+    await fetchSession(API_BASE, { setUser, setCredentials });
   };
 
   const loginAsDev = async () => {
@@ -76,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!res.ok) throw new Error('Dev Login failed');
     const data = await res.json();
     setUser(data.user);
+    await fetchSession(API_BASE, { setUser, setCredentials });
   };
 
   const logout = async () => {

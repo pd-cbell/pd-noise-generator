@@ -100,14 +100,6 @@ export const ConfigurationForm: React.FC = () => {
     await fetchEscalationPolicies();
   };
 
-  const handleToggleAllTeams = () => {
-    if (selectedTeamIds.length === teams.length) {
-      setSelectedTeamIds([]);
-    } else {
-      setSelectedTeamIds(teams.map(t => t.id));
-    }
-  };
-
   const handleToggleAllServices = () => {
     if (visibleServices.length === 0) return;
     const allSelected = visibleServices.every(s => s.include);

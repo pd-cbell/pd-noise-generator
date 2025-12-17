@@ -1,9 +1,9 @@
 import { useStore } from '../store/useStore';
 
 export class SimulationEngine {
-  private fireTimer: NodeJS.Timeout | null = null;
-  private evalTimer: NodeJS.Timeout | null = null;
-  private trendTimer: NodeJS.Timeout | null = null;
+  private fireTimer: ReturnType<typeof setTimeout> | null = null;
+  private evalTimer: ReturnType<typeof setInterval> | null = null;
+  private trendTimer: ReturnType<typeof setInterval> | null = null;
 
   start() {
     console.log('[Engine] Starting simulation...');
@@ -23,7 +23,7 @@ export class SimulationEngine {
   }
 
   private scheduleNextFire() {
-    const { isGenerating, ratePerMinute, services, triggerIncident, addLog } = useStore.getState();
+    const { isGenerating, ratePerMinute, triggerIncident } = useStore.getState();
 
     if (!isGenerating) {
         // If paused/stopped, check again in 1s just in case state changes, or let the loop die?

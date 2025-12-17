@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore, MappingProfile, Service } from '../store/useStore';
+import { useStore, Service } from '../store/useStore';
 import { X, Plus, Save, Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -10,7 +10,7 @@ interface AddToProfileModalProps {
 }
 
 export const AddToProfileModal: React.FC<AddToProfileModalProps> = ({ isOpen, onClose, selectedServices }) => {
-  const { mappingProfiles, fetchMappingProfiles, createMappingProfile, updateMappingProfile, addLog } = useStore();
+  const { mappingProfiles, fetchMappingProfiles, createMappingProfile, addLog } = useStore();
   
   const [targetProfileId, setTargetProfileId] = useState<string>('');
   const [newProfileName, setNewProfileName] = useState('');

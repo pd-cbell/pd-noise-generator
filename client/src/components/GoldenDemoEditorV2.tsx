@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { GoldenDemo } from '../../../server/src/types';
 import { useStore } from '../store/useStore';
-import { X, Save, Plus, Trash2, ArrowUp, ArrowDown, Copy, Upload } from 'lucide-react';
+import { X, Save, Plus, Trash2, Copy, Upload, GripVertical } from 'lucide-react';
 import { convertCampaignFailureToGoldenDemoItems, convertCruxEventGroupToGoldenDemoItems, detectImportFormat, ImportedGoldenDemoEvent } from '../utils/importers';
 
 type StageKey = 'routine_change_minor' | 'business_impact' | 'triage_context' | 'resolution_pir';
@@ -37,6 +37,8 @@ const safeStringify = (obj: any) => {
     return '{}';
   }
 };
+
+const maturityOptions = ['Reactive', 'Proactive', 'Preventative'];
 
 const normalizeEvents = (items: any[] | undefined): EditableEvent[] => {
   if (!items || !Array.isArray(items)) return [];
@@ -110,8 +112,8 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
 
   const [meta, setMeta] = useState({
     name: demo.name,
-    vertical: demo.vertical,
-    maturityLevel: demo.maturityLevel,
+    vertical: demo.vertical || '',
+    maturityLevel: demo.maturityLevel || '',
     narrative: demo.narrative,
     personaNotes: demo.personaNotes || '',
     description: demo.configJson?.description || '',
@@ -127,8 +129,8 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const [importPreview, setImportPreview] = useState<EditableEvent[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
-  const [importType, setImportType] = useState<'campaign' | 'crux'>('campaign');
   const [importBaseOffset, setImportBaseOffset] = useState<number>(0);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setStageState(normalizeStages(demo.configJson));
@@ -182,13 +184,11 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const handleDeleteEvent = (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
   };
-
-  const moveEvent = (index: number, direction: -1 | 1) => {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= events.length) return;
+  const reorderEvents = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= events.length || to >= events.length) return;
     const updated = [...events];
-    const [moved] = updated.splice(index, 1);
-    updated.splice(newIndex, 0, moved);
+    const [moved] = updated.splice(from, 1);
+    updated.splice(to, 0, moved);
     setEvents(updated);
   };
 
@@ -215,7 +215,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       return {
         ...existingMatch,
         id: evt.id,
-        stepName: evt.summary || evt.stepName,
+        stepName: evt.summary || existingMatch.stepName,
         service: evt.logicalServiceName,
         logicalServiceName: evt.logicalServiceName,
         delaySeconds,
@@ -250,6 +250,14 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const handleSave = async () => {
     if (!meta.name.trim()) {
       setError('Name is required.');
+      return;
+    }
+    if (!meta.vertical.trim()) {
+      setError('Vertical is required.');
+      return;
+    }
+    if (!meta.maturityLevel.trim()) {
+      setError('Maturity is required.');
       return;
     }
     for (const evt of events) {
@@ -355,16 +363,23 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                   value={meta.vertical}
                   onChange={(e) => setMeta({ ...meta, vertical: e.target.value })}
+                  required
+                  placeholder="Retail, FSI, Tech..."
                 />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Maturity</label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                <select
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
                   value={meta.maturityLevel}
                   onChange={(e) => setMeta({ ...meta, maturityLevel: e.target.value })}
-                />
+                  required
+                >
+                  <option value="">Select maturity</option>
+                  {maturityOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Description</label>
@@ -437,8 +452,21 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
               {stagedEvents.map((evt, idx) => (
                 <div
                   key={evt.id}
-                  className={`p-3 flex items-center gap-3 ${evt.type === 'change' ? 'bg-pink-50' : ''}`}
+                  className={`p-3 flex items-center gap-3 ${evt.type === 'change' ? 'bg-pink-50' : ''} ${dragIndex === idx ? 'ring-2 ring-indigo-300' : ''}`}
+                  draggable
+                  onDragStart={() => setDragIndex(idx)}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={() => {
+                    if (dragIndex !== null) {
+                      reorderEvents(dragIndex, idx);
+                      setDragIndex(null);
+                    }
+                  }}
+                  onDragEnd={() => setDragIndex(null)}
                 >
+                  <div className="cursor-grab text-gray-400 hover:text-gray-600">
+                    <GripVertical className="w-4 h-4" />
+                  </div>
                   <div className="w-10 text-xs text-gray-500 text-center">{evt.displayIndex}</div>
                   <div className="flex-1">
                   <div className="text-sm font-semibold text-gray-800 truncate">
@@ -462,20 +490,6 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                       </div>
                     </div>
                 <div className="flex items-center gap-2">
-                    <button
-                      className="text-gray-500 hover:text-gray-700"
-                      onClick={() => moveEvent(idx, -1)}
-                      aria-label="Move up"
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      className="text-gray-500 hover:text-gray-700"
-                      onClick={() => moveEvent(idx, 1)}
-                      aria-label="Move down"
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                    </button>
                     <button
                       className="text-gray-500 hover:text-gray-700"
                       onClick={() => handleDuplicateEvent(evt)}

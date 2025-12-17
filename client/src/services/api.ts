@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore';
+import type { ServiceMappingInput } from '../store/useStore';
 
 export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
@@ -50,6 +51,16 @@ export const api = {
       headers: getHeaders(config)
     }),
 
+  // --- Users (RBAC) ---
+  getUsers: () => fetchFromProxy('/api/users'),
+  
+  updateUserRole: (id: string, role: string) =>
+    fetchFromProxy(`/api/users/${id}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    }),
+
   // --- Mapping Profiles ---
   getMappingProfiles: () => fetchFromProxy('/api/mapping-profiles'),
   getMappingProfile: (id: string) => fetchFromProxy(`/api/mapping-profiles/${id}`),
@@ -57,7 +68,7 @@ export const api = {
     name: string;
     description?: string | null;
     globalIncidentRoutingKey?: string | null;
-    serviceMappings?: any[];
+    serviceMappings?: ServiceMappingInput[];
   }) =>
     fetchFromProxy('/api/mapping-profiles', {
       method: 'POST',
@@ -68,7 +79,7 @@ export const api = {
     name?: string;
     description?: string | null;
     globalIncidentRoutingKey?: string | null;
-    serviceMappings?: any[];
+    serviceMappings?: ServiceMappingInput[];
   }) =>
     fetchFromProxy(`/api/mapping-profiles/${id}`, {
       method: 'PUT',

@@ -1,21 +1,19 @@
-# PagerDuty Golden Demo Platform v2.2
+# PagerDuty Golden Demo Platform v2.3.1
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.3.0-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.3.1-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.3: Multi-Sim & Director Control
+## 🚀 New in v2.3.1
 
-v2.3 introduces a powerful multi-track simulation architecture.
+v2.3.1 stabilizes the Golden Demo Platform workflow and completes the v2.2.x feature set for real-world demo reuse.
 
--   **Multi-Simulation Architecture:** Run "Background Noise" and multiple "Golden Demos" concurrently as independent tracks.
--   **Enhanced Director Mode:**
-    -   **Active Tracks Panel:** Monitor running Golden Demos in real-time with a slide-out status panel.
-    -   **Concurrent Injection:** Launch demos without stopping the background simulation.
--   **Frictionless Mapping:** "Add to Profile" feature in Configuration allows rapid bulk creation of service mappings.
--   **Cleanup:** Deprecated "Campaigns" feature removed in favor of the unified Golden Demo platform.
+-   **Service Mapping Profiles:** Map logical demo service names to real PagerDuty services and routing keys (incident + change), including optional per-service Change routing key overrides.
+-   **Golden Demo Editor:** Edit demo metadata, narrative stages, and the scripted event list (`configJson.items`) with required `logicalServiceName`.
+-   **Imports:** Import legacy Campaign Failure JSON and Crux `event_group` JSON into Golden Demos (paste/file upload + base offset adjustment).
+-   **Triggers:** Start a Golden Demo server-side via `POST /api/golden-demos/:id/trigger` (routing keys + optional mapping profile override).
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
@@ -26,7 +24,7 @@ The platform employs a powerful **Hybrid Architecture**:
 
 ## ✨ Core Features
 -   **Golden Demo Library:** Create, edit, and manage a library of perfect demos.
--   **Director Mode:** A visual "Soundboard" for one-click injection of scenarios into a running simulation.
+-   **Director Mode:** A visual "Soundboard" for launching Golden Demos.
 -   **Agentic Builder:** AI-driven creation of campaigns with specific volume, service, and narrative constraints.
 -   **Poisson Noise Generation:** Simulates realistic background traffic.
 -   **Lifecycle Automation:** Auto-Acknowledge/Resolve based on severity targets.

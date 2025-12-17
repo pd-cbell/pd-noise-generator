@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Bot, Loader2, CheckCircle, RefreshCcw, Server, Settings } from 'lucide-react';
+import { Sparkles, Bot, Loader2, CheckCircle, Settings } from 'lucide-react';
 import { api } from '../services/api';
-import { useStore, Service } from '../store/useStore';
+import { useStore } from '../store/useStore';
 import { ServiceSelector } from './ServiceSelector';
 
 import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
