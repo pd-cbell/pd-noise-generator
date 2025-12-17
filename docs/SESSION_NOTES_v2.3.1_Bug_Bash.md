@@ -22,6 +22,9 @@
   - **Fix:** Normalize per-minute probability to per-tick (1s) in BackgroundTrack.
 - [x] Golden Demo events reorder UX is clunky (arrow buttons).  
   - **Fix:** Implemented drag-and-drop ordering in Golden Demo editor.
+- [x] Agentic Campaign Builder: build succeeds but UI doesn’t open the created demo.  
+  - **Symptom:** console logs “Agent built Golden Demo…”, but user remains on builder and must manually find it.  
+  - **Fix:** App now navigates to Golden Demos and opens the editor modal for the newly created demo.
 - [ ] Golden Demo track lifecycle monitoring UI + guide.  
   - **Status:** Server-side lifecycle tracking is implemented; UI rendering has been intentionally removed for now.  
   - **Plan:** Move UI/guide work to v2.4 (design TBD).
@@ -40,3 +43,4 @@
 - Director: mapping selection on preview overrides global mapping
 - Import: Crux import succeeds with fallback service naming
 - Golden Demo lifecycle: verify `track_run_*` socket events are emitted and state updates continue (UI deferred to v2.4)
+- Agent Builder: generate a demo and confirm it opens in the editor immediately

@@ -1,6 +1,9 @@
 # Session Notes - v2.3 Bug Bash
 
-## Bugs Identified
+## Status
+This document is superseded by `docs/SESSION_NOTES_v2.3.1_Bug_Bash.md` and kept only for historical context.
+
+## Bugs Identified (Historical)
 
 ### 1. Stop Simulation Fails (Active Tracks Panel)
 **Issue:** Clicking "Stop" on an active track in the slide-out panel doesn't seem to stop the simulation track.

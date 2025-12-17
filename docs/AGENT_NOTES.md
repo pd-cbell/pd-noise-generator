@@ -1,26 +1,28 @@
-# Agent Notes - v2.2.1 (Golden Demo Platform)
+# Agent Notes - v2.3.1 (Bug Bash Snapshot)
 
-**Branch:** `v2.2` (bug bash)
+**Branch:** `v2.3.1`
 
 ## Status
-v2.2.1 delivered (mapping profiles + Golden Demo editor/imports); actively bug bashing.
+v2.3.1 is in bug bash / hardening mode. Focus is on stability, RBAC foundations, and Golden Demo UX polish (no major new product surface area).
 
 ## Current Platform Snapshot
-- **Mapping Profiles (v2.2):** Prisma `MappingProfile`/`ServiceMapping`; CRUD API `/api/mapping-profiles`; Director selector passes `mappingProfileId` to ServerSimulationEngine via socket/webhook. `resolveEventTarget` resolves incident/change targets + routing keys.
-- **Routing overrides:** Mapping Profiles now support `changeRoutingKeyOverride` per logical service (priority for change events), plus per-event overrides in Golden Demo editor.
-- **Golden Demo Editor (v2.2.1):** `GoldenDemoEditorV2` edits metadata, narrative stages (`configJson.narrative.stages`), and events (`configJson.items`). Enforces/derives `logicalServiceName`; validates JSON payloads. Events support incident/alert/change/note/automation.
-- **Imports:** Shared importer (`client/src/utils/importers.ts`) handles Campaign Failure and Crux event_group JSON. Import modal supports paste/upload, append/replace, and base offset adjustment (clamped >= 0). Preserves repeat/interval and payloads.
-- **Triggers (Golden Demo):** Public webhook `POST /api/golden-demos/:id/trigger` starts a Golden Demo run server-side. Supports headers/body overrides for `x-pd-routing-key`, `x-pd-change-routing-key`, `mappingProfileId`. Golden Demo detail shows copyable webhook + curl example.
-- **Runtime:** Director launches Golden Demos via socket `start_simulation` with `mappingProfileId`. ServerSimulationEngine applies mapping resolution; change events use simulator config/keys; Presenter shows beats/metrics/session history.
+- **App name:** PagerDuty Customer Sim & Demo Platform (formerly “PagerDuty Noise Simulator”).
+- **Multi-simulation runtime:** Server supports multiple concurrent tracks (background noise + Golden Demo scenario tracks) per user session.
+- **Mapping Profiles:** Prisma `MappingProfile`/`ServiceMapping` with CRUD API `/api/mapping-profiles`; director can choose mapping profiles for Golden Demo runs.
+  - Note: client payloads use input types (no `id`/`mappingProfileId` required when creating/updating mappings).
+- **Golden Demos:** persisted scenarios with editor (`GoldenDemoEditorV2`), importer, and Director launch experience.
+  - Editor UX: required metadata validation (Vertical required; Maturity Level dropdown) and drag-and-drop ordering for events.
+- **Agentic Campaign Builder:** creates a Golden Demo via AI and now opens the generated demo in the editor for review/edit/save immediately.
+- **Track lifecycle monitoring (server):** Golden Demo runs emit `track_run_*` socket events; server polls incidents by dedup_key for lifecycle updates.
+  - UI rendering for tracked incidents was intentionally removed in v2.3.1 and is deferred to v2.4 (tracking remains active under the hood).
+- **RBAC:** roles exist (`Role`: ADMIN/EDITOR/VIEWER) with basic client gating + server wiring; full Admin UX and enforcement hardening planned for v2.3.2.
 
 ## Validation / Bug Bash Focus
-- Mapping resolution: unmapped services fall back to logical names + global keys; verify incidents and change events route correctly with selected mapping profile.
-- Golden Demo save/load: ensure `logicalServiceName` persists and payload JSON remains valid after edits/imports.
-- Import flows: Campaign Failure + Crux parsing (including payload string JSON), base offset adjustments, repeat/interval retained.
-- Webhook trigger: starts demo without socket client; routing keys required unless provided via env; mapping profile override respected.
+- Socket reliability: start/stop simulation, stop tracks, and manual state sync.
+- Golden Demo: create/edit/import flows, event ordering, and Director preview/mapping selection.
+- Agent Builder: build → immediately open editor for the created Golden Demo.
+- RBAC: ensure viewer/editor/admin gating is consistent and server routes enforce expected permissions.
 
 ## Gotchas / Notes
-- Webhook credentials: uses provided headers/body or env defaults; API token/fromEmail not populated automatically.
-- Importer IDs: use `crypto.randomUUID` fallback; no `uuid` dependency.
-- Schedule triggers not implemented for Golden Demos (webhook-only).
-- Ensure Prisma migrations applied for mapping profiles; changelog tracks planned versions.
+- Browser console errors from `content_script.js` are typically extension noise (not app errors).
+- Track lifecycle UI is not present in v2.3.1 by design; do not treat that as a regression.
