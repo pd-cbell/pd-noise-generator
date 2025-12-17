@@ -188,8 +188,6 @@ v2.3 (Tentative)
 
 Sharing & Publishing Golden Demos across orgs
 
-Role-based access control for mapping profiles
-
 Team auto-suggest mapping profiles from PD metadata & fuzzymatching
 
 Multi-profile Director runs (e.g., run same demo against multiple profiles simultaneously)
