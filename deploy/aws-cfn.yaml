@@ -230,10 +230,22 @@ Resources:
           cd /home/ec2-user
           git clone ${RepoUrl} noise-generator
           cd noise-generator
-          
           # Prepare environment variables
+          # Fetch Public Hostname using IMDSv2
+          TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+          PUBLIC_HOSTNAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/public-hostname)
+          
+          if [ -z "$PUBLIC_HOSTNAME" ]; then
+             # Fallback to Public IPv4
+             PUBLIC_HOSTNAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -s http://169.254.169.254/latest/meta-data/public-ipv4)
+          fi
+          
+          if [ -z "$PUBLIC_HOSTNAME" ]; then
+             PUBLIC_HOSTNAME="localhost"
+          fi
+          
           echo "PORT=8080" > .env
-          echo "CLIENT_URL=http://localhost:8080" >> .env
+          echo "CLIENT_URL=http://${PUBLIC_HOSTNAME}:8080" >> .env
           echo "JWT_SECRET=${JwtSecret}" >> .env
           echo "ENCRYPTION_KEY=${EncryptionKey}" >> .env
           echo "GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env

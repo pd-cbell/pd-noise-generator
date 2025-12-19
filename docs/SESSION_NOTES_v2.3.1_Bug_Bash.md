@@ -11,9 +11,9 @@
   - **Status:** Already implemented; doc was stale.
 - [x] Crux import: “Missing logicalServiceName/service_name in payload” error.  
   - **Status:** Fixed previously via relaxed fallback; doc was stale.
-- [ ] Cloud deployment: connection/behavior issues (details to capture as tested).  
-  - **Repro:** TBD (capture endpoint, auth, socket, or PD API failures).  
-  - **Suspect fix:** TBD after logs.
+- [x] Cloud deployment: connection/behavior issues (CORS failures).  
+  - **Cause:** `CLIENT_URL` was hardcoded to `localhost` in CFN UserData, causing CORS rejection for public access.
+  - **Fix:** Updated `deploy/aws-cfn.yaml` to dynamically fetch public hostname via AWS IMDSv2.
 - [x] RBAC enum import crash (`UserRole` undefined) on server start.  
   - **Status:** Fixed (switched to `Role` from Prisma schema; build passes).
 - [x] Monitor/socket resilience: start button no-op after auth/socket timing.  
