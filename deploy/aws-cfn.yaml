@@ -251,6 +251,7 @@ Resources:
           echo "GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
           echo "VITE_GOOGLE_CLIENT_ID=${GoogleClientId}" >> .env
           echo "VITE_API_URL=/" >> .env
+          echo "VITE_WEBHOOK_BASE_URL=https://${PUBLIC_HOSTNAME}" >> .env
           echo "GEMINI_API_KEY=${GeminiApiKey}" >> .env
           echo "OPENAI_API_KEY=${OpenaiApiKey}" >> .env
           

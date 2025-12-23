@@ -53,5 +53,8 @@
 - [ ] Server: attempt direct API calls as non-admin (expect 403).
 - [ ] Cloud: validate cookies/CORS + socket auth still work across roles.
 
+## 4) Simulation Hardening
+- [ ] Skip PagerDuty REST polling when credentials are missing (reduce 401 noise when only triggering Events API).
+
 ## Out of Scope for v2.3.2
 - Golden Demo lifecycle monitoring UI + presenter “guide” (moved to v2.4).

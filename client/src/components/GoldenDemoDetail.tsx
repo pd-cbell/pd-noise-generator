@@ -12,8 +12,8 @@ interface GoldenDemoDetailProps {
 
 const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onEdit }) => {
   const { mappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-  const webhookUrl = `${apiBase}/api/golden-demos/${demo.id}/trigger`;
+  const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
+  const webhookUrl = `${webhookBase}/api/golden-demos/${demo.id}/trigger`;
 
   const copyText = async (text: string) => {
     try {
