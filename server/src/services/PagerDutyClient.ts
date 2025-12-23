@@ -39,6 +39,22 @@ export class PagerDutyClient {
     this.lastRequestTime = Date.now();
   }
 
+  private redactRoutingKey(routingKey?: string | null) {
+    if (!routingKey) return 'missing';
+    const trimmed = routingKey.trim();
+    if (trimmed.length <= 8) return `${trimmed}...`;
+    return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+  }
+
+  private sanitizeEventBody(body: any) {
+    if (!body || typeof body !== 'object') return body;
+    const clone = { ...body };
+    if ('routing_key' in clone) {
+      clone.routing_key = this.redactRoutingKey(clone.routing_key);
+    }
+    return clone;
+  }
+
   private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>): Promise<any> {
     await this.throttle(); // Simple throttling
 
@@ -62,7 +78,13 @@ export class PagerDutyClient {
       // agent: this.httpAgent, // Uncomment if using proxy
     } as RequestInit; // Cast to satisfy mismatched node-fetch types
 
-    const res = await fetch(url.toString(), options as any);
+    let res: any;
+    try {
+      res = await fetch(url.toString(), options as any);
+    } catch (err: any) {
+      console.error(`[PagerDutyClient] Request failed ${method} ${path}: ${err?.message || err}`);
+      throw err;
+    }
 
     if (res.status === 429) {
         // Hit rate limit, simple retry after 2s
@@ -72,6 +94,10 @@ export class PagerDutyClient {
 
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
+      console.error(
+        `[PagerDutyClient] REST error ${method} ${path} -> ${res.status} ${res.statusText}`,
+        JSON.stringify(errorData, null, 2)
+      );
       throw new Error(errorData.error?.message || errorData.message || `PagerDuty API Error: ${res.statusText}`);
     }
     return res.json();
@@ -231,6 +257,7 @@ export class PagerDutyClient {
   // --- Events API V2 (Unauthenticated, uses routing key) ---
   // These do NOT use apiToken or fromEmail headers
   async triggerEvent(eventBody: any) {
+    const sanitized = this.sanitizeEventBody(eventBody);
     const res = await fetch('https://events.pagerduty.com/v2/enqueue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -239,14 +266,16 @@ export class PagerDutyClient {
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
       const errorMsg = errorData.message || (Array.isArray(errorData.errors) ? errorData.errors.join(', ') : JSON.stringify(errorData.errors)) || `PagerDuty Events API Error: ${res.statusText}`;
-      console.error("PD Event API Error Data:", JSON.stringify(errorData, null, 2));
+      console.error('[PagerDutyClient] Event enqueue failed:', JSON.stringify(sanitized, null, 2));
+      console.error('[PagerDutyClient] Event API Error:', res.status, res.statusText, JSON.stringify(errorData, null, 2));
       throw new Error(errorMsg);
     }
     return res.json();
   }
 
   async triggerChangeEvent(eventBody: any) {
-    console.log('[PagerDutyClient] Sending change event:', JSON.stringify(eventBody, null, 2));
+    const sanitized = this.sanitizeEventBody(eventBody);
+    console.log('[PagerDutyClient] Sending change event:', JSON.stringify(sanitized, null, 2));
     const res = await fetch('https://events.pagerduty.com/v2/change/enqueue', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -254,7 +283,8 @@ export class PagerDutyClient {
     });
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      console.error('[PagerDutyClient] Change Event Error Response:', JSON.stringify(errorData, null, 2));
+      console.error('[PagerDutyClient] Change enqueue failed:', JSON.stringify(sanitized, null, 2));
+      console.error('[PagerDutyClient] Change Event Error:', res.status, res.statusText, JSON.stringify(errorData, null, 2));
       throw new Error(errorData.message || `PagerDuty Change Events API Error: ${res.statusText}`);
     }
     return res.json();

@@ -72,6 +72,13 @@ export abstract class SimulationTrack {
     this.activeIncidents = this.activeIncidents.filter(inc => inc.dedupKey !== dedupKey);
   }
 
+  public drainLogs() {
+    if (this.log.length === 0) return [];
+    const drained = this.log;
+    this.log = [];
+    return drained;
+  }
+
   public async applyMappingProfile(profile: MappingProfileWithMappings | null) {
     this.mappingProfile = profile;
     this.simulatorConfig = {

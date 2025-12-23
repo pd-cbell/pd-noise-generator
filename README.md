@@ -25,7 +25,7 @@ The platform employs a powerful **Hybrid Architecture**:
 ## ✨ Core Features
 -   **Golden Demo Library:** Create, edit, and manage a library of perfect demos.
 -   **Director Mode:** A visual "Soundboard" for launching Golden Demos.
--   **Agentic Builder:** AI-driven creation of campaigns with specific volume, service, and narrative constraints.
+-   **Agentic Builder:** AI-driven creation of Golden Demos with specific volume, service, and narrative constraints.
 -   **Poisson Noise Generation:** Simulates realistic background traffic.
 -   **Lifecycle Automation:** Auto-Acknowledge/Resolve based on severity targets.
 
@@ -39,10 +39,14 @@ cp client/.env.example client/.env
 ```
 2) Fill required values in `server/.env`:
    - `DATABASE_URL` (PostgreSQL)
+   - `JWT_SECRET`, `ENCRYPTION_KEY`
+   - `CLIENT_URL` (default `http://localhost:5173`)
+   - `GOOGLE_CLIENT_ID` (Google OAuth)
    - `PD_REST_API_TOKEN`, `PD_FROM_EMAIL`, `PD_EVENTS_ROUTING_KEY`
    - `GEMINI_API_KEY` or `OPENAI_API_KEY` (Required for Agent features)
 3) Fill `client/.env`:
    - `VITE_API_URL` (default `http://localhost:3001`)
+   - `VITE_GOOGLE_CLIENT_ID` (Google OAuth)
 
 ### Quick Start
 1. **Start Database:** `docker-compose up -d db`
@@ -52,6 +56,9 @@ cp client/.env.example client/.env
 
 ## ☁️ Deployment (AWS)
 Includes CloudFormation template (`deploy/aws-cfn.yaml`) for EC2 deployment.
+
+## 📚 Legacy Docs
+Historical docs are kept in `docs/ARCHIVE`.
 
 ## 📜 License
 Provided as-is for demonstration purposes.

@@ -289,6 +289,18 @@ export class SimulationSession {
     console.log('SimulationSession: Starting for user', this.userId);
     this.timer = setInterval(() => this.tick(), 1000);
     this.addLog("Simulation Session Started", 'info');
+    if (!this.credentials.globalRoutingKey) {
+      console.warn('SimulationSession: Global routing key missing; alert events will not be sent.');
+      this.addLog('Global routing key missing; alert events will not be sent.', 'warn');
+    }
+    if (!this.credentials.apiToken || !this.credentials.fromEmail) {
+      console.warn('SimulationSession: PagerDuty REST credentials missing; lifecycle actions may fail.');
+      this.addLog('PagerDuty REST credentials missing; lifecycle actions may fail.', 'warn');
+    }
+    if (!this.config.selectedServices || this.config.selectedServices.length === 0) {
+      console.warn('SimulationSession: No services selected; background noise will not emit events.');
+      this.addLog('No services selected; background noise will not emit events.', 'warn');
+    }
 
     // Start all tracks
     this.tracks.forEach(track => track.start());
@@ -567,6 +579,20 @@ export class SimulationSession {
       this.tracks.forEach(track => {
           allIncidents = [...allIncidents, ...track.activeIncidents];
           trackInfos.push(track.getTrackInfo());
+          const drainedLogs = track.drainLogs();
+          if (drainedLogs.length > 0) {
+            const trackLabel = track.type === 'background' ? 'Background' : 'Scenario';
+            drainedLogs.forEach((entry) => {
+              this.state.log.unshift({
+                ts: entry.ts,
+                type: entry.type,
+                msg: `[${trackLabel}] ${entry.msg}`,
+              });
+            });
+            if (this.state.log.length > 800) {
+              this.state.log.length = 800;
+            }
+          }
       });
 
       // Sort by start time descending
