@@ -37,7 +37,8 @@ router.use(authenticateUser);
 
 router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (_req, res) => {
   try {
-    const profiles = await mappingProfileService.getMappingProfiles();
+    const userId = _req.user!.userId;
+    const profiles = await mappingProfileService.getMappingProfiles(userId);
     res.json(profiles);
   } catch (error) {
     console.error('Error listing mapping profiles:', error);
@@ -50,7 +51,8 @@ router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (_req, 
 
 router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const profile = await mappingProfileService.getMappingProfileById(req.params.id);
+    const userId = req.user!.userId;
+    const profile = await mappingProfileService.getMappingProfileById(req.params.id, userId);
     if (!profile) {
       return res.status(404).json({ message: 'Mapping profile not found' });
     }
@@ -64,8 +66,9 @@ router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req
   }
 });
 
-router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.post('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
+    const userId = req.user!.userId;
     const validation = createProfileSchema.safeParse(req.body);
     if (!validation.success) {
       return res
@@ -73,7 +76,7 @@ router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
         .json({ message: 'Validation failed', errors: validation.error.issues });
     }
 
-    const profile = await mappingProfileService.createMappingProfile(validation.data);
+    const profile = await mappingProfileService.createMappingProfile(validation.data, userId);
     res.status(201).json(profile);
   } catch (error) {
     console.error('Error creating mapping profile:', error);
@@ -84,8 +87,9 @@ router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   }
 });
 
-router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.put('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
+    const userId = req.user!.userId;
     const validation = updateProfileSchema.safeParse(req.body);
     if (!validation.success) {
       return res
@@ -95,6 +99,7 @@ router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
 
     const profile = await mappingProfileService.updateMappingProfile(
       req.params.id,
+      userId,
       validation.data
     );
     res.json(profile);
@@ -110,8 +115,9 @@ router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
   }
 });
 
-router.post('/:id/mappings', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.post('/:id/mappings', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
+    const userId = req.user!.userId;
     const mappingsSchema = z.array(serviceMappingSchema);
     const validation = mappingsSchema.safeParse(req.body);
     
@@ -123,6 +129,7 @@ router.post('/:id/mappings', checkRole([Role.EDITOR, Role.ADMIN]), async (req, r
 
     const profile = await mappingProfileService.addMappingsToProfile(
       req.params.id,
+      userId,
       validation.data
     );
     res.json(profile);
@@ -138,9 +145,10 @@ router.post('/:id/mappings', checkRole([Role.EDITOR, Role.ADMIN]), async (req, r
   }
 });
 
-router.delete('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.delete('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    await mappingProfileService.deleteMappingProfile(req.params.id);
+    const userId = req.user!.userId;
+    await mappingProfileService.deleteMappingProfile(req.params.id, userId);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting mapping profile:', error);

@@ -1,25 +1,30 @@
-import { Prisma, GoldenDemo } from '@prisma/client';
+import { Prisma, GoldenDemo, Role } from '@prisma/client';
 import prisma from '../prisma';
 
 export class GoldenDemoService {
-  async listGoldenDemos(userId: string, vertical?: string): Promise<GoldenDemo[]> {
-    const where: Prisma.GoldenDemoWhereInput = {
-      createdByUserId: userId,
-    };
+  async listGoldenDemos(userId: string, role: Role, vertical?: string): Promise<GoldenDemo[]> {
+    const where: Prisma.GoldenDemoWhereInput = {};
+    if (role === Role.VIEWER) {
+      where.OR = [{ createdByUserId: userId }, { isShared: true }];
+    }
     if (vertical) {
       where.vertical = vertical;
     }
-    return prisma.goldenDemo.findMany({ where });
+    return prisma.goldenDemo.findMany({ where, orderBy: { updatedAt: 'desc' } });
   }
 
-  async getGoldenDemo(id: string, userId?: string): Promise<GoldenDemo | null> {
+  async getGoldenDemo(id: string, userId?: string, role?: Role): Promise<GoldenDemo | null> {
+    if (!userId || !role || role === Role.EDITOR || role === Role.ADMIN) {
+      return prisma.goldenDemo.findFirst({ where: { id } });
+    }
     return prisma.goldenDemo.findFirst({
-      where: userId ? { id, createdByUserId: userId } : { id },
+      where: { id, OR: [{ createdByUserId: userId }, { isShared: true }] },
     });
   }
 
   async createGoldenDemo(
-    data: Omit<Prisma.GoldenDemoUncheckedCreateInput, 'id' | 'createdAt' | 'updatedAt'>
+    data: Omit<Prisma.GoldenDemoUncheckedCreateInput, 'id' | 'createdAt' | 'updatedAt'>,
+    role: Role
   ): Promise<GoldenDemo> {
     // Basic validation
     if (!data.name || data.name.trim() === '') {
@@ -40,12 +45,17 @@ export class GoldenDemoService {
       throw new Error('Golden Demo configJson is not valid JSON.');
     }
 
+    if (role === Role.VIEWER && data.isShared) {
+      throw new Error('Forbidden: viewers cannot share Golden Demos.');
+    }
+
     return prisma.goldenDemo.create({ data });
   }
 
   async updateGoldenDemo(
     id: string,
     userId: string,
+    role: Role,
     data: Prisma.GoldenDemoUpdateInput
   ): Promise<GoldenDemo> {
     // Basic validation
@@ -69,15 +79,37 @@ export class GoldenDemoService {
       }
     }
 
-    return prisma.goldenDemo.update({
-      where: { id, createdByUserId: userId },
-      data,
-    });
+    if (role === Role.VIEWER) {
+      const existing = await prisma.goldenDemo.findFirst({
+        where: { id, createdByUserId: userId },
+        select: { isShared: true },
+      });
+      if (!existing || existing.isShared) {
+        throw new Error('Forbidden: viewers cannot edit shared Golden Demos.');
+      }
+      if (data.isShared) {
+        throw new Error('Forbidden: viewers cannot share Golden Demos.');
+      }
+    }
+
+    const where =
+      role === Role.EDITOR || role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
+    return prisma.goldenDemo.update({ where, data });
   }
 
-  async deleteGoldenDemo(id: string, userId: string): Promise<GoldenDemo> {
-    return prisma.goldenDemo.delete({
-      where: { id, createdByUserId: userId },
-    });
+  async deleteGoldenDemo(id: string, userId: string, role: Role): Promise<GoldenDemo> {
+    if (role === Role.VIEWER) {
+      const existing = await prisma.goldenDemo.findFirst({
+        where: { id, createdByUserId: userId },
+        select: { isShared: true },
+      });
+      if (!existing || existing.isShared) {
+        throw new Error('Forbidden: viewers cannot delete shared Golden Demos.');
+      }
+    }
+
+    const where =
+      role === Role.EDITOR || role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
+    return prisma.goldenDemo.delete({ where });
   }
 }

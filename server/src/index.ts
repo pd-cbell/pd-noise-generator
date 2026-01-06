@@ -19,6 +19,14 @@ import { SimulationManager } from './services/ServerSimulationEngine';
 import { GoldenDemoService } from './services/GoldenDemoService'; // New import
 import { AgentService } from './services/AgentService'; // New import
 import prisma from './prisma'; // New import for prisma client
+import { Role } from '@prisma/client';
+import {
+  DEFAULT_AUTO_HEAL_CONFIG,
+  DEFAULT_SEVERITY_CONFIGS,
+  DEFAULT_SOURCE_MIX,
+  SimulationConfig,
+} from './types';
+import { decrypt } from './utils/crypto';
 
 console.log("Environment Loaded. GEMINI_API_KEY present:", serverConfig.geminiApiKeyPresent);
 
@@ -69,10 +77,30 @@ export { simulationManager };
 const goldenDemoService = new GoldenDemoService(); // Instantiate GoldenDemoService
 const agentService = new AgentService(goldenDemoService); // Instantiate AgentService with GoldenDemoService
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const userId = socket.data.user.userId;
   socket.join(userId);
   console.log(`User ${userId} connected via Socket.io`);
+  let user: { role: Role; agentEnabled: boolean } | null = null;
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, agentEnabled: true },
+    });
+  } catch (err) {
+    socket.disconnect();
+    return;
+  }
+  if (!user) {
+    socket.disconnect();
+    return;
+  }
+  socket.data.user.role = user.role;
+  socket.data.user.agentEnabled = user.agentEnabled;
+  const canLaunchScenario = (role?: Role) =>
+    role === Role.VIEWER || role === Role.EDITOR || role === Role.ADMIN;
+  const canControlBackground = (role?: Role) =>
+    role === Role.EDITOR || role === Role.ADMIN;
   
   // Check for existing simulation
   const existingSim = simulationManager.get(userId);
@@ -96,6 +124,10 @@ io.on('connection', (socket) => {
 
   socket.on('stop_track', ({ trackId }: { trackId: string }, callback?: (err?: any) => void) => {
     try {
+      if (!canLaunchScenario(socket.data.user.role)) {
+        if (callback) callback({ message: 'Forbidden' });
+        return;
+      }
       const session = simulationManager.get(userId);
       if (!session) {
         if (callback) callback({ message: 'Session not found' });
@@ -111,10 +143,55 @@ io.on('connection', (socket) => {
 
   socket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
     try {
-      const session = simulationManager.get(userId);
-      if (!session) {
-        if (callback) callback({ message: 'Session not found' });
+      if (!canLaunchScenario(socket.data.user.role)) {
+        if (callback) callback({ message: 'Forbidden' });
         return;
+      }
+      let session = simulationManager.get(userId);
+      if (!session) {
+        const userRecord = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            encryptedPagerDutyApiToken: true,
+            encryptedGlobalRoutingKey: true,
+            encryptedFromEmail: true,
+            pdRegion: true,
+          },
+        });
+        if (!userRecord) {
+          if (callback) callback({ message: 'User not found' });
+          return;
+        }
+        const credentials = {
+          apiToken: userRecord.encryptedPagerDutyApiToken
+            ? decrypt(userRecord.encryptedPagerDutyApiToken)
+            : '',
+          globalRoutingKey: userRecord.encryptedGlobalRoutingKey
+            ? decrypt(userRecord.encryptedGlobalRoutingKey)
+            : '',
+          fromEmail: userRecord.encryptedFromEmail ? decrypt(userRecord.encryptedFromEmail) : '',
+          pdRegion: userRecord.pdRegion || 'US',
+        };
+        if (!credentials.globalRoutingKey) {
+          if (callback) callback({ message: 'Missing global routing key' });
+          return;
+        }
+        const baseConfig: SimulationConfig = {
+          ratePerMinute: 0,
+          severityWeights: { info: 0.2, warning: 0.4, error: 0.25, critical: 0.15 },
+          autoHealConfig: DEFAULT_AUTO_HEAL_CONFIG,
+          resumeExistingEnabled: false,
+          sourceMix: DEFAULT_SOURCE_MIX,
+          burstProbability: 0,
+          majorIncidentProbability: 0,
+          responderAckRate: 0,
+          teamFailureProbability: 0,
+          severityConfigs: DEFAULT_SEVERITY_CONFIGS,
+          selectedServices: [],
+          selectedTeamIds: [],
+          mappingProfileId: mappingProfileId || null,
+        };
+        session = await simulationManager.createOrUpdate(userId, baseConfig, credentials);
       }
       const track = await session.startTrack('scenario', items);
       if (mappingProfileId) {
@@ -129,6 +206,10 @@ io.on('connection', (socket) => {
 
   socket.on('start_simulation', async (data) => {
       try {
+        if (!canControlBackground(socket.data.user.role)) {
+          socket.emit('sim_error', { message: 'Forbidden' });
+          return;
+        }
         const sim = await simulationManager.createOrUpdate(userId, data.config, data.credentials);
         sim.start();
         socket.emit('sim_started');
@@ -139,6 +220,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('stop_simulation', () => {
+      if (!canControlBackground(socket.data.user.role)) {
+        socket.emit('sim_error', { message: 'Forbidden' });
+        return;
+      }
       const sim = simulationManager.get(userId);
       if (sim) sim.stop();
       socket.emit('sim_stopped');
@@ -146,21 +231,25 @@ io.on('connection', (socket) => {
 
   // --- Interaction Events ---
   socket.on('ack_incident', (dedupKey) => {
+      if (!canLaunchScenario(socket.data.user.role)) return;
       const sim = simulationManager.get(userId);
       if (sim) sim.ackIncident(dedupKey);
   });
 
   socket.on('resolve_incident', (dedupKey) => {
+      if (!canLaunchScenario(socket.data.user.role)) return;
       const sim = simulationManager.get(userId);
       if (sim) sim.resolveIncident(dedupKey);
   });
 
   socket.on('clear_incidents', () => {
+      if (!canLaunchScenario(socket.data.user.role)) return;
       const sim = simulationManager.get(userId);
       if (sim) sim.clearActiveIncidents();
   });
 
   socket.on('resolve_all', () => {
+      if (!canLaunchScenario(socket.data.user.role)) return;
       const sim = simulationManager.get(userId);
       if (sim) sim.resolveAllIncidents();
   });

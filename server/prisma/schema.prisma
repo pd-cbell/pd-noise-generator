@@ -18,6 +18,7 @@ model User {
   avatarUrl     String?
   pdRegion      String?   @default("US")
   role          Role      @default(EDITOR) // New: User role for RBAC
+  agentEnabled  Boolean   @default(true)
 
   // Encrypted Credentials
   encryptedPagerDutyApiToken String?
@@ -29,6 +30,7 @@ model User {
 
   profiles      Profile[]
   goldenDemos   GoldenDemo[] // Inverse relation for GoldenDemo
+  mappingProfiles MappingProfile[]
 }
 
 model Profile {
@@ -94,6 +96,7 @@ model GoldenDemo {
   narrative       String
   configJson      Json      // Stores the full simulation configuration, including beats
   personaNotes    String?
+  isShared        Boolean   @default(false)
   createdByUserId String
   user            User      @relation(fields: [createdByUserId], references: [id])
   sessions        Session[] // Inverse relation for Session
@@ -122,6 +125,8 @@ model MappingProfile {
   name                     String
   description              String?
   globalIncidentRoutingKey String?
+  userId                   String?
+  user                     User?             @relation(fields: [userId], references: [id])
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
   serviceMappings          ServiceMapping[]

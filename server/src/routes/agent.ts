@@ -2,12 +2,14 @@ import { Router } from 'express';
 import { AgentService } from '../services/AgentService';
 import { authenticateUser } from '../middleware/auth'; // Import authenticateUser
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
+import { requireAgentEnabled } from '../middleware/agentAccess';
 import { Role } from '@prisma/client'; // Import Role enum
 
 export default (agentService: AgentService) => {
   const router = Router();
 
   router.use(authenticateUser); // All agent routes require authentication
+  router.use(requireAgentEnabled);
 
   router.post('/proposal', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     const { prompt, provider, services, vertical, maturityLevel } = req.body;
@@ -43,7 +45,7 @@ export default (agentService: AgentService) => {
         personaNotes,
         // createdByUserId // This will come from req.user
     } = req.body;
-    const { userId } = req.user!; // Get userId from authenticated user
+    const { userId, role } = req.user!; // Get userId from authenticated user
 
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
@@ -60,7 +62,8 @@ export default (agentService: AgentService) => {
           maturityLevel,
           narrative,
           personaNotes,
-          createdByUserId: userId // Use userId from req.user
+          createdByUserId: userId, // Use userId from req.user
+          role
       });
       res.json(campaign);
     } catch (error: any) {

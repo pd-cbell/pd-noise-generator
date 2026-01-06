@@ -1,19 +1,22 @@
-# PagerDuty Golden Demo Platform v2.3.1
+# PagerDuty Golden Demo Platform v2.3.2
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.3.1-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.3.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-## 🚀 New in v2.3.1
+Status: v2.3.2 complete (cloud validation pending).
 
-v2.3.1 stabilizes the Golden Demo Platform workflow and completes the v2.2.x feature set for real-world demo reuse.
+## 🚀 New in v2.3.2
 
--   **Service Mapping Profiles:** Map logical demo service names to real PagerDuty services and routing keys (incident + change), including optional per-service Change routing key overrides.
--   **Golden Demo Editor:** Edit demo metadata, narrative stages, and the scripted event list (`configJson.items`) with required `logicalServiceName`.
--   **Imports:** Import legacy Campaign Failure JSON and Crux `event_group` JSON into Golden Demos (paste/file upload + base offset adjustment).
--   **Triggers:** Start a Golden Demo server-side via `POST /api/golden-demos/:id/trigger` (routing keys + optional mapping profile override).
+v2.3.2 completes Admin UX + RBAC enforcement for safer multi-user demo operations.
+
+-   **Admin Dashboard:** View users, assign roles, and manage agent access.
+-   **RBAC Enforcement:** Server + UI gating aligned for Viewer/Editor/Admin.
+-   **Shared Demo Rules:** Viewers can view shared demos but only edit their own.
+-   **User-Scoped Mapping Profiles:** Mapping profiles are owned per user and not shared.
+-   **Director Launch for Viewers:** Viewers can launch demos without starting background noise.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
@@ -59,6 +62,7 @@ Includes CloudFormation template (`deploy/aws-cfn.yaml`) for EC2 deployment.
 
 ## 📚 Legacy Docs
 Historical docs are kept in `docs/ARCHIVE`.
+Recent changelog: `docs/CHANGELOG_v2.3.md`.
 
 ## 📜 License
 Provided as-is for demonstration purposes.

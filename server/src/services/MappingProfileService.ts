@@ -31,25 +31,33 @@ export type MappingProfileWithMappings = MappingProfile & {
 };
 
 export class MappingProfileService {
-  async getMappingProfiles(): Promise<MappingProfileWithMappings[]> {
+  async getMappingProfiles(userId: string): Promise<MappingProfileWithMappings[]> {
     return prisma.mappingProfile.findMany({
+      where: { userId },
       include: { serviceMappings: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async getMappingProfileById(id: string): Promise<MappingProfileWithMappings | null> {
-    return prisma.mappingProfile.findUnique({
-      where: { id },
+  async getMappingProfileById(
+    id: string,
+    userId: string
+  ): Promise<MappingProfileWithMappings | null> {
+    return prisma.mappingProfile.findFirst({
+      where: { id, userId },
       include: { serviceMappings: true },
     });
   }
 
-  async createMappingProfile(data: MappingProfileInput): Promise<MappingProfileWithMappings> {
+  async createMappingProfile(
+    data: MappingProfileInput,
+    userId: string
+  ): Promise<MappingProfileWithMappings> {
     const createPayload: Prisma.MappingProfileCreateInput = {
       name: data.name,
       description: data.description ?? undefined,
       globalIncidentRoutingKey: data.globalIncidentRoutingKey ?? undefined,
+      user: { connect: { id: userId } },
       serviceMappings: data.serviceMappings
         ? {
             create: data.serviceMappings.map((mapping) => ({
@@ -74,10 +82,11 @@ export class MappingProfileService {
 
   async updateMappingProfile(
     id: string,
+    userId: string,
     data: MappingProfileUpdateInput
   ): Promise<MappingProfileWithMappings> {
     return prisma.$transaction(async (tx) => {
-      const existing = await tx.mappingProfile.findUnique({ where: { id } });
+      const existing = await tx.mappingProfile.findFirst({ where: { id, userId } });
       if (!existing) {
         throw new Error('Mapping Profile not found');
       }
@@ -116,10 +125,11 @@ export class MappingProfileService {
 
   async addMappingsToProfile(
     id: string,
+    userId: string,
     mappings: ServiceMappingInput[]
   ): Promise<MappingProfileWithMappings> {
     return prisma.$transaction(async (tx) => {
-      const existingProfile = await tx.mappingProfile.findUnique({ where: { id } });
+      const existingProfile = await tx.mappingProfile.findFirst({ where: { id, userId } });
       if (!existingProfile) {
         throw new Error('Mapping Profile not found');
       }
@@ -169,7 +179,11 @@ export class MappingProfileService {
     });
   }
 
-  async deleteMappingProfile(id: string): Promise<void> {
+  async deleteMappingProfile(id: string, userId: string): Promise<void> {
+    const existing = await prisma.mappingProfile.findFirst({ where: { id, userId } });
+    if (!existing) {
+      throw new Error('Mapping Profile not found');
+    }
     await prisma.mappingProfile.delete({
       where: { id },
     });

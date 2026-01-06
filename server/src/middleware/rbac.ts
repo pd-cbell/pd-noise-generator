@@ -9,6 +9,7 @@ declare global {
         userId: string;
         email: string;
         role: Role; // Assuming Prisma enum maps directly
+        agentEnabled?: boolean;
       };
     }
   }

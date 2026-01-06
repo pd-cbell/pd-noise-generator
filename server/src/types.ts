@@ -223,6 +223,7 @@ export interface GoldenDemo {
   narrative: string;
   configJson: GoldenDemoConfig; // Use the specific config structure
   personaNotes?: string;
+  isShared: boolean;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;

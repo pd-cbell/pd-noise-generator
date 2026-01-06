@@ -26,7 +26,14 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-full flex flex-col overflow-y-auto">
       <div className="flex items-center justify-between mb-4 border-b pb-4">
-        <h2 className="text-2xl font-bold text-gray-900">{demo.name}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-900">{demo.name}</h2>
+          {demo.isShared && (
+            <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">
+              Shared
+            </span>
+          )}
+        </div>
         <div className="flex space-x-2">
           {onEdit && (
             <button

@@ -6,14 +6,20 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
   const { startSimulation, stopSimulation, socketStatus, socketError, isLoading } = useServerSimulation();
   const { user } = useAuth();
 
-  const navItems = [
-    { id: 'configure', label: 'Configure', icon: Settings },
-    { id: 'monitor', label: 'Monitor', icon: Activity },
-    { id: 'golden-demos', label: 'Golden Demos', icon: Layers },
-    { id: 'agent', label: 'Agent', icon: Bot },
-    { id: 'director', label: 'Director', icon: Layers },
-    { id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon },
-  ];
+  const agentEnabled = user?.agentEnabled !== false;
+  const navItems: { id: string; label: string; icon: any }[] = [];
+
+  if (user?.role === UserRole.ADMIN) {
+    navItems.push({ id: 'configure', label: 'Configure', icon: Settings });
+    navItems.push({ id: 'monitor', label: 'Monitor', icon: Activity });
+  }
+
+  navItems.push({ id: 'golden-demos', label: 'Golden Demos', icon: Layers });
+  if (agentEnabled && user?.role !== UserRole.VIEWER) {
+    navItems.push({ id: 'agent', label: 'Agent', icon: Bot });
+  }
+  navItems.push({ id: 'director', label: 'Director', icon: Layers });
+  navItems.push({ id: 'mapping-profiles', label: 'Mapping Profiles', icon: MapIcon });
 
   if (user?.role === UserRole.ADMIN) {
     navItems.push({ id: 'admin', label: 'Admin', icon: Shield });
@@ -27,7 +33,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">PagerDuty Customer Sim &amp; Demo Platform</h1>
-          <p className="text-xs text-gray-500 font-medium">v2.3.1 (Golden Demo Platform)</p>
+          <p className="text-xs text-gray-500 font-medium">v2.3.2 (Admin UX + RBAC)</p>
         </div>
       </div>
 
@@ -64,7 +70,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
            </span>
         </div>
         
-        {!isSimRunning ? (
+        {user?.role !== UserRole.VIEWER && !isSimRunning ? (
           <button
             onClick={() => startSimulation()}
             disabled={socketStatus !== 'connected' || isLoading}
@@ -73,7 +79,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
             <Play className="w-4 h-4 fill-current" />
             Start
           </button>
-        ) : (
+        ) : user?.role !== UserRole.VIEWER ? (
           <button
             onClick={stopSimulation}
             className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-white shadow-md transition-colors bg-red-600 hover:bg-red-700"
@@ -81,7 +87,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
             <Square className="w-4 h-4 fill-current" />
             Stop
           </button>
-        )}
+        ) : null}
         {socketError && (
           <span className="text-xs text-red-600">{socketError}</span>
         )}

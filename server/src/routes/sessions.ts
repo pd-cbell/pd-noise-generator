@@ -83,7 +83,8 @@ export default (simulationManager: SimulationManager) => {
   // GET /api/sessions/:id
   router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
       try {
-          const session = await sessionService.getSession(req.params.id);
+          const userId = req.user!.userId;
+          const session = await sessionService.getSession(req.params.id, userId);
           if (!session) return res.status(404).json({ message: 'Session not found' });
           res.json(session);
       } catch (error) {

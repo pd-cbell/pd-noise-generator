@@ -19,6 +19,7 @@ router.get('/', async (req, res) => {
         name: true,
         avatarUrl: true,
         role: true,
+        agentEnabled: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -46,6 +47,26 @@ router.put('/:id/role', async (req, res) => {
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to update user role', details: error.message });
+  }
+});
+
+// PUT /api/users/:id/agent-enabled - Update agent access
+router.put('/:id/agent-enabled', async (req, res) => {
+  const { agentEnabled } = req.body;
+
+  if (typeof agentEnabled !== 'boolean') {
+    return res.status(400).json({ error: 'agentEnabled must be a boolean' });
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { agentEnabled },
+      select: { id: true, email: true, agentEnabled: true },
+    });
+    res.json(user);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to update agent access', details: error.message });
   }
 });
 

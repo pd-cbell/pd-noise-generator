@@ -5,6 +5,7 @@ import prisma from '../prisma';
 import { encrypt, decrypt } from '../utils/crypto';
 import { authenticateUser, AuthRequest } from '../middleware/auth';
 import { serverConfig } from '../config';
+import { Role } from '@prisma/client';
 
 const router = Router();
 const client = new OAuth2Client(serverConfig.googleClientId);
@@ -25,10 +26,19 @@ router.post('/google', async (req, res) => {
 
     if (!email) throw new Error('Email not provided by Google');
 
+    const existingUsers = await prisma.user.count();
+    const isFirstUser = existingUsers === 0;
+
     const user = await prisma.user.upsert({
       where: { googleId },
       update: { name, avatarUrl, email },
-      create: { googleId, email, name, avatarUrl },
+      create: {
+        googleId,
+        email,
+        name,
+        avatarUrl,
+        role: isFirstUser ? Role.ADMIN : undefined,
+      },
     });
 
     const sessionToken = jwt.sign(
@@ -104,6 +114,9 @@ router.get('/me', async (req, res) => {
               const email = 'dev@localhost';
               const googleId = 'dev-dummy-id';
               
+              const existingUsers = await prisma.user.count();
+              const isFirstUser = existingUsers === 0;
+
               const user = await prisma.user.upsert({
                 where: { googleId },
                 update: {},
@@ -111,7 +124,8 @@ router.get('/me', async (req, res) => {
                   googleId, 
                   email, 
                   name: 'Dev User', 
-                  avatarUrl: 'https://via.placeholder.com/150' 
+                  avatarUrl: 'https://via.placeholder.com/150',
+                  role: isFirstUser ? Role.ADMIN : undefined,
                 },
               });
         

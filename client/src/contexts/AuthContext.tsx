@@ -12,6 +12,7 @@ interface User {
   name: string;
   avatarUrl: string;
   role: UserRole;
+  agentEnabled?: boolean;
 }
 
 interface Credentials {

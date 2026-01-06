@@ -5,7 +5,7 @@ export async function fetchFromProxy(url: string, options: RequestInit = {}) {
   // Track API call
   useStore.getState().incrementApiCount();
 
-  const res = await fetch(url, options);
+  const res = await fetch(url, { credentials: 'include', ...options });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
     throw new Error(errorData.error || errorData.message || `API Error: ${res.statusText}`);
@@ -59,6 +59,12 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role }),
+    }),
+  updateUserAgentEnabled: (id: string, agentEnabled: boolean) =>
+    fetchFromProxy(`/api/users/${id}/agent-enabled`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentEnabled }),
     }),
 
   // --- Mapping Profiles ---

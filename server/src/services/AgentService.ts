@@ -4,7 +4,7 @@ import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { z } from "zod";
 import { GoldenDemoService } from "./GoldenDemoService";
-import { GoldenDemo } from "@prisma/client";
+import { GoldenDemo, Role } from "@prisma/client";
 
 // --- State Definition using Annotation (LangGraph v0.2/v1.0+) ---
 const AgentStateAnnotation = Annotation.Root({
@@ -372,6 +372,7 @@ Do NOT output JSON in this step. This is narrative planning only.
       narrative: string;
       personaNotes?: string;
       createdByUserId: string;
+      role: Role;
   }): Promise<GoldenDemo> { 
     
     const plan = params.approvedPlan || "Proceed with standard best practices for this scenario.";
@@ -408,7 +409,7 @@ Do NOT output JSON in this step. This is narrative planning only.
       configJson: result.goldenDemoMetadata.configJson || {},
       personaNotes: result.goldenDemoMetadata.personaNotes,
       createdByUserId: result.goldenDemoMetadata.createdByUserId!,
-    });
+    }, params.role);
 
     return createdGoldenDemo;
   }

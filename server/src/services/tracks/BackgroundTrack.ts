@@ -56,7 +56,7 @@ export class BackgroundTrack extends SimulationTrack {
     if (now - (this._lastPollCheck || 0) > 10000) {
         this._lastPollCheck = now;
         const checkList = this.activeIncidents.filter(i => i.incidentId).slice(0, 25); // Check max 25 at a time
-        if (checkList.length > 0) {
+        if (checkList.length > 0 && this.credentials.apiToken && this.credentials.fromEmail) {
              const ids = checkList.map(i => i.incidentId!);
              this.pdClient.getIncidentsByIds(ids).then((res: any) => {
                  if (res && res.incidents) {

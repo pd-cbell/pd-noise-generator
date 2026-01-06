@@ -117,6 +117,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
     narrative: demo.narrative,
     personaNotes: demo.personaNotes || '',
     description: demo.configJson?.description || '',
+    isShared: demo.isShared ?? false,
   });
 
   const [stageState, setStageState] = useState<StageState>(defaultStageState);
@@ -292,6 +293,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
           maturityLevel: meta.maturityLevel,
           narrative: meta.narrative,
           personaNotes: meta.personaNotes,
+          isShared: meta.isShared,
           configJson: updatedConfig,
         });
         addLog(`Created Golden Demo "${created.name}"`, 'info');
@@ -302,6 +304,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
           maturityLevel: meta.maturityLevel,
           narrative: meta.narrative,
           personaNotes: meta.personaNotes,
+          isShared: meta.isShared,
           configJson: updatedConfig,
         });
         addLog(`Updated Golden Demo "${meta.name}"`, 'info');
@@ -390,6 +393,18 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                   onChange={(e) => setMeta({ ...meta, description: e.target.value })}
                   placeholder="Short scenario description"
                 />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="isShared"
+                  type="checkbox"
+                  checked={meta.isShared}
+                  onChange={(e) => setMeta({ ...meta, isShared: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label htmlFor="isShared" className="text-sm text-gray-700">
+                  Shared (visible to all users)
+                </label>
               </div>
             </div>
             <div>

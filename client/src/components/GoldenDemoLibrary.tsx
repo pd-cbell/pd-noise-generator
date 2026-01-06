@@ -17,7 +17,8 @@ const GoldenDemoLibrary: React.FC = () => {
   } = useStore();
   
   const { user } = useAuth();
-  const canEdit = user?.role === UserRole.EDITOR || user?.role === UserRole.ADMIN;
+  const canEditAll = user?.role === UserRole.EDITOR || user?.role === UserRole.ADMIN;
+  const canCreate = Boolean(user);
 
   const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false); // Edit Modal State
@@ -40,7 +41,9 @@ const GoldenDemoLibrary: React.FC = () => {
     }
 
     setSelectedDemoId(requestedDemo.id);
-    if (canEdit) {
+    const canEditRequested =
+      canEditAll || requestedDemo.createdByUserId === user?.id;
+    if (canEditRequested) {
       setDraftDemo(requestedDemo);
       setIsEditing(true);
     }
@@ -50,7 +53,8 @@ const GoldenDemoLibrary: React.FC = () => {
     goldenDemos,
     isLoadingGoldenDemos,
     fetchGoldenDemos,
-    canEdit,
+    canEditAll,
+    user?.id,
     clearEditGoldenDemoRequest,
   ]);
 
@@ -80,7 +84,7 @@ const GoldenDemoLibrary: React.FC = () => {
       <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-900">Golden Demos</h2>
-          {canEdit && (
+          {canCreate && (
             <button 
               className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
               title="Create New Golden Demo"
@@ -93,6 +97,7 @@ const GoldenDemoLibrary: React.FC = () => {
                   narrative: '',
                   configJson: { name: '', description: '', items: [], narrative: { stages: {} } } as any,
                   personaNotes: '',
+                  isShared: false,
                   createdByUserId: '',
                   createdAt: new Date(),
                   updatedAt: new Date(),
@@ -111,7 +116,7 @@ const GoldenDemoLibrary: React.FC = () => {
               <Loader2 className="animate-spin inline-block mr-2" size={20} /> Loading Demos...
             </div>
           ) : goldenDemos.length === 0 ? (
-            <p className="p-4 text-gray-500">No Golden Demos found. {canEdit ? 'Create one!' : ''}</p>
+            <p className="p-4 text-gray-500">No Golden Demos found. {canCreate ? 'Create one!' : ''}</p>
           ) : (
             <ul>
               {goldenDemos.map((demo) => (
@@ -125,7 +130,7 @@ const GoldenDemoLibrary: React.FC = () => {
                     <p className="text-sm text-gray-500">{demo.vertical} - {demo.maturityLevel}</p>
                   </div>
                   <div className="flex space-x-2">
-                    {canEdit && (
+                    {(canEditAll || demo.createdByUserId === user?.id) && (
                       <>
                         <button 
                           className="text-gray-500 hover:text-blue-600" 
@@ -157,11 +162,11 @@ const GoldenDemoLibrary: React.FC = () => {
           <GoldenDemoDetail 
             demo={selectedDemo} 
             onLaunch={() => handleLaunchSimulation(selectedDemo)} 
-            onEdit={canEdit ? () => { setDraftDemo(selectedDemo); setIsEditing(true); } : undefined} 
+            onEdit={(canEditAll || selectedDemo.createdByUserId === user?.id) ? () => { setDraftDemo(selectedDemo); setIsEditing(true); } : undefined} 
           />
         ) : (
           <div className="h-full flex items-center justify-center text-gray-500 text-lg">
-            Select a Golden Demo {canEdit ? 'or create a new one' : ''} to view details.
+            Select a Golden Demo {canCreate ? 'or create a new one' : ''} to view details.
           </div>
         )}
       </div>

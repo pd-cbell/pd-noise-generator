@@ -24,17 +24,16 @@ export class SessionService {
     });
   }
 
-  async getSession(id: string): Promise<Session | null> {
-    return prisma.session.findUnique({
-        where: { id },
-        include: { goldenDemo: true }
+  async getSession(id: string, userId: string): Promise<Session | null> {
+    return prisma.session.findFirst({
+      where: { id, createdByUserId: userId },
+      include: { goldenDemo: true }
     });
   }
 
   async listSessions(userId: string, goldenDemoId?: string): Promise<Session[]> {
     const where: Prisma.SessionWhereInput = {
-        // optionally filter by userId if we link sessions to users strictky
-        // createdByUserId: userId 
+        createdByUserId: userId 
     };
     
     if (goldenDemoId) {

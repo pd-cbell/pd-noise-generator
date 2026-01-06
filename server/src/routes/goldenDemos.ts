@@ -18,6 +18,7 @@ const createGoldenDemoSchema = z.object({
   narrative: z.string().min(1, 'Narrative cannot be empty'),
   configJson: z.any(), // Loosely typed for now, can be more specific later
   personaNotes: z.string().max(1000).optional(),
+  isShared: z.boolean().optional(),
 });
 
 // Zod schema for GoldenDemo update validation
@@ -28,6 +29,7 @@ const updateGoldenDemoSchema = z.object({
   narrative: z.string().min(1).optional(),
   configJson: z.any().optional(),
   personaNotes: z.string().max(1000).optional(),
+  isShared: z.boolean().optional(),
 });
 
 // All Golden Demo routes require authentication, then role-based checks
@@ -101,10 +103,11 @@ router.post('/:id/trigger', async (req, res) => {
 // GET /api/golden-demos - List all golden demos for the authenticated user
 router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.userId; // Access userId from req.user
+    const { userId, role } = (req as any).user!;
     const { vertical } = req.query;
     const goldenDemos = await goldenDemoService.listGoldenDemos(
       userId,
+      role,
       vertical ? String(vertical) : undefined
     );
     res.json(goldenDemos);
@@ -117,9 +120,9 @@ router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, r
 // GET /api/golden-demos/:id - Get a specific golden demo
 router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.userId; // Access userId from req.user
+    const { userId, role } = (req as any).user!;
     const { id } = req.params;
-    const goldenDemo = await goldenDemoService.getGoldenDemo(id, userId);
+    const goldenDemo = await goldenDemoService.getGoldenDemo(id, userId, role);
     if (!goldenDemo) {
       return res.status(404).json({ message: 'Golden Demo not found' });
     }
@@ -131,9 +134,9 @@ router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req
 });
 
 // POST /api/golden-demos - Create a new golden demo
-router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.post('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.userId; // Access userId from req.user
+    const { userId, role } = (req as any).user!;
     const validation = createGoldenDemoSchema.safeParse(req.body);
 
     if (!validation.success) {
@@ -143,18 +146,21 @@ router.post('/', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     const newGoldenDemo = await goldenDemoService.createGoldenDemo({
       ...validation.data,
       createdByUserId: userId,
-    });
+    }, role);
     res.status(201).json(newGoldenDemo);
   } catch (error) {
     console.error('Error creating golden demo:', error);
+    if (error instanceof Error && error.message.startsWith('Forbidden')) {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to create golden demo', error: error instanceof Error ? error.message : String(error) });
   }
 });
 
 // PUT /api/golden-demos/:id - Update an existing golden demo
-router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.put('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.userId; // Access userId from req.user
+    const { userId, role } = (req as any).user!;
     const { id } = req.params;
     const validation = updateGoldenDemoSchema.safeParse(req.body);
 
@@ -165,24 +171,31 @@ router.put('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     const updatedGoldenDemo = await goldenDemoService.updateGoldenDemo(
       id,
       userId,
+      role,
       validation.data
     );
     res.json(updatedGoldenDemo);
   } catch (error) {
     console.error('Error updating golden demo:', error);
+    if (error instanceof Error && error.message.startsWith('Forbidden')) {
+      return res.status(403).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to update golden demo', error: error instanceof Error ? error.message : String(error) });
   }
 });
 
 // DELETE /api/golden-demos/:id - Delete a golden demo
-router.delete('/:id', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
+router.delete('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
   try {
-    const userId = (req as any).user!.userId; // Access userId from req.user
+    const { userId, role } = (req as any).user!;
     const { id } = req.params;
-    await goldenDemoService.deleteGoldenDemo(id, userId);
+    await goldenDemoService.deleteGoldenDemo(id, userId, role);
     res.status(204).send(); // No content
   } catch (error) {
     console.error('Error deleting golden demo:', error);
+    if (error instanceof Error && error.message.startsWith('Forbidden')) {
+      return res.status(403).json({ message: error.message });
+    }
     if (error instanceof Error && error.message.includes('Record to delete does not exist')) {
       return res.status(404).json({ message: 'Golden Demo not found' });
     }

@@ -9,6 +9,7 @@ export interface AuthRequest extends Request {
     userId: string;
     email: string;
     role: Role;
+    agentEnabled?: boolean;
   };
 }
 
@@ -32,7 +33,8 @@ export const authenticateUser = async (req: AuthRequest, res: Response, next: Ne
     req.user = {
         userId: user.id,
         email: user.email,
-        role: user.role
+        role: user.role,
+        agentEnabled: user.agentEnabled,
     };
     
     next();

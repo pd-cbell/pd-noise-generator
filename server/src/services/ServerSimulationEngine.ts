@@ -238,7 +238,10 @@ export class SimulationSession {
         bgTrack = new BackgroundTrack('background', this.config, this.credentials, this.io);
         // Apply mapping profile if global config has one
         if (this.config.mappingProfileId) {
-            const profile = await mappingProfileService.getMappingProfileById(this.config.mappingProfileId);
+            const profile = await mappingProfileService.getMappingProfileById(
+              this.config.mappingProfileId,
+              this.userId
+            );
             bgTrack.applyMappingProfile(profile);
         }
         this.tracks.set('background', bgTrack);
@@ -384,7 +387,10 @@ export class SimulationSession {
       // Apply current session mapping profile by default?
       // The old logic applied it. 
       if (this.config.mappingProfileId) {
-          const profile = await mappingProfileService.getMappingProfileById(this.config.mappingProfileId);
+          const profile = await mappingProfileService.getMappingProfileById(
+            this.config.mappingProfileId,
+            this.userId
+          );
           await track.applyMappingProfile(profile);
       }
 
@@ -398,7 +404,7 @@ export class SimulationSession {
 
   // Manually applying mapping profile to a specific new track (used by socket handler)
   public async applyMappingToNewTrack(track: SimulationTrack, mappingProfileId: string) {
-      const profile = await mappingProfileService.getMappingProfileById(mappingProfileId);
+      const profile = await mappingProfileService.getMappingProfileById(mappingProfileId, this.userId);
       await track.applyMappingProfile(profile);
   }
 
@@ -609,6 +615,9 @@ export class SimulationSession {
   }
 
   private async pollTrackRuns() {
+    if (!this.credentials.apiToken || !this.credentials.fromEmail) {
+      return;
+    }
     const now = Date.now();
     for (const run of this.trackRuns.values()) {
       const incidents = Object.values(run.incidentsByDedupKey || {});

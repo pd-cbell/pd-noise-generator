@@ -19,6 +19,35 @@ function App() {
   const { isSimRunning, isLoading: isSimLoading } = useServerSimulation(); 
   const { activeSessionId, upsertGoldenDemo, requestEditGoldenDemo } = useStore();
   const [activePage, setActivePage] = useState('configure');
+  const agentEnabled = user?.agentEnabled !== false;
+  const isAdmin = user?.role === UserRole.ADMIN;
+  const isViewer = user?.role === UserRole.VIEWER;
+
+  const allowedPages = (() => {
+    if (!user) return [];
+    if (isAdmin) {
+      return [
+        'configure',
+        'monitor',
+        'golden-demos',
+        ...(agentEnabled ? ['agent'] : []),
+        'director',
+        'mapping-profiles',
+        'presenter',
+        'admin',
+      ];
+    }
+    if (isViewer) {
+      return ['golden-demos', 'director', 'mapping-profiles', 'presenter'];
+    }
+    return [
+      'golden-demos',
+      ...(agentEnabled ? ['agent'] : []),
+      'director',
+      'mapping-profiles',
+      'presenter',
+    ];
+  })();
 
   // Auto-switch to presenter view when a session starts
   useEffect(() => {
@@ -26,6 +55,11 @@ function App() {
           setActivePage('presenter');
       }
   }, [activeSessionId]);
+  useEffect(() => {
+    if (user && allowedPages.length > 0 && !allowedPages.includes(activePage)) {
+      setActivePage(allowedPages[0]);
+    }
+  }, [user, allowedPages, activePage]);
 
   const handleNavigate = (page: string) => {
     setActivePage(page);
@@ -55,9 +89,11 @@ function App() {
       />
       
       <main className="flex-1 overflow-auto relative">
-        {activePage === 'configure' && <ConfigurationForm />}
-        {activePage === 'monitor' && <MonitorDashboard />}
-        {activePage === 'agent' && <AgentBuilder onBuildComplete={handleAgentBuildComplete} />}
+        {activePage === 'configure' && user.role === UserRole.ADMIN && <ConfigurationForm />}
+        {activePage === 'monitor' && user.role === UserRole.ADMIN && <MonitorDashboard />}
+        {activePage === 'agent' && agentEnabled && user.role !== UserRole.VIEWER && (
+          <AgentBuilder onBuildComplete={handleAgentBuildComplete} />
+        )}
         {activePage === 'director' && <DirectorDashboard />}
         {activePage === 'mapping-profiles' && <MappingProfilesPage />}
         {activePage === 'golden-demos' && <GoldenDemoLibrary />}
