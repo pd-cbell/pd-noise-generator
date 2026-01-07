@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GoldenDemo } from '../store/useStore';
 import { Play, History, Link as LinkIcon, Copy, Shield } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
@@ -14,6 +14,11 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
   const { mappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
   const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
   const webhookUrl = `${webhookBase}/api/golden-demos/${demo.id}/trigger`;
+  const fullNarrative = demo.configJson?.narrative?.full;
+  const showFullNarrative =
+    Boolean(fullNarrative && fullNarrative.trim()) &&
+    fullNarrative.trim() !== demo.narrative.trim();
+  const [isFullNarrativeOpen, setIsFullNarrativeOpen] = useState(false);
 
   const copyText = async (text: string) => {
     try {
@@ -69,6 +74,24 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
           <p className="text-gray-700 whitespace-pre-wrap">{demo.narrative}</p>
         </div>
       </div>
+
+      {showFullNarrative && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setIsFullNarrativeOpen((prev) => !prev)}
+            className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"
+          >
+            Narrative (Generation Source)
+            <span className="text-gray-400">{isFullNarrativeOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {isFullNarrativeOpen && (
+            <div className="prose prose-sm max-w-none">
+              <p className="text-gray-700 whitespace-pre-wrap">{fullNarrative}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {demo.personaNotes && (
         <div className="mb-6">
