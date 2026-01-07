@@ -66,6 +66,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agentEnabled }),
     }),
+  impersonateUser: (id: string) =>
+    fetchFromProxy(`/api/users/${id}/impersonate`, {
+      method: 'POST',
+    }),
 
   // --- Mapping Profiles ---
   getMappingProfiles: () => fetchFromProxy('/api/mapping-profiles'),

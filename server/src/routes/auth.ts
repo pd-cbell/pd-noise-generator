@@ -71,7 +71,7 @@ router.get('/me', async (req, res) => {
     if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
     try {
-        const decoded = jwt.verify(token, serverConfig.jwtSecret) as { userId: string };
+        const decoded = jwt.verify(token, serverConfig.jwtSecret) as { userId: string; impersonatorId?: string };
         const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
         if (!user) return res.status(401).json({ error: 'User not found' });
 
@@ -81,7 +81,7 @@ router.get('/me', async (req, res) => {
             fromEmail: user.encryptedFromEmail ? decrypt(user.encryptedFromEmail) : null,
         };
 
-            res.json({ user, credentials });
+            res.json({ user, credentials, impersonatorId: decoded.impersonatorId || null });
           } catch (e) {
             res.status(401).json({ error: 'Invalid token' });
           }
@@ -148,5 +148,37 @@ router.get('/me', async (req, res) => {
             }
           });
         }
+
+        router.post('/stop-impersonation', async (req, res) => {
+          const token = req.cookies.token;
+          if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+          try {
+            const decoded = jwt.verify(token, serverConfig.jwtSecret) as { impersonatorId?: string };
+            if (!decoded.impersonatorId) {
+              return res.status(400).json({ error: 'Not impersonating' });
+            }
+
+            const user = await prisma.user.findUnique({ where: { id: decoded.impersonatorId } });
+            if (!user) return res.status(401).json({ error: 'User not found' });
+
+            const sessionToken = jwt.sign(
+              { userId: user.id, email: user.email },
+              serverConfig.jwtSecret,
+              { expiresIn: '7d' }
+            );
+
+            res.cookie('token', sessionToken, {
+              httpOnly: true,
+              secure: serverConfig.isProduction,
+              sameSite: 'lax',
+              maxAge: 7 * 24 * 60 * 60 * 1000,
+            });
+
+            res.json({ user });
+          } catch (error: any) {
+            res.status(401).json({ error: 'Invalid token' });
+          }
+        });
         
         export default router;

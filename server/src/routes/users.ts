@@ -1,8 +1,10 @@
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import prisma from '../prisma';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac';
 import { Role } from '@prisma/client';
+import { serverConfig } from '../config';
 
 const router = Router();
 
@@ -67,6 +69,39 @@ router.put('/:id/agent-enabled', async (req, res) => {
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to update agent access', details: error.message });
+  }
+});
+
+// POST /api/users/:id/impersonate - Impersonate user (Admin only)
+router.post('/:id/impersonate', async (req, res) => {
+  try {
+    const targetUser = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const adminUserId = req.user?.userId;
+    const adminEmail = req.user?.email;
+    if (!adminUserId || !adminEmail) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const sessionToken = jwt.sign(
+      { userId: targetUser.id, email: targetUser.email, impersonatorId: adminUserId },
+      serverConfig.jwtSecret,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('token', sessionToken, {
+      httpOnly: true,
+      secure: serverConfig.isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({ message: 'Impersonation started', userId: targetUser.id });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to impersonate user', details: error.message });
   }
 });
 
