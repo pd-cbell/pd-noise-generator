@@ -41,6 +41,7 @@ function App() {
       return ['golden-demos', 'director', 'mapping-profiles', 'presenter'];
     }
     return [
+      'configure',
       'golden-demos',
       ...(agentEnabled ? ['agent'] : []),
       'director',
@@ -89,7 +90,7 @@ function App() {
       />
       
       <main className="flex-1 overflow-auto relative">
-        {activePage === 'configure' && user.role === UserRole.ADMIN && <ConfigurationForm />}
+        {activePage === 'configure' && user.role !== UserRole.VIEWER && <ConfigurationForm />}
         {activePage === 'monitor' && user.role === UserRole.ADMIN && <MonitorDashboard />}
         {activePage === 'agent' && agentEnabled && user.role !== UserRole.VIEWER && (
           <AgentBuilder onBuildComplete={handleAgentBuildComplete} />

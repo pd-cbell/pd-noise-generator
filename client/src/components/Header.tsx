@@ -9,8 +9,10 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
   const agentEnabled = user?.agentEnabled !== false;
   const navItems: { id: string; label: string; icon: any }[] = [];
 
-  if (user?.role === UserRole.ADMIN) {
+  if (user?.role !== UserRole.VIEWER) {
     navItems.push({ id: 'configure', label: 'Configure', icon: Settings });
+  }
+  if (user?.role === UserRole.ADMIN) {
     navItems.push({ id: 'monitor', label: 'Monitor', icon: Activity });
   }
 
