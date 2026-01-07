@@ -6,6 +6,12 @@ export enum UserRole {
   VIEWER = 'VIEWER',
 }
 
+export const ROLE_LABELS: Record<UserRole, string> = {
+  [UserRole.ADMIN]: 'Conductor',
+  [UserRole.EDITOR]: 'Composer',
+  [UserRole.VIEWER]: 'Listener',
+};
+
 interface User {
   id: string;
   email: string;

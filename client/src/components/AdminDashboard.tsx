@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { useAuth, UserRole } from '../contexts/AuthContext';
+import { useAuth, UserRole, ROLE_LABELS } from '../contexts/AuthContext';
 import { Shield, Loader2, User as UserIcon } from 'lucide-react';
 
 interface User {
@@ -157,7 +157,7 @@ export const AdminDashboard: React.FC = () => {
                     `}
                   >
                     {Object.values(UserRole).map((role) => (
-                      <option key={role} value={role}>{role}</option>
+                      <option key={role} value={role}>{ROLE_LABELS[role]}</option>
                     ))}
                   </select>
                   {user.id === currentUser?.id && (

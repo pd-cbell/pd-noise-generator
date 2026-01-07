@@ -8,12 +8,12 @@ The platform supports two core workflows:
 - **Run time:** launch Golden Demos from Director and (for Editors/Admins) run background noise simulation.
 
 ## Roles and Access
-Current roles:
-- **ADMIN:** manage users + everything Editors can do.
-- **EDITOR:** create/edit demos and profiles, run simulations.
-- **VIEWER:** view shared demos, edit own demos, launch demos in Director (no background simulation).
+Current roles (music theme):
+- **Conductor (Admin):** manage users + everything Composers can do.
+- **Composer (Editor):** create/edit demos and profiles, run simulations.
+- **Listener (Viewer):** view shared demos, edit own demos, launch demos in Director (no background simulation).
 
-Note: role labels will be renamed in v2.4 (Admin → Conductor, Editor → Composer, Viewer → Listener).
+Note: the UI labels use the music theme, while the system roles remain ADMIN/EDITOR/VIEWER.
 
 ## Login
 1) Open the app URL.
