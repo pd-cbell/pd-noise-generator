@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GoldenDemo } from '../store/useStore';
-import { Play, History, Link as LinkIcon, Copy, Shield } from 'lucide-react';
+import { Play, History, Link as LinkIcon, Copy, Shield, Download } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
 import { useStore } from '../store/useStore';
 
@@ -28,6 +28,20 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
     }
   };
 
+  const handleExport = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      goldenDemo: demo,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${demo.name || 'golden-demo'}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-full flex flex-col overflow-y-auto">
       <div className="flex items-center justify-between mb-4 border-b pb-4">
@@ -48,6 +62,13 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
               Edit Details
             </button>
           )}
+          <button
+            onClick={handleExport}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-2"
+          >
+            <Download size={18} />
+            Export JSON
+          </button>
           <button
             onClick={() => onLaunch(demo)}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
