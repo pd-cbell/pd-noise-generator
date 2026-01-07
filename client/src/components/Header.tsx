@@ -12,7 +12,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
   if (user?.role !== UserRole.VIEWER) {
     navItems.push({ id: 'configure', label: 'Configure', icon: Settings });
   }
-  if (user?.role === UserRole.ADMIN) {
+  if (user?.role !== UserRole.VIEWER) {
     navItems.push({ id: 'monitor', label: 'Monitor', icon: Activity });
   }
 

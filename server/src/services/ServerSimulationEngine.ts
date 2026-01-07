@@ -719,6 +719,19 @@ export class SimulationManager {
     return this.instances.get(userId);
   }
 
+  findActiveBySubdomain(subdomain: string, excludeUserId?: string) {
+    const normalized = subdomain.trim().toLowerCase();
+    if (!normalized) return null;
+    for (const [userId, instance] of this.instances.entries()) {
+      if (excludeUserId && userId === excludeUserId) continue;
+      const activeSubdomain = instance.config.pdSubdomain?.trim().toLowerCase();
+      if (instance.state.isRunning && activeSubdomain && activeSubdomain === normalized) {
+        return userId;
+      }
+    }
+    return null;
+  }
+
   async createOrUpdate(userId: string, config: SimulationConfig, credentials: SimulationCredentials) {
     console.log(`SimulationManager: createOrUpdate for ${userId}`);
     let instance = this.instances.get(userId);

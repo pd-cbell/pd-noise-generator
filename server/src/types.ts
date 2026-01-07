@@ -171,6 +171,7 @@ export function createEmptySeverityMetrics(): SeverityMetrics {
 }
 
 export interface SimulationConfig {
+  pdSubdomain?: string;
   ratePerMinute: number;
   severityWeights: SeverityWeights;
   autoHealConfig: { enabled: boolean; warningProbability: number; minDelaySec: number; maxDelaySec: number };
@@ -206,6 +207,7 @@ export interface GoldenDemoConfig {
   items: any[]; // CampaignItem[] - Loosely typed for now, can be more specific
   beats?: Beat[]; // Array of narrative beats
   narrative?: {
+    full?: string;
     stages?: Record<string, { text?: string }>;
   };
 }

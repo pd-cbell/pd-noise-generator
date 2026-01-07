@@ -210,6 +210,14 @@ io.on('connection', async (socket) => {
           socket.emit('sim_error', { message: 'Forbidden' });
           return;
         }
+        const subdomain = data?.config?.pdSubdomain;
+        if (typeof subdomain === 'string' && subdomain.trim().length > 0) {
+          const existingOwner = simulationManager.findActiveBySubdomain(subdomain, userId);
+          if (existingOwner) {
+            socket.emit('sim_error', { message: 'Simulation already running for this subdomain.' });
+            return;
+          }
+        }
         const sim = await simulationManager.createOrUpdate(userId, data.config, data.credentials);
         sim.start();
         socket.emit('sim_started');
