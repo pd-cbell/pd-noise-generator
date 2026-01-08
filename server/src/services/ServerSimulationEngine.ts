@@ -84,6 +84,7 @@ export class SimulationSession {
   private pdClient: PagerDutyClient; // Still needed for some session-level ops or just passing to tracks
   private trackRuns: Map<string, TrackRunState> = new Map();
   private trackRunByTrackId: Map<string, string> = new Map();
+  private metricIncidentState: Map<string, { acked: boolean; resolved: boolean }> = new Map();
 
   constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
     this.userId = userId;
@@ -235,7 +236,7 @@ export class SimulationSession {
         // Ideally, SimulationTrack should have an updateConfig method. 
         // For now, we assume this is called on init.
     } else {
-        bgTrack = new BackgroundTrack('background', this.config, this.credentials, this.io);
+        bgTrack = new BackgroundTrack('background', this.config, this.credentials, this.io, this.getMetricCallbacks());
         // Apply mapping profile if global config has one
         if (this.config.mappingProfileId) {
             const profile = await mappingProfileService.getMappingProfileById(
@@ -344,12 +345,13 @@ export class SimulationSession {
             trackRunId,
             onEventSent: (payload) => this.registerTrackEvent(trackRunId, payload),
             onComplete: () => this.finishTrackRun(trackRunId),
+            callbacks: this.getMetricCallbacks(),
           });
           this.trackRunByTrackId.set(id, trackRunId);
           this.emitTrackRunStarted(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
       } else {
           // Background
-          track = new BackgroundTrack(id, this.config, this.credentials, this.io);
+          track = new BackgroundTrack(id, this.config, this.credentials, this.io, this.getMetricCallbacks());
       }
 
       // Apply mapping if provided in session config context (or passed in?)
@@ -609,9 +611,62 @@ export class SimulationSession {
       // Update Trend
       this.addMonitorTrendData(this.state.activeIncidents.length);
 
+      this.refreshApiMetrics();
       await this.pollTrackRuns();
 
       this.emitState();
+  }
+
+  private getMetricCallbacks() {
+    return {
+      onApiCall: () => this.recordApiCall(),
+      onIncidentAcked: (incident: Incident, ackedAt: number) => this.recordAck(incident, ackedAt),
+      onIncidentResolved: (incident: Incident, resolvedAt: number) => this.recordResolve(incident, resolvedAt),
+      onDroppedEvent: () => this.recordDrop(),
+    };
+  }
+
+  private recordApiCall() {
+    this.state._apiCallTimestamps.push(Date.now());
+  }
+
+  private refreshApiMetrics() {
+    const now = Date.now();
+    this.state._apiCallTimestamps = this.state._apiCallTimestamps.filter((t) => now - t <= 60000);
+    this.state.metrics.apiCallsLast60s = this.state._apiCallTimestamps.length;
+    this.state.metrics.apiRpm = this.state.metrics.apiCallsLast60s;
+  }
+
+  private recordDrop() {
+    this.state.metrics.droppedEvents += 1;
+  }
+
+  private recordAck(incident: Incident, ackedAt: number) {
+    const key = `${incident.dedupKey}:ack`;
+    if (this.metricIncidentState.get(key)) return;
+    this.metricIncidentState.set(key, { acked: true, resolved: false });
+    const mtta = Math.max(0, ackedAt - incident.startedAt);
+    this.state._mttaSums[incident.severity] += mtta;
+    this.state._mttaCounts[incident.severity] += 1;
+    this.state._mttaSums.global += mtta;
+    this.state._mttaCounts.global += 1;
+    this.state.metrics.avgMtta[incident.severity] =
+      this.state._mttaSums[incident.severity] / this.state._mttaCounts[incident.severity];
+    this.state.metrics.avgMtta.global = this.state._mttaSums.global / this.state._mttaCounts.global;
+  }
+
+  private recordResolve(incident: Incident, resolvedAt: number) {
+    const key = `${incident.dedupKey}:resolve`;
+    if (this.metricIncidentState.get(key)) return;
+    this.metricIncidentState.set(key, { acked: true, resolved: true });
+    const mttr = Math.max(0, resolvedAt - incident.startedAt);
+    this.state._mttrSums[incident.severity] += mttr;
+    this.state._mttrCounts[incident.severity] += 1;
+    this.state._mttrSums.global += mttr;
+    this.state._mttrCounts.global += 1;
+    this.state.metrics.avgMttr[incident.severity] =
+      this.state._mttrSums[incident.severity] / this.state._mttrCounts[incident.severity];
+    this.state.metrics.avgMttr.global = this.state._mttrSums.global / this.state._mttrCounts.global;
   }
 
   private async pollTrackRuns() {

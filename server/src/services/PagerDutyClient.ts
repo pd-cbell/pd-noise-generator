@@ -6,6 +6,7 @@ interface PagerDutyClientConfig {
   fromEmail: string;
   apiBase?: string;
   pdRegion?: string; // New: PagerDuty Region
+  onRequest?: () => void;
 }
 
 export class PagerDutyClient {
@@ -57,6 +58,7 @@ export class PagerDutyClient {
 
   private async request(method: string, path: string, body?: any, queryParams?: URLSearchParams, headersOverride?: Record<string, string>): Promise<any> {
     await this.throttle(); // Simple throttling
+    this.config.onRequest?.();
 
     const url = new URL(`${this.config.apiBase}${path}`);
     if (queryParams) {
