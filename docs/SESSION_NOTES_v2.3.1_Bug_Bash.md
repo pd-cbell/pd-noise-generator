@@ -42,5 +42,5 @@
 - Socket: verify Start/Stop simulation and Stop track flows via UI
 - Director: mapping selection on preview overrides global mapping
 - Import: Crux import succeeds with fallback service naming
-- Golden Demo lifecycle: verify `track_run_*` socket events are emitted and state updates continue (UI deferred to v2.4)
+- Golden Demo lifecycle: verify `track_run_*` socket events are emitted and state updates continue (UI deferred to v2.4, completed).
 - Agent Builder: generate a demo and confirm it opens in the editor immediately

@@ -26,4 +26,4 @@ Implement basic Role-Based Access Control to manage user permissions and system 
 - Socket hardening and state sync improvements were implemented during v2.3.1 bug bash (start/stop reliability, manual state sync).
 - Golden Demo editor UX improvements landed (drag-and-drop event ordering, required metadata validation).
 - Agentic Campaign Builder now opens the newly generated Golden Demo in the editor for immediate review/edit/save.
-- Golden Demo track lifecycle monitoring remains active server-side (`track_run_*` events), but UI rendering is deferred to v2.4.
+- Golden Demo track lifecycle monitoring remains active server-side (`track_run_*` events); UI rendering was added in v2.4.

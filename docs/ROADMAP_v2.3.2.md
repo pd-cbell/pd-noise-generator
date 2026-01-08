@@ -13,7 +13,7 @@
 - Admin Dashboard is available with role + agent access management.
 - Mapping Profiles are user-scoped; Golden Demo sharing and access rules are enforced.
 - Viewer can launch Golden Demos in Director but cannot start background simulation.
-- Track lifecycle monitoring exists (server polling + socket updates), but UI/guide is deferred to v2.4.
+- Track lifecycle monitoring exists (server polling + socket updates); UI/guide shipped in v2.4.
 
 ## Policy Matrix (v2.3.2)
 | Capability | Viewer | Editor | Admin |
@@ -85,4 +85,4 @@
 - [x] Skip PagerDuty REST polling when credentials are missing (reduce 401 noise when only triggering Events API).
 
 ## Out of Scope for v2.3.2
-- Golden Demo lifecycle monitoring UI + presenter “guide” (moved to v2.4).
+- Golden Demo lifecycle monitoring UI + presenter “guide” (moved to v2.4, completed).

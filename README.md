@@ -6,7 +6,7 @@ A persistent **Golden Demo Platform** for designing, managing, and delivering co
 
 ![Version](https://img.shields.io/badge/version-2.4-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-Status: v2.4 in progress (cloud validation pending).
+Status: v2.4 complete (cloud validation pending).
 
 ## 🚀 New in v2.4
 
