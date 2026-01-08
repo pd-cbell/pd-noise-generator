@@ -16,6 +16,10 @@ export abstract class SimulationTrack {
   protected pdClient: PagerDutyClient;
   protected mappingProfile: MappingProfileWithMappings | null = null;
   protected simulatorConfig: MappingSimulatorConfig = { pdChangeEventsRoutingKey: null };
+  protected onApiCall?: () => void;
+  protected onIncidentAcked?: (incident: Incident, ackedAt: number) => void;
+  protected onIncidentResolved?: (incident: Incident, resolvedAt: number) => void;
+  protected onDroppedEvent?: () => void;
 
   public activeIncidents: Incident[] = []; 
   public log: { ts: string; type: 'info' | 'warn' | 'error'; msg: string }[] = [];
@@ -24,17 +28,28 @@ export abstract class SimulationTrack {
     id: string,
     config: SimulationConfig,
     credentials: SimulationCredentials,
-    io: Server
+    io: Server,
+    callbacks?: {
+      onApiCall?: () => void;
+      onIncidentAcked?: (incident: Incident, ackedAt: number) => void;
+      onIncidentResolved?: (incident: Incident, resolvedAt: number) => void;
+      onDroppedEvent?: () => void;
+    }
   ) {
     this.id = id;
     this.config = config;
     this.credentials = credentials;
     this.io = io;
+    this.onApiCall = callbacks?.onApiCall;
+    this.onIncidentAcked = callbacks?.onIncidentAcked;
+    this.onIncidentResolved = callbacks?.onIncidentResolved;
+    this.onDroppedEvent = callbacks?.onDroppedEvent;
     this.pdClient = new PagerDutyClient({
       apiToken: credentials.apiToken,
       fromEmail: credentials.fromEmail,
       pdRegion: credentials.pdRegion,
       apiBase: serverConfig.pdApiBase, 
+      onRequest: callbacks?.onApiCall,
     });
   }
 

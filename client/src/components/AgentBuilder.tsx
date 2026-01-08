@@ -126,6 +126,11 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
           Describe a failure scenario. The AI will design a "Golden Demo" campaign for you.
         </p>
       </div>
+      {services.length === 0 && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+          No services loaded yet. Use the Configure tab to load domain config (API token + From Email) and fetch teams/services.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         

@@ -196,214 +196,6 @@ export const ConfigurationForm: React.FC = () => {
         </div>
       </div>
       
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Simulation Settings</h2>
-        
-        <div className="space-y-6">
-          {/* Global Throughput */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Throughput</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="ratePerMinute" className="block text-sm font-medium text-gray-700 mb-1">Incident Rate (per minute)</label>
-                <input
-                  id="ratePerMinute"
-                  type="number"
-                  min="0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-                  value={useStore(state => state.ratePerMinute)}
-                  onChange={(e) => useStore.getState().setSettings({ ratePerMinute: Number(e.target.value) })}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Per-Severity Settings Tabs */}
-          <div className="md:col-span-2">
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Per-Severity Behavior</h3>
-            <SeverityTabs />
-          </div>
-
-          {/* Global Auto-Action & Healing */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Auto-Action & Healing</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2 flex items-center gap-4 p-3 bg-gray-50 rounded-md border border-gray-200">
-                <div className="flex items-center">
-                  <input
-                    id="autoHealEnabled"
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-green-600 rounded"
-                    checked={useStore(state => state.autoHealConfig.enabled)}
-                    onChange={(e) => useStore.getState().setSettings({ 
-                      autoHealConfig: { ...useStore.getState().autoHealConfig, enabled: e.target.checked } 
-                    })}
-                  />
-                  <label htmlFor="autoHealEnabled" className="ml-2 text-sm font-medium text-gray-700">Enable Auto-Heal (Warnings)</label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="healProb" className="text-sm text-gray-600">Prob:</label>
-                  <input
-                    id="healProb"
-                    type="number"
-                    step="0.1"
-                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-                    value={useStore(state => state.autoHealConfig.warningProbability)}
-                    onChange={(e) => useStore.getState().setSettings({ 
-                      autoHealConfig: { ...useStore.getState().autoHealConfig, warningProbability: Number(e.target.value) } 
-                    })}
-                  />
-                </div>
-              </div>
-              <div className="md:col-span-2 flex items-center">
-                 <input
-                    id="resumeExisting"
-                    type="checkbox"
-                    className="form-checkbox h-4 w-4 text-green-600 rounded"
-                    checked={useStore(state => state.resumeExistingEnabled)}
-                    onChange={(e) => useStore.getState().setSettings({ resumeExistingEnabled: e.target.checked })}
-                  />
-                  <label htmlFor="resumeExisting" className="ml-2 text-sm font-medium text-gray-700">Resume existing incidents on start</label>
-              </div>
-            </div>
-          </div>
-
-          {/* Event Bursting Settings */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Event Bursting</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label htmlFor="burstProbability" className="block text-sm font-medium text-gray-700">Burst Probability</label>
-                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.burstProbability * 100)).toFixed(0)}%</span>
-                </div>
-                <input
-                  id="burstProbability"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                  value={useStore(state => state.burstProbability)}
-                  onChange={(e) => useStore.getState().setSettings({ burstProbability: Number(e.target.value) })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  If triggered, sends 2-7 events every 10-40s. Stops on resolve.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Realism & Chaos (v1.8) */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Realism & Chaos (v1.8)</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label htmlFor="majorIncidentProbability" className="block text-sm font-medium text-gray-700">Major Incident Probability</label>
-                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.majorIncidentProbability * 100)).toFixed(0)}%</span>
-                </div>
-                <input
-                  id="majorIncidentProbability"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                  value={useStore(state => state.majorIncidentProbability)}
-                  onChange={(e) => useStore.getState().setSettings({ majorIncidentProbability: Number(e.target.value) })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  % of Team Failure scenarios that become Major (P1/P2).
-                </p>
-              </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label htmlFor="responderAckRate" className="block text-sm font-medium text-gray-700">Responder Ack Rate</label>
-                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.responderAckRate * 100)).toFixed(0)}%</span>
-                </div>
-                <input
-                  id="responderAckRate"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                  value={useStore(state => state.responderAckRate)}
-                  onChange={(e) => useStore.getState().setSettings({ responderAckRate: Number(e.target.value) })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Simulates human error. Lower = more missed acks.
-                </p>
-              </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label htmlFor="teamFailureProbability" className="block text-sm font-medium text-gray-700">Team Failure Probability</label>
-                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.teamFailureProbability * 100)).toFixed(1)}%</span>
-                </div>
-                <input
-                  id="teamFailureProbability"
-                  type="range"
-                  min="0"
-                  max="0.05"
-                  step="0.001"
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                  value={useStore(state => state.teamFailureProbability)}
-                  onChange={(e) => useStore.getState().setSettings({ teamFailureProbability: Number(e.target.value) })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Prob. of correlated team-wide failure scenarios.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Severity Distribution */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Severity Weights (Must sum to ~1.0)</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {['info', 'warning', 'error', 'critical'].map(sev => (
-                <div key={sev}>
-                  <label htmlFor={`sev-${sev}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{sev}</label>
-                  <input
-                    id={`sev-${sev}`}
-                    type="number"
-                    step="0.05"
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    value={useStore(state => state.severityWeights[sev as keyof typeof state.severityWeights])}
-                    onChange={(e) => useStore.getState().setSettings({ 
-                      severityWeights: { ...useStore.getState().severityWeights, [sev]: Number(e.target.value) } 
-                    })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Observability Mix */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Observability Payload Mix</h3>
-            <div className="grid grid-cols-4 gap-2">
-              {Object.keys(useStore.getState().sourceMix).map(source => (
-                <div key={source}>
-                  <label htmlFor={`mix-${source}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{source}</label>
-                  <input
-                    id={`mix-${source}`}
-                    type="number"
-                    step="0.05"
-                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    value={useStore(state => state.sourceMix[source])}
-                    onChange={(e) => useStore.getState().setSettings({ 
-                      sourceMix: { ...useStore.getState().sourceMix, [source]: Number(e.target.value) } 
-                    })}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* --- Teams Section --- */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
@@ -628,6 +420,214 @@ export const ConfigurationForm: React.FC = () => {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 md:col-span-2">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">Simulation Settings</h2>
+        
+        <div className="space-y-6">
+          {/* Global Throughput */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Throughput</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="ratePerMinute" className="block text-sm font-medium text-gray-700 mb-1">Incident Rate (per minute)</label>
+                <input
+                  id="ratePerMinute"
+                  type="number"
+                  min="0"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={useStore(state => state.ratePerMinute)}
+                  onChange={(e) => useStore.getState().setSettings({ ratePerMinute: Number(e.target.value) })}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Per-Severity Settings Tabs */}
+          <div className="md:col-span-2">
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Per-Severity Behavior</h3>
+            <SeverityTabs />
+          </div>
+
+          {/* Global Auto-Action & Healing */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Global Auto-Action & Healing</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2 flex items-center gap-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                <div className="flex items-center">
+                  <input
+                    id="autoHealEnabled"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    checked={useStore(state => state.autoHealConfig.enabled)}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      autoHealConfig: { ...useStore.getState().autoHealConfig, enabled: e.target.checked } 
+                    })}
+                  />
+                  <label htmlFor="autoHealEnabled" className="ml-2 text-sm font-medium text-gray-700">Enable Auto-Heal (Warnings)</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label htmlFor="healProb" className="text-sm text-gray-600">Prob:</label>
+                  <input
+                    id="healProb"
+                    type="number"
+                    step="0.1"
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.autoHealConfig.warningProbability)}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      autoHealConfig: { ...useStore.getState().autoHealConfig, warningProbability: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              </div>
+              <div className="md:col-span-2 flex items-center">
+                 <input
+                    id="resumeExisting"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-green-600 rounded"
+                    checked={useStore(state => state.resumeExistingEnabled)}
+                    onChange={(e) => useStore.getState().setSettings({ resumeExistingEnabled: e.target.checked })}
+                  />
+                  <label htmlFor="resumeExisting" className="ml-2 text-sm font-medium text-gray-700">Resume existing incidents on start</label>
+              </div>
+            </div>
+          </div>
+
+          {/* Event Bursting Settings */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Event Bursting</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="burstProbability" className="block text-sm font-medium text-gray-700">Burst Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.burstProbability * 100)).toFixed(0)}%</span>
+                </div>
+                <input
+                  id="burstProbability"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.burstProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ burstProbability: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  If triggered, sends 2-7 events every 10-40s. Stops on resolve.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Realism & Chaos (v1.8) */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Realism & Chaos (v1.8)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="majorIncidentProbability" className="block text-sm font-medium text-gray-700">Major Incident Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.majorIncidentProbability * 100)).toFixed(0)}%</span>
+                </div>
+                <input
+                  id="majorIncidentProbability"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.majorIncidentProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ majorIncidentProbability: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  % of Team Failure scenarios that become Major (P1/P2).
+                </p>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="responderAckRate" className="block text-sm font-medium text-gray-700">Responder Ack Rate</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.responderAckRate * 100)).toFixed(0)}%</span>
+                </div>
+                <input
+                  id="responderAckRate"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.responderAckRate)}
+                  onChange={(e) => useStore.getState().setSettings({ responderAckRate: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Simulates human error. Lower = more missed acks.
+                </p>
+              </div>
+              <div>
+                <div className="flex justify-between mb-1">
+                  <label htmlFor="teamFailureProbability" className="block text-sm font-medium text-gray-700">Team Failure Probability</label>
+                  <span className="text-sm font-medium text-gray-900">{(useStore(state => state.teamFailureProbability * 100)).toFixed(1)}%</span>
+                </div>
+                <input
+                  id="teamFailureProbability"
+                  type="range"
+                  min="0"
+                  max="0.05"
+                  step="0.001"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                  value={useStore(state => state.teamFailureProbability)}
+                  onChange={(e) => useStore.getState().setSettings({ teamFailureProbability: Number(e.target.value) })}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Prob. of correlated team-wide failure scenarios.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Severity Distribution */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Severity Weights (Must sum to ~1.0)</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {['info', 'warning', 'error', 'critical'].map(sev => (
+                <div key={sev}>
+                  <label htmlFor={`sev-${sev}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{sev}</label>
+                  <input
+                    id={`sev-${sev}`}
+                    type="number"
+                    step="0.05"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.severityWeights[sev as keyof typeof state.severityWeights])}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      severityWeights: { ...useStore.getState().severityWeights, [sev]: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Observability Mix */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Observability Payload Mix</h3>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.keys(useStore.getState().sourceMix).map(source => (
+                <div key={source}>
+                  <label htmlFor={`mix-${source}`} className="block text-xs font-medium text-gray-500 capitalize mb-1">{source}</label>
+                  <input
+                    id={`mix-${source}`}
+                    type="number"
+                    step="0.05"
+                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={useStore(state => state.sourceMix[source])}
+                    onChange={(e) => useStore.getState().setSettings({ 
+                      sourceMix: { ...useStore.getState().sourceMix, [source]: Number(e.target.value) } 
+                    })}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <AddToProfileModal 

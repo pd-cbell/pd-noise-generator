@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
-import { useAuth, UserRole } from '../contexts/AuthContext';
+import { useAuth, UserRole, ROLE_LABELS } from '../contexts/AuthContext';
 import { Shield, Loader2, User as UserIcon } from 'lucide-react';
 
 interface User {
@@ -21,6 +21,7 @@ export const AdminDashboard: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+  const [impersonatingUserId, setImpersonatingUserId] = useState<string | null>(null);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -67,6 +68,21 @@ export const AdminDashboard: React.FC = () => {
       setError(err.message || 'Failed to update agent access');
     } finally {
       setUpdatingAgentId(null);
+    }
+  };
+
+  const handleImpersonate = async (userId: string, email: string) => {
+    if (!window.confirm(`Impersonate ${email}?`)) return;
+    setImpersonatingUserId(userId);
+    setNotice(null);
+    try {
+      await api.impersonateUser(userId);
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Failed to impersonate user', err);
+      setError(err.message || 'Failed to impersonate user');
+    } finally {
+      setImpersonatingUserId(null);
     }
   };
 
@@ -118,6 +134,7 @@ export const AdminDashboard: React.FC = () => {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -157,7 +174,7 @@ export const AdminDashboard: React.FC = () => {
                     `}
                   >
                     {Object.values(UserRole).map((role) => (
-                      <option key={role} value={role}>{role}</option>
+                      <option key={role} value={role}>{ROLE_LABELS[role]}</option>
                     ))}
                   </select>
                   {user.id === currentUser?.id && (
@@ -177,6 +194,19 @@ export const AdminDashboard: React.FC = () => {
                       {user.agentEnabled ? 'Enabled' : 'Disabled'}
                     </span>
                   </label>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                  <button
+                    onClick={() => handleImpersonate(user.id, user.email)}
+                    disabled={user.id === currentUser?.id || impersonatingUserId === user.id}
+                    className={`text-xs font-semibold px-3 py-1 rounded border ${
+                      user.id === currentUser?.id || impersonatingUserId === user.id
+                        ? 'text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                    }`}
+                  >
+                    Impersonate
+                  </button>
                 </td>
               </tr>
             ))}

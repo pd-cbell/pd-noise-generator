@@ -31,9 +31,15 @@ export class ScenarioTrack extends SimulationTrack {
       trackRunId?: string;
       onEventSent?: ScenarioTrack['onEventSent'];
       onComplete?: () => void;
+      callbacks?: {
+        onApiCall?: () => void;
+        onIncidentAcked?: (incident: any, ackedAt: number) => void;
+        onIncidentResolved?: (incident: any, resolvedAt: number) => void;
+        onDroppedEvent?: () => void;
+      };
     }
   ) {
-    super(id, config, credentials, io);
+    super(id, config, credentials, io, options?.callbacks);
     this.trackRunId = options?.trackRunId;
     this.onEventSent = options?.onEventSent;
     this.onComplete = options?.onComplete;

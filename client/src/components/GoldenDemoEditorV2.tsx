@@ -115,6 +115,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
     vertical: demo.vertical || '',
     maturityLevel: demo.maturityLevel || '',
     narrative: demo.narrative,
+    fullNarrative: demo.configJson?.narrative?.full || demo.narrative || '',
     personaNotes: demo.personaNotes || '',
     description: demo.configJson?.description || '',
     isShared: demo.isShared ?? false,
@@ -132,6 +133,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
   const [importBaseOffset, setImportBaseOffset] = useState<number>(0);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [isFullNarrativeOpen, setIsFullNarrativeOpen] = useState(false);
 
   useEffect(() => {
     setStageState(normalizeStages(demo.configJson));
@@ -203,6 +205,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
 
   const buildConfigJson = () => {
     const existing = demo.configJson || {};
+    const fullNarrative = meta.fullNarrative.trim() || meta.narrative.trim();
     const items = events.map((evt, idx) => {
       const existingMatch =
         (existing.items || []).find((i: any) => i.id === evt.id) || (existing.items || [])[idx] || {};
@@ -230,12 +233,13 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       };
     });
 
-  return {
-    ...existing,
-    name: existing.name || meta.name,
-    description: meta.description || existing.description || '',
+    return {
+      ...existing,
+      name: existing.name || meta.name,
+      description: meta.description || existing.description || '',
       narrative: {
         ...(existing.narrative || {}),
+        full: fullNarrative,
         stages: {
           ...(existing.narrative?.stages || {}),
           routine_change_minor: { text: stageState.routine_change_minor },
@@ -415,6 +419,27 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                 value={meta.narrative}
                 onChange={(e) => setMeta({ ...meta, narrative: e.target.value })}
               />
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsFullNarrativeOpen((prev) => !prev)}
+                className="text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-2"
+              >
+                Narrative (generation source)
+                <span className="text-gray-400">{isFullNarrativeOpen ? 'Hide' : 'Show'}</span>
+              </button>
+              {isFullNarrativeOpen && (
+                <>
+                  <textarea
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm mt-2"
+                    rows={6}
+                    value={meta.fullNarrative}
+                    onChange={(e) => setMeta({ ...meta, fullNarrative: e.target.value })}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Used to auto-fill narrative stages and event generation context.</p>
+                </>
+              )}
             </div>
           </section>
 

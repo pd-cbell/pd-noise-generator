@@ -70,6 +70,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     
     // Use override config (Golden Demo) or current store config
     const simConfig = overrideSafe || {
+      pdSubdomain: state.pdSubdomain,
       ratePerMinute: state.ratePerMinute,
       severityWeights: state.severityWeights,
       autoHealConfig: state.autoHealConfig,

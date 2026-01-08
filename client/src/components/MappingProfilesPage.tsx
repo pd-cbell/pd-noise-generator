@@ -23,6 +23,8 @@ const MappingProfilesPage: React.FC = () => {
     setSelectedMappingProfileId,
     services,
     fetchServices,
+    apiToken,
+    fromEmail,
   } = useStore();
 
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
@@ -181,6 +183,7 @@ const handleAddMapping = () => {
   };
 
   const serviceOptions = services || [];
+  const missingCredentials = !apiToken || !fromEmail;
 
   return (
     <div className="p-6 h-[calc(100vh-80px)] flex flex-col gap-4">
@@ -206,6 +209,18 @@ const handleAddMapping = () => {
           </button>
         </div>
       </div>
+      {services.length === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
+          Load domain config to fetch teams and services for mapping profiles. Use the Configure tab to save your
+          API token and From Email, then load teams/services.
+        </div>
+      )}
+      {missingCredentials && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-md text-sm">
+          Missing credentials: API token and From Email are required to load services. Use the Configure tab to
+          add credentials.
+        </div>
+      )}
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="w-64 bg-white border border-gray-200 rounded-lg p-3 overflow-y-auto">

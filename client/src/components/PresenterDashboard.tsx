@@ -5,7 +5,7 @@ import { Play, CheckCircle, ChevronRight, Clock, AlertTriangle, StopCircle } fro
 import { api } from '../services/api';
 
 export const PresenterDashboard: React.FC = () => {
-  const { activeSessionId, endSession, goldenDemos } = useStore();
+  const { activeSessionId, endSession, goldenDemos, trackRunsById, activeTrackRunId } = useStore();
   const { currentSimState, stopSimulation } = useServerSimulation();
   
   const [sessionData, setSessionData] = useState<any>(null);
@@ -44,6 +44,16 @@ export const PresenterDashboard: React.FC = () => {
 
   const activeDemo = goldenDemos.find(d => d.id === sessionData?.goldenDemoId);
   const beats: Beat[] = activeDemo?.configJson?.beats || [];
+  const narrativeStages = activeDemo?.configJson?.narrative?.stages || {};
+  const activeTrackRun = activeTrackRunId ? trackRunsById[activeTrackRunId] : null;
+  const activeTrackIncidents = Object.values(activeTrackRun?.incidentsByDedupKey || {});
+
+  const stageLabels: Record<string, string> = {
+    routine_change_minor: 'Routine Change & Minor Incidents',
+    business_impact: 'Business Impact',
+    triage_context: 'Triage & Context',
+    resolution_pir: 'Resolution & Post-Incident Review',
+  };
 
   const handleNextBeat = () => {
     if (currentBeatIndex < beats.length - 1) {
@@ -111,6 +121,20 @@ export const PresenterDashboard: React.FC = () => {
         {/* Left: Narrative Script (Beats) */}
         <div className="w-1/2 p-6 overflow-y-auto border-r border-gray-200 bg-white">
             <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Narrative Script</h2>
+            {Object.keys(narrativeStages).length > 0 && (
+              <div className="mb-6 space-y-3">
+                {(Object.keys(stageLabels) as Array<keyof typeof stageLabels>).map((key) => {
+                  const text = narrativeStages?.[key]?.text || '';
+                  if (!text) return null;
+                  return (
+                    <div key={key} className="border border-gray-200 rounded-lg p-3">
+                      <div className="text-xs font-semibold text-gray-600 mb-1">{stageLabels[key]}</div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{text}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             
             {beats.length === 0 ? (
                 <p className="text-gray-500 italic">No beats defined for this demo.</p>
@@ -202,6 +226,17 @@ export const PresenterDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {activeTrackRun && (
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-2">Track Run Status</h2>
+                <div className="text-sm text-gray-700">
+                  <div>Run: {activeTrackRun.trackRunId.slice(0, 8)}</div>
+                  <div>Incidents: {activeTrackIncidents.length}</div>
+                  <div>Status: {activeTrackRun.isActive ? 'Active' : 'Finished'}</div>
+                </div>
+              </div>
+            )}
 
             {/* Session Notes */}
             <div className="flex-1 p-6 flex flex-col min-h-0">

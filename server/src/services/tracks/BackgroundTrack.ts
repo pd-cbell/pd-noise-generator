@@ -36,6 +36,21 @@ export class BackgroundTrack extends SimulationTrack {
   // Track-specific metrics (optional, or rely on base class aggregation)
   private droppedEvents: number = 0;
 
+  constructor(
+    id: string,
+    config: any,
+    credentials: any,
+    io: any,
+    callbacks?: {
+      onApiCall?: () => void;
+      onIncidentAcked?: (incident: Incident, ackedAt: number) => void;
+      onIncidentResolved?: (incident: Incident, resolvedAt: number) => void;
+      onDroppedEvent?: () => void;
+    }
+  ) {
+    super(id, config, credentials, io, callbacks);
+  }
+
   public start(): void {
     // Background track logic is driven by the Session tick, 
     // but it might have internal state to reset.
@@ -209,6 +224,7 @@ export class BackgroundTrack extends SimulationTrack {
               } else {
                 this.removeIncident(inc.dedupKey);
                 this.droppedEvents++;
+                this.onDroppedEvent?.();
                 this.addLog(`Dropped incident ${inc.dedupKey.substring(0, 8)} (Suppressed/Grouped)`, 'warn');
               }
             }
@@ -358,7 +374,9 @@ export class BackgroundTrack extends SimulationTrack {
     const incident = this.activeIncidents.find(i => i.dedupKey === dedupKey);
     if (!incident || !incident.incidentId || incident.acked) return;
 
-    this.updateIncident(dedupKey, { acked: true, ackAt: Date.now() });
+    const ackedAt = Date.now();
+    this.updateIncident(dedupKey, { acked: true, ackAt: ackedAt });
+    this.onIncidentAcked?.({ ...incident, ackAt: ackedAt }, ackedAt);
     
     const personaEmail = await this.getOnCallEmailForService(incident.serviceId);
     
@@ -380,6 +398,8 @@ export class BackgroundTrack extends SimulationTrack {
     const incident = this.activeIncidents.find(i => i.dedupKey === dedupKey);
     if (!incident || !incident.incidentId) return;
 
+    const resolvedAt = Date.now();
+    this.onIncidentResolved?.({ ...incident, resolveAt: resolvedAt }, resolvedAt);
     this.removeIncident(dedupKey);
     
     const personaEmail = await this.getOnCallEmailForService(incident.serviceId);

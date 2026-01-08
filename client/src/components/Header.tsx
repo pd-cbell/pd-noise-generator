@@ -4,13 +4,15 @@ import { useAuth, UserRole } from '../contexts/AuthContext';
 
 export const Header: React.FC<{ activePage: string; onNavigate: (page: string) => void; isSimRunning: boolean }> = ({ activePage, onNavigate, isSimRunning }) => {
   const { startSimulation, stopSimulation, socketStatus, socketError, isLoading } = useServerSimulation();
-  const { user } = useAuth();
+  const { user, impersonatorId, stopImpersonation } = useAuth();
 
   const agentEnabled = user?.agentEnabled !== false;
   const navItems: { id: string; label: string; icon: any }[] = [];
 
-  if (user?.role === UserRole.ADMIN) {
+  if (user?.role !== UserRole.VIEWER) {
     navItems.push({ id: 'configure', label: 'Configure', icon: Settings });
+  }
+  if (user?.role !== UserRole.VIEWER) {
     navItems.push({ id: 'monitor', label: 'Monitor', icon: Activity });
   }
 
@@ -33,7 +35,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">PagerDuty Customer Sim &amp; Demo Platform</h1>
-          <p className="text-xs text-gray-500 font-medium">v2.3.2 (Admin UX + RBAC)</p>
+          <p className="text-xs text-gray-500 font-medium">v2.4 (Track Monitor + Presenter Guide)</p>
         </div>
       </div>
 
@@ -56,6 +58,14 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
       </nav>
 
       <div className="flex items-center gap-4">
+        {impersonatorId && (
+          <button
+            onClick={() => stopImpersonation()}
+            className="text-xs font-semibold px-3 py-1 rounded border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100"
+          >
+            Stop Impersonation
+          </button>
+        )}
         <div className="flex items-center gap-2">
            <span className={`w-3 h-3 rounded-full ${
              socketStatus === 'connected' ? 'bg-green-500' :

@@ -95,6 +95,11 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
   const simulatorConfig: SimulatorConfig = {
     pdChangeEventsRoutingKey: useStore.getState().globalRoutingKey,
   };
+  const fullNarrative = demo.configJson?.narrative?.full;
+  const showFullNarrative =
+    Boolean(fullNarrative && fullNarrative.trim()) &&
+    fullNarrative.trim() !== demo.narrative.trim();
+  const [isFullNarrativeOpen, setIsFullNarrativeOpen] = useState(false);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -125,6 +130,23 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
               <ReactMarkdown>{demo.narrative || 'No narrative provided.'}</ReactMarkdown>
             </div>
           </div>
+          {showFullNarrative && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setIsFullNarrativeOpen((prev) => !prev)}
+                className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"
+              >
+                Narrative (Generation Source)
+                <span className="text-gray-400">{isFullNarrativeOpen ? 'Hide' : 'Show'}</span>
+              </button>
+              {isFullNarrativeOpen && (
+                <div className="prose prose-sm max-w-none text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <ReactMarkdown>{fullNarrative}</ReactMarkdown>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Mapping Preview */}
           <div>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GoldenDemo } from '../store/useStore';
-import { Play, History, Link as LinkIcon, Copy, Shield } from 'lucide-react';
+import { Play, History, Link as LinkIcon, Copy, Shield, Download } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
 import { useStore } from '../store/useStore';
 
@@ -14,6 +14,11 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
   const { mappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
   const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
   const webhookUrl = `${webhookBase}/api/golden-demos/${demo.id}/trigger`;
+  const fullNarrative = demo.configJson?.narrative?.full;
+  const showFullNarrative =
+    Boolean(fullNarrative && fullNarrative.trim()) &&
+    fullNarrative.trim() !== demo.narrative.trim();
+  const [isFullNarrativeOpen, setIsFullNarrativeOpen] = useState(false);
 
   const copyText = async (text: string) => {
     try {
@@ -21,6 +26,20 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
     } catch {
       // ignore
     }
+  };
+
+  const handleExport = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      goldenDemo: demo,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${demo.name || 'golden-demo'}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -43,6 +62,13 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
               Edit Details
             </button>
           )}
+          <button
+            onClick={handleExport}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors flex items-center gap-2"
+          >
+            <Download size={18} />
+            Export JSON
+          </button>
           <button
             onClick={() => onLaunch(demo)}
             className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -69,6 +95,24 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
           <p className="text-gray-700 whitespace-pre-wrap">{demo.narrative}</p>
         </div>
       </div>
+
+      {showFullNarrative && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setIsFullNarrativeOpen((prev) => !prev)}
+            className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2"
+          >
+            Narrative (Generation Source)
+            <span className="text-gray-400">{isFullNarrativeOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {isFullNarrativeOpen && (
+            <div className="prose prose-sm max-w-none">
+              <p className="text-gray-700 whitespace-pre-wrap">{fullNarrative}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {demo.personaNotes && (
         <div className="mb-6">

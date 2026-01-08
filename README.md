@@ -1,22 +1,22 @@
-# PagerDuty Golden Demo Platform v2.3.2
+# PagerDuty Golden Demo Platform v2.4
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.3.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.4-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-Status: v2.3.2 complete (cloud validation pending).
+Status: v2.4 in progress (cloud validation pending).
 
-## 🚀 New in v2.3.2
+## 🚀 New in v2.4
 
-v2.3.2 completes Admin UX + RBAC enforcement for safer multi-user demo operations.
+v2.4 focuses on presenter-ready run monitoring, narrative guidance, and editor domain configuration.
 
--   **Admin Dashboard:** View users, assign roles, and manage agent access.
--   **RBAC Enforcement:** Server + UI gating aligned for Viewer/Editor/Admin.
--   **Shared Demo Rules:** Viewers can view shared demos but only edit their own.
--   **User-Scoped Mapping Profiles:** Mapping profiles are owned per user and not shared.
--   **Director Launch for Viewers:** Viewers can launch demos without starting background noise.
+-   **Track Run Monitor:** Track run lifecycle panel with incident timelines and status.
+-   **Presenter Guide:** Narrative stage prompts plus beat-by-beat script cues.
+-   **Editor Domain Config:** Editors can load domain config for services, mapping profiles, and agent context.
+-   **Golden Demo Export/Import:** Export demos to JSON and re-import them.
+-   **Admin Impersonation:** Admins can impersonate users for debugging and setup.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 

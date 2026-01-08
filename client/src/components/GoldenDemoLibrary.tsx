@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore, GoldenDemo } from '../store/useStore';
-import { Loader2, Plus, Edit, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Upload } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
 import { GoldenDemoEditorV2 } from './GoldenDemoEditorV2';
 import { useAuth, UserRole } from '../contexts/AuthContext';
@@ -24,6 +24,8 @@ const GoldenDemoLibrary: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false); // Edit Modal State
   const [draftDemo, setDraftDemo] = useState<GoldenDemo | null>(null);
   const selectedDemo = goldenDemos.find(demo => demo.id === selectedDemoId);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetchGoldenDemos();
@@ -78,6 +80,55 @@ const GoldenDemoLibrary: React.FC = () => {
     console.log('Simulation Config:', demo.configJson);
   };
 
+  const buildUniqueName = (baseName: string) => {
+    const existingNames = new Set(goldenDemos.map((d) => d.name));
+    if (!existingNames.has(baseName)) return baseName;
+    let counter = 2;
+    let candidate = `${baseName} (Imported)`;
+    if (!existingNames.has(candidate)) return candidate;
+    while (existingNames.has(`${candidate} ${counter}`)) {
+      counter += 1;
+    }
+    return `${candidate} ${counter}`;
+  };
+
+  const parseImportedDemo = (raw: any): Omit<GoldenDemo, 'id' | 'createdAt' | 'updatedAt' | 'createdByUserId'> => {
+    const payload = raw?.goldenDemo || raw;
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('Invalid import format: expected Golden Demo JSON.');
+    }
+    if (!payload.name || !payload.vertical || !payload.maturityLevel || !payload.narrative || !payload.configJson) {
+      throw new Error('Missing required Golden Demo fields (name, vertical, maturityLevel, narrative, configJson).');
+    }
+    return {
+      name: String(payload.name),
+      vertical: String(payload.vertical),
+      maturityLevel: String(payload.maturityLevel),
+      narrative: String(payload.narrative),
+      configJson: payload.configJson,
+      personaNotes: payload.personaNotes || '',
+      isShared: Boolean(payload.isShared),
+    };
+  };
+
+  const handleImportFile = async (file: File) => {
+    setImportError(null);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const imported = parseImportedDemo(parsed);
+      const uniqueName = buildUniqueName(imported.name);
+      const created = await useStore.getState().createGoldenDemo({
+        ...imported,
+        name: uniqueName,
+      });
+      setSelectedDemoId(created.id);
+      addLog(`Imported Golden Demo "${created.name}"`, 'info');
+    } catch (error: any) {
+      setImportError(error.message || 'Failed to import Golden Demo.');
+    }
+  };
+
   return (
     <div className="flex h-full bg-gray-50">
       {/* Sidebar - Golden Demo List */}
@@ -85,31 +136,58 @@ const GoldenDemoLibrary: React.FC = () => {
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-xl font-bold text-gray-900">Golden Demos</h2>
           {canCreate && (
-            <button 
-              className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
-              title="Create New Golden Demo"
-              onClick={() => {
-                const blank: GoldenDemo = {
-                  id: 'new',
-                  name: '',
-                  vertical: '',
-                  maturityLevel: '',
-                  narrative: '',
-                  configJson: { name: '', description: '', items: [], narrative: { stages: {} } } as any,
-                  personaNotes: '',
-                  isShared: false,
-                  createdByUserId: '',
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-                };
-                setDraftDemo(blank);
-                setIsEditing(true);
-              }}
-            >
-              <Plus size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleImportFile(file);
+                    e.currentTarget.value = '';
+                  }
+                }}
+              />
+              <button
+                className="p-2 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors"
+                title="Import Golden Demo"
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Upload size={18} />
+              </button>
+              <button 
+                className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                title="Create New Golden Demo"
+                onClick={() => {
+                  const blank: GoldenDemo = {
+                    id: 'new',
+                    name: '',
+                    vertical: '',
+                    maturityLevel: '',
+                    narrative: '',
+                    configJson: { name: '', description: '', items: [], narrative: { stages: {}, full: '' } } as any,
+                    personaNotes: '',
+                    isShared: false,
+                    createdByUserId: '',
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  };
+                  setDraftDemo(blank);
+                  setIsEditing(true);
+                }}
+              >
+                <Plus size={20} />
+              </button>
+            </div>
           )}
         </div>
+        {importError && (
+          <div className="px-4 py-2 text-xs text-red-600 border-b border-red-100 bg-red-50">
+            {importError}
+          </div>
+        )}
         <div className="flex-grow overflow-y-auto">
           {isLoadingGoldenDemos ? (
             <div className="p-4 text-center text-gray-500">
