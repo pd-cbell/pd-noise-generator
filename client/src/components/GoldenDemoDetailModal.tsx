@@ -95,7 +95,7 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
   const simulatorConfig: SimulatorConfig = {
     pdChangeEventsRoutingKey: useStore.getState().globalRoutingKey,
   };
-  const fullNarrative = demo.configJson?.narrative?.full;
+  const fullNarrative = demo.configJson?.narrative?.full || '';
   const showFullNarrative =
     Boolean(fullNarrative && fullNarrative.trim()) &&
     fullNarrative.trim() !== demo.narrative.trim();

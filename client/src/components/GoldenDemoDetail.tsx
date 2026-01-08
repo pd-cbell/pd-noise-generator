@@ -14,7 +14,7 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
   const { mappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
   const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
   const webhookUrl = `${webhookBase}/api/golden-demos/${demo.id}/trigger`;
-  const fullNarrative = demo.configJson?.narrative?.full;
+  const fullNarrative = demo.configJson?.narrative?.full || '';
   const showFullNarrative =
     Boolean(fullNarrative && fullNarrative.trim()) &&
     fullNarrative.trim() !== demo.narrative.trim();
