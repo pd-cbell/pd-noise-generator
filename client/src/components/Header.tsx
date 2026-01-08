@@ -35,7 +35,7 @@ export const Header: React.FC<{ activePage: string; onNavigate: (page: string) =
         </div>
         <div>
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">PagerDuty Customer Sim &amp; Demo Platform</h1>
-          <p className="text-xs text-gray-500 font-medium">v2.3.2 (Admin UX + RBAC)</p>
+          <p className="text-xs text-gray-500 font-medium">v2.4 (Track Monitor + Presenter Guide)</p>
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 # User Guide
 
-This guide describes how to use the PagerDuty Customer Sim & Demo Platform (v2.3.2).
+This guide describes how to use the PagerDuty Customer Sim & Demo Platform (v2.4).
 
 ## Overview
 The platform supports two core workflows:
@@ -77,4 +77,4 @@ Admins can manage user roles and agent access:
 - **Agent blocked:** Admin must enable agent access for the user.
 
 ## Cloud Validation
-v2.3.2 is complete with local validation. Cloud validation is pending.
+v2.4 is in progress with local validation. Cloud validation is pending.
