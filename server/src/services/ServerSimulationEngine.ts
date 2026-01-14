@@ -241,14 +241,7 @@ export class SimulationSession {
         // For now, we assume this is called on init.
     } else {
         bgTrack = new BackgroundTrack('background', this.config, this.credentials, this.io, this.getMetricCallbacks());
-        // Apply mapping profile if global config has one
-        if (this.config.mappingProfileId) {
-            const profile = await mappingProfileService.getMappingProfileById(
-              this.config.mappingProfileId,
-              this.userId
-            );
-            bgTrack.applyMappingProfile(profile);
-        }
+        // Background noise should not use mapping profiles.
         this.tracks.set('background', bgTrack);
     }
   }
