@@ -166,6 +166,9 @@ export class ScenarioTrack extends SimulationTrack {
     if (!payload.severity) {
       payload.severity = 'error';
     }
+    if (!payload.summary || String(payload.summary).trim().length === 0) {
+      payload.summary = item.summary || item.stepName || `Event for ${logicalServiceName}`;
+    }
 
     const eventId = item.id || item.stepName || item.summary || `evt-${index}`;
     const threadKey =

@@ -82,6 +82,7 @@ export const MonitorDashboard: React.FC = () => {
     const value = typeof ts === 'string' ? Date.parse(ts) : ts;
     return Number.isNaN(value) ? '--' : new Date(value).toLocaleTimeString();
   };
+  const showTrackRunsPanel = false;
 
   return (
     <div className="p-6 h-full flex flex-col gap-6">
@@ -131,74 +132,76 @@ export const MonitorDashboard: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <div className="text-sm font-semibold text-gray-800">Golden Demo Track Runs</div>
-            <div className="text-xs text-gray-500">Lifecycle events from `track_run_*` telemetry</div>
+      {showTrackRunsPanel && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">Golden Demo Track Runs</div>
+              <div className="text-xs text-gray-500">Lifecycle events from `track_run_*` telemetry</div>
+            </div>
+            <select
+              className="border border-gray-300 rounded px-2 py-1 text-xs bg-white"
+              value={selectedRunId || ''}
+              onChange={(e) => setSelectedTrackRunId(e.target.value || null, 'manual')}
+            >
+              <option value="">Latest active</option>
+              {trackRuns.map((run) => {
+                const demoName = run.goldenDemoId
+                  ? goldenDemos.find((demo) => demo.id === run.goldenDemoId)?.name
+                  : null;
+                return (
+                <option key={run.trackRunId} value={run.trackRunId}>
+                  {run.trackRunId.slice(0, 6)} • {demoName || run.goldenDemoId || 'Unknown'}
+                </option>
+                );
+              })}
+            </select>
           </div>
-          <select
-            className="border border-gray-300 rounded px-2 py-1 text-xs bg-white"
-            value={selectedRunId || ''}
-            onChange={(e) => setSelectedTrackRunId(e.target.value || null, 'manual')}
-          >
-            <option value="">Latest active</option>
-            {trackRuns.map((run) => {
-              const demoName = run.goldenDemoId
-                ? goldenDemos.find((demo) => demo.id === run.goldenDemoId)?.name
-                : null;
-              return (
-              <option key={run.trackRunId} value={run.trackRunId}>
-                {run.trackRunId.slice(0, 6)} • {demoName || run.goldenDemoId || 'Unknown'}
-              </option>
-              );
-            })}
-          </select>
+          {!selectedRun && <div className="text-xs text-gray-500">No track runs yet.</div>}
+          {selectedRun && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="border border-gray-100 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Summary</div>
+                <div className="text-sm text-gray-800">Demo: {selectedRunDemo?.name || selectedRun.goldenDemoId || 'Unknown'}</div>
+                <div className="text-sm text-gray-600">Started: {formatTs(selectedRun.startedAt)}</div>
+                <div className="text-sm text-gray-600">Status: {selectedRun.isActive ? 'Active' : 'Finished'}</div>
+                <div className="text-sm text-gray-600">Events Sent: {runSentEvents.length}</div>
+                <div className="text-sm text-gray-600">Incidents: {runIncidents.length}</div>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-3 max-h-40 overflow-y-auto">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Incidents</div>
+                {runIncidents.length === 0 ? (
+                  <div className="text-xs text-gray-500">No incidents recorded yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {runIncidents.map((inc) => (
+                      <div key={inc.dedupKey} className="text-xs text-gray-700">
+                        <span className="font-semibold">{inc.status || 'unknown'}</span> • {inc.serviceName || 'Service'} •{' '}
+                        {inc.title || inc.dedupKey}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="border border-gray-100 rounded-lg p-3 max-h-40 overflow-y-auto md:col-span-2">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Event Timeline</div>
+                {runSentEvents.length === 0 ? (
+                  <div className="text-xs text-gray-500">No events sent yet.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {runSentEvents.map((evt) => (
+                      <div key={evt.id} className="text-xs text-gray-700">
+                        <span className="font-semibold">{formatTs(evt.sentAt)}</span> • {evt.type} •{' '}
+                        {evt.logicalServiceName} • {evt.status}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        {!selectedRun && <div className="text-xs text-gray-500">No track runs yet.</div>}
-        {selectedRun && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-gray-100 rounded-lg p-3">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Summary</div>
-              <div className="text-sm text-gray-800">Demo: {selectedRunDemo?.name || selectedRun.goldenDemoId || 'Unknown'}</div>
-              <div className="text-sm text-gray-600">Started: {formatTs(selectedRun.startedAt)}</div>
-              <div className="text-sm text-gray-600">Status: {selectedRun.isActive ? 'Active' : 'Finished'}</div>
-              <div className="text-sm text-gray-600">Events Sent: {runSentEvents.length}</div>
-              <div className="text-sm text-gray-600">Incidents: {runIncidents.length}</div>
-            </div>
-            <div className="border border-gray-100 rounded-lg p-3 max-h-40 overflow-y-auto">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Incidents</div>
-              {runIncidents.length === 0 ? (
-                <div className="text-xs text-gray-500">No incidents recorded yet.</div>
-              ) : (
-                <div className="space-y-2">
-                  {runIncidents.map((inc) => (
-                    <div key={inc.dedupKey} className="text-xs text-gray-700">
-                      <span className="font-semibold">{inc.status || 'unknown'}</span> • {inc.serviceName || 'Service'} •{' '}
-                      {inc.title || inc.dedupKey}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="border border-gray-100 rounded-lg p-3 max-h-40 overflow-y-auto md:col-span-2">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Event Timeline</div>
-              {runSentEvents.length === 0 ? (
-                <div className="text-xs text-gray-500">No events sent yet.</div>
-              ) : (
-                <div className="space-y-2">
-                  {runSentEvents.map((evt) => (
-                    <div key={evt.id} className="text-xs text-gray-700">
-                      <span className="font-semibold">{formatTs(evt.sentAt)}</span> • {evt.type} •{' '}
-                      {evt.logicalServiceName} • {evt.status}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Golden Demo lifecycle view intentionally removed (tracking still active under the hood) */}
       {/* KPI Cards */}

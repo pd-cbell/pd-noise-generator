@@ -204,8 +204,12 @@ export class SimulationSession {
     const run = this.trackRuns.get(trackRunId);
     if (!run) return;
     run.finishedAt = Date.now();
-    run.isActive = true; // keep polling until resolved
+    const stillUnresolved = Object.values(run.incidentsByDedupKey || {}).some((i) => i.status !== 'resolved');
+    run.isActive = false;
     this.emitTrackRunUpdate(run);
+    if (!stillUnresolved) {
+      this.emitTrackRunFinished(run);
+    }
   }
 
   private normalizeSourceMix(sourceMix: SourceMix | Partial<SourceMix> | undefined): SourceMix {

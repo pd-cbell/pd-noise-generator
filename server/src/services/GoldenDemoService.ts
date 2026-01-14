@@ -49,7 +49,14 @@ export class GoldenDemoService {
       throw new Error('Forbidden: viewers cannot share Golden Demos.');
     }
 
-    return prisma.goldenDemo.create({ data });
+    try {
+      return await prisma.goldenDemo.create({ data });
+    } catch (error: any) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('Conflict: Golden Demo name already exists for this user.');
+      }
+      throw error;
+    }
   }
 
   async updateGoldenDemo(
@@ -94,7 +101,14 @@ export class GoldenDemoService {
 
     const where =
       role === Role.EDITOR || role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
-    return prisma.goldenDemo.update({ where, data });
+    try {
+      return await prisma.goldenDemo.update({ where, data });
+    } catch (error: any) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new Error('Conflict: Golden Demo name already exists for this user.');
+      }
+      throw error;
+    }
   }
 
   async deleteGoldenDemo(id: string, userId: string, role: Role): Promise<GoldenDemo> {

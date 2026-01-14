@@ -153,6 +153,9 @@ router.post('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, 
     if (error instanceof Error && error.message.startsWith('Forbidden')) {
       return res.status(403).json({ message: error.message });
     }
+    if (error instanceof Error && error.message.startsWith('Conflict')) {
+      return res.status(409).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to create golden demo', error: error instanceof Error ? error.message : String(error) });
   }
 });
@@ -179,6 +182,9 @@ router.put('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req
     console.error('Error updating golden demo:', error);
     if (error instanceof Error && error.message.startsWith('Forbidden')) {
       return res.status(403).json({ message: error.message });
+    }
+    if (error instanceof Error && error.message.startsWith('Conflict')) {
+      return res.status(409).json({ message: error.message });
     }
     res.status(500).json({ message: 'Failed to update golden demo', error: error instanceof Error ? error.message : String(error) });
   }

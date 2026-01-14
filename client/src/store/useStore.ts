@@ -460,7 +460,11 @@ export const useStore = create<AppState>()(
           const allServices: Service[] = [];
           let offset = 0;
           let more = true;
-          const CHANGE_INTEGRATION_TYPES = ["events_api_v2_inbound_integration", "change_event_transform_inbound_integration"];
+          const CHANGE_INTEGRATION_TYPES = [
+            "events_api_v2_inbound_integration",
+            "change_event_transform_inbound_integration",
+            "generic_events_api_inbound_integration",
+          ];
 
           while (more) {
             const data = await api.getServices(targetTeamIds, { token: apiToken, fromEmail }, 100, offset);

@@ -192,7 +192,7 @@ Do NOT output JSON in this step. This is narrative planning only.
             name: s.name, 
             type: s.type || 'technical',
             integrationKey: s.integrationKey ? 'available' : 'missing',
-            changeIntegrationKey: s.changeIntegrationKey ? 'available' : 'missing'
+            changeIntegrationKey: s.changeIntegrations?.[0]?.integrationKey ? 'available' : 'missing'
         })) || []
     );
 
@@ -217,7 +217,7 @@ Do NOT output JSON in this step. This is narrative planning only.
       2. **Event Types:**
          - **Alerts:** Standard failures.
          - **Change Events:** (CRITICAL) You must include at least one 'Change Event'.
-      3. **Timing:** Calculate \`delaySeconds\` so events fire sequentially with 1-5 minute gaps.
+      3. **Timing:** Calculate \`delaySeconds\` so events fire sequentially with 10-150 second gaps.
       4. **Payloads:** Use Mustache tokens (\`{{faker.internet.ip}}\`, \`{{faker.date.recent}}\`) for realism.
       5. **Team Persona:** Ensure the text in the payloads matches the request.
       6. REPETITION: If an event represents a flood or ongoing issue, set "repeatCount" to 2-5.
@@ -321,6 +321,85 @@ Do NOT output JSON in this step. This is narrative planning only.
             let text = typeof response.content === 'string' ? response.content : JSON.stringify(response.content);
             text = text.replace(/```json/g, "").replace(/```/g, "").trim();
             goldenDemoOutput = JSON.parse(text);
+        }
+
+        const items = goldenDemoOutput?.configJson?.items;
+        if (Array.isArray(items)) {
+            const serviceLookup = new Map(
+                (state.availableServices || []).map((svc: any) => [svc.name, svc])
+            );
+
+            items.forEach((item: any) => {
+                const eventType = item.eventType || item.type || 'incident';
+                const serviceName =
+                    item.service ||
+                    item.logicalServiceName ||
+                    item.serviceName ||
+                    item?.payload?.custom_details?.service_name;
+
+                if (eventType === 'change' && serviceName) {
+                    const svc = serviceLookup.get(serviceName);
+                    const changeKey =
+                        item.changeRoutingKey ||
+                        item.integrationKey ||
+                        svc?.changeIntegrations?.find((integration: any) => integration?.integrationKey)?.integrationKey ||
+                        null;
+                    if (!item.changeRoutingKey && changeKey) {
+                        item.changeRoutingKey = changeKey;
+                    }
+                }
+
+                const delay = Number(item.delaySeconds ?? item.offsetSeconds ?? 0);
+                const clampedDelay = Number.isFinite(delay)
+                    ? Math.min(150, Math.max(10, delay))
+                    : 10;
+                item.delaySeconds = clampedDelay;
+                if ('offsetSeconds' in item) {
+                    item.offsetSeconds = clampedDelay;
+                }
+            });
+        }
+
+        const fullNarrativeSource = state.goldenDemoNarrative || state.planSummary;
+        if (fullNarrativeSource) {
+            const extractTldr = (text: string) => {
+                const tldrMatch = text.match(/TL;DR[:\s]*([\s\S]*?)(?:\n\s*\n|$)/i);
+                if (tldrMatch && tldrMatch[1]) {
+                    return tldrMatch[1].trim();
+                }
+                const firstParagraph = text.split(/\n\s*\n/)[0];
+                return firstParagraph.trim();
+            };
+            const extractStageBlock = (text: string, stageNumber: number) => {
+                const stageHeader = new RegExp(`(?:^|\\n)\\s*(?:#{2,3}\\s*)?Stage\\s*${stageNumber}\\b[\\s\\S]*?\\n`, 'i');
+                const headerMatch = text.match(stageHeader);
+                if (!headerMatch || headerMatch.index === undefined) return '';
+                const startIndex = headerMatch.index + headerMatch[0].length;
+                const tail = text.slice(startIndex);
+                const nextHeader = tail.match(
+                    /(?:\n\s*(?:#{2,3}\s*)?Stage\s*\d+\b|\n\s*(?:#{2,3}\s*)?PagerDuty Operations Cloud Value\b)/i
+                );
+                const endIndex = nextHeader && nextHeader.index !== undefined ? startIndex + nextHeader.index : text.length;
+                return text.slice(startIndex, endIndex).trim();
+            };
+            if (!goldenDemoOutput.configJson) {
+                goldenDemoOutput.configJson = {};
+            }
+            const tldr = extractTldr(fullNarrativeSource);
+            if (tldr) {
+                goldenDemoOutput.narrative = tldr;
+            }
+            goldenDemoOutput.configJson.narrative = {
+                ...(goldenDemoOutput.configJson.narrative || {}),
+                full: fullNarrativeSource,
+                stages: {
+                    ...(goldenDemoOutput.configJson.narrative?.stages || {}),
+                    routine_change_minor: { text: extractStageBlock(fullNarrativeSource, 1) },
+                    business_impact: { text: extractStageBlock(fullNarrativeSource, 2) },
+                    triage_context: { text: extractStageBlock(fullNarrativeSource, 3) },
+                    resolution_pir: { text: extractStageBlock(fullNarrativeSource, 4) },
+                },
+            };
         }
 
         goldenDemoOutput.createdByUserId = state.createdByUserId;

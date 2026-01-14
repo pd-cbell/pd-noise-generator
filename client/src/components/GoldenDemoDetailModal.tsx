@@ -72,13 +72,19 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
     setIsSavingMapping(true);
     try {
       const realService = services.find(s => s.id === selectedRealServiceId);
+      const changeIntegrationKey =
+        realService?.changeIntegrations?.find((integration) => integration?.integrationKey)?.integrationKey ||
+        null;
       const mappingPayload = [{
         logicalServiceName: logicalName,
         incidentServiceId: realService?.id || null,
         incidentServiceName: realService?.name || null,
+        changeServiceId: changeIntegrationKey ? (realService?.id || null) : null,
+        changeServiceName: changeIntegrationKey ? (realService?.name || null) : null,
+        changeRoutingKeyOverride: changeIntegrationKey,
         // Resetting overrides to defaults for simplicity, or we could preserve them if we looked them up
         // For quick mapping, standardizing on the selected service is usually desired.
-        useIncidentForChange: true, 
+        useIncidentForChange: !changeIntegrationKey,
       }];
 
       await api.addMappingsToProfile(effectiveProfile.id, mappingPayload);
