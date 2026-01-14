@@ -3,7 +3,7 @@
 **Branch:** `main`
 
 ## Status
-v2.4 is complete with cloud validation pending. Focus is on track monitor, presenter guide, editor domain config, and quality-of-life tooling.
+v2.4 is complete. v2.4.1 is in progress with local validation done and cloud validation pending.
 
 ## Current Platform Snapshot
 - **App name:** PagerDuty Customer Sim & Demo Platform (formerly “PagerDuty Noise Simulator”).

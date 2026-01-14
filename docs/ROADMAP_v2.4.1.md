@@ -1,7 +1,7 @@
 # Roadmap v2.4.1: Patch Release Stabilization
 
 ## Status
-Planning (scope pending confirmation).
+In progress (local validation done; cloud validation pending).
 
 ## Goals
 1. Stabilize cloud deployment behavior for auth, sockets, and Monitor metrics.
