@@ -497,7 +497,7 @@ export class BackgroundTrack extends SimulationTrack {
       }
     };
 
-    if (resolvedTarget.notes) {
+    if (this.mappingProfile && resolvedTarget.notes) {
       this.addLog(resolvedTarget.notes, 'info');
     }
 
