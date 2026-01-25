@@ -106,11 +106,20 @@ export class ScenarioTrack extends SimulationTrack {
   }
 
   private async fireItem(item: any, index: number) {
+    const normalizeServiceName = (name?: string) => {
+      if (!name) return undefined;
+      const trimmed = String(name).trim();
+      if (!trimmed || trimmed.toLowerCase() === 'unknown service') return undefined;
+      return trimmed;
+    };
     const logicalServiceName =
-      item.logicalServiceName ||
-      item.service ||
-      item.serviceName ||
-      item?.payload?.custom_details?.service_name ||
+      normalizeServiceName(item.logicalServiceName) ||
+      normalizeServiceName(item.service) ||
+      normalizeServiceName(item.serviceName) ||
+      normalizeServiceName(item?.payload?.custom_details?.service_name) ||
+      normalizeServiceName(item?.payload?.payload?.custom_details?.service_name) ||
+      normalizeServiceName(item?.payload?.custom_details?.service) ||
+      normalizeServiceName(item?.payload?.payload?.custom_details?.service) ||
       'Unknown Service';
     const type = (item.eventType || item.type || 'alert') as EventType;
 
@@ -144,7 +153,10 @@ export class ScenarioTrack extends SimulationTrack {
     };
 
     let payload = TemplateParser.parseObject(item.payload || {});
-    payload = normalizePayload(payload);
+    const payloadWithExtras = normalizePayload(payload);
+    const links = payloadWithExtras.links || payload.links || item.links || [];
+    const images = payloadWithExtras.images || payload.images || item.images || [];
+    const payload = payloadWithExtras;
     if (!payload.custom_details) payload.custom_details = {};
     payload.custom_details.service_name =
       resolvedTarget.effectiveServiceName || payload.custom_details.service_name || logicalServiceName;
@@ -171,6 +183,8 @@ export class ScenarioTrack extends SimulationTrack {
           ...payload,
           source: payload.source || 'pd-noise-simulator-scenario',
         },
+        ...(links.length ? { links } : {}),
+        ...(images.length ? { images } : {}),
       };
       
       await this.pdClient.triggerChangeEvent(body);
