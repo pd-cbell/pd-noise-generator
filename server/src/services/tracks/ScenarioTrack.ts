@@ -120,7 +120,31 @@ export class ScenarioTrack extends SimulationTrack {
       this.simulatorConfig
     );
 
-    const payload = TemplateParser.parseObject(item.payload || {});
+    const normalizePayload = (raw: any) => {
+      const next = { ...(raw || {}) };
+      const nested = raw?.payload && typeof raw.payload === 'object' ? raw.payload : null;
+      if (nested) {
+        delete next.payload;
+        next.custom_details = {
+          ...(nested.custom_details || {}),
+          ...(next.custom_details || {}),
+        };
+        Object.assign(next, nested);
+      }
+      if (next.details) {
+        next.custom_details = { ...(next.details || {}), ...(next.custom_details || {}) };
+        delete next.details;
+      }
+      if (!next.summary && next.description) {
+        next.summary = next.description;
+      }
+      delete next.description;
+      delete next.contexts;
+      return next;
+    };
+
+    let payload = TemplateParser.parseObject(item.payload || {});
+    payload = normalizePayload(payload);
     if (!payload.custom_details) payload.custom_details = {};
     payload.custom_details.service_name =
       resolvedTarget.effectiveServiceName || payload.custom_details.service_name || logicalServiceName;
