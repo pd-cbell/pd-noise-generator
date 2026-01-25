@@ -152,10 +152,10 @@ export class ScenarioTrack extends SimulationTrack {
       return next;
     };
 
-    let payload = TemplateParser.parseObject(item.payload || {});
-    const payloadWithExtras = normalizePayload(payload);
-    const links = payloadWithExtras.links || payload.links || item.links || [];
-    const images = payloadWithExtras.images || payload.images || item.images || [];
+    const rawPayload = TemplateParser.parseObject(item.payload || {});
+    const payloadWithExtras = normalizePayload(rawPayload);
+    const links = payloadWithExtras.links || rawPayload.links || item.links || [];
+    const images = payloadWithExtras.images || rawPayload.images || item.images || [];
     const payload = payloadWithExtras;
     if (!payload.custom_details) payload.custom_details = {};
     payload.custom_details.service_name =
