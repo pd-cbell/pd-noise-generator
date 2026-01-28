@@ -141,13 +141,19 @@ io.on('connection', async (socket) => {
     }
   });
 
-  socket.on('inject_golden_demo_items', async ({ items, mappingProfileId }: { items: any[], mappingProfileId?: string }, callback?: (err?: any) => void) => {
+  socket.on('inject_golden_demo_items', async ({ items, mappingProfileId, pdSubdomain }: { items: any[], mappingProfileId?: string, pdSubdomain?: string }, callback?: (err?: any) => void) => {
     try {
       if (!canLaunchScenario(socket.data.user.role)) {
         if (callback) callback({ message: 'Forbidden' });
         return;
       }
       let session = simulationManager.get(userId);
+      if (!session && pdSubdomain) {
+        const ownerId = simulationManager.findActiveBySubdomain(pdSubdomain);
+        if (ownerId) {
+          session = simulationManager.get(ownerId);
+        }
+      }
       if (!session) {
         const userRecord = await prisma.user.findUnique({
           where: { id: userId },

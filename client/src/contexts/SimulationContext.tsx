@@ -127,7 +127,8 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const injectGoldenDemo = useCallback((items: any[], mappingProfileId?: string) => {
     if (socketRef.current && user && credentials) {
       // Don't block UI for injection
-      socketRef.current.emit('inject_golden_demo_items', { items, mappingProfileId }, (err: any) => {
+      const pdSubdomain = useStore.getState().pdSubdomain;
+      socketRef.current.emit('inject_golden_demo_items', { items, mappingProfileId, pdSubdomain }, (err: any) => {
         if (err) {
           console.error('SimulationProvider: inject_golden_demo_items callback error', err);
         }
