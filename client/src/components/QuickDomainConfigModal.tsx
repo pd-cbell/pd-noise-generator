@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useAuth } from '../contexts/AuthContext';
 
 interface QuickDomainConfigModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface QuickDomainConfigModalProps {
 
 export const QuickDomainConfigModal: React.FC<QuickDomainConfigModalProps> = ({ isOpen, onClose }) => {
   const { apiToken, fromEmail, pdSubdomain, setCredentials, fetchTeams, fetchServices } = useStore();
+  const { updateCredentials } = useAuth();
   const [localToken, setLocalToken] = useState(apiToken || '');
   const [localEmail, setLocalEmail] = useState(fromEmail || '');
   const [localSubdomain, setLocalSubdomain] = useState(pdSubdomain || '');
@@ -30,6 +32,10 @@ export const QuickDomainConfigModal: React.FC<QuickDomainConfigModalProps> = ({ 
       fromEmail: localEmail.trim(),
     });
     try {
+      await updateCredentials({
+        apiToken: localToken.trim(),
+        fromEmail: localEmail.trim(),
+      });
       await fetchTeams();
       await fetchServices();
       onClose();
