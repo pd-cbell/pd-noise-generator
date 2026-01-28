@@ -4,15 +4,29 @@ import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
 import { ActiveTracksPanel } from './ActiveTracksPanel';
+import { QuickDomainConfigModal } from './QuickDomainConfigModal';
 
 export const DirectorDashboard: React.FC = () => {
-  const { addLog, goldenDemos, fetchGoldenDemos, isLoadingGoldenDemos, mappingProfiles, fetchMappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
+  const {
+    addLog,
+    goldenDemos,
+    fetchGoldenDemos,
+    isLoadingGoldenDemos,
+    mappingProfiles,
+    fetchMappingProfiles,
+    selectedMappingProfileId,
+    setSelectedMappingProfileId,
+    services,
+    apiToken,
+    fromEmail,
+  } = useStore();
   const { injectGoldenDemo } = useServerSimulation();
   
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<GoldenDemo | null>(null);
   const [isActiveTracksPanelOpen, setIsActiveTracksPanelOpen] = useState(false); // New state for panel
+  const [isQuickConfigOpen, setIsQuickConfigOpen] = useState(false);
 
   useEffect(() => {
     const loadDemos = async () => {
@@ -59,9 +73,25 @@ export const DirectorDashboard: React.FC = () => {
 
   const uniqueVerticals = Array.from(new Set(goldenDemos.map(demo => demo.vertical)));
   const uniqueMaturityLevels = Array.from(new Set(goldenDemos.map(demo => demo.maturityLevel)));
+  const missingCredentials = !apiToken || !fromEmail;
 
   return (
     <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-80px)] flex flex-col">
+      {(services.length === 0 || missingCredentials) && (
+        <div className={`${missingCredentials ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-yellow-50 border-yellow-200 text-yellow-800'} border px-4 py-3 rounded-md text-sm mb-4 flex items-center justify-between gap-3`}>
+          <div>
+            {missingCredentials
+              ? 'Missing credentials: API token and From Email are required to load services for mapping.'
+              : 'Load domain config to fetch teams and services for mapping profiles.'}
+          </div>
+          <button
+            className={`${missingCredentials ? 'border-blue-300 text-blue-900 hover:bg-blue-100' : 'border-yellow-300 text-yellow-900 hover:bg-yellow-100'} px-3 py-1.5 bg-white border rounded-md text-xs font-semibold`}
+            onClick={() => setIsQuickConfigOpen(true)}
+          >
+            Load Here
+          </button>
+        </div>
+      )}
       {/* Header & Filters */}
       <div className="flex flex-col sm:flex-row items-center justify-between mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex items-center gap-3 mb-4 sm:mb-0">
@@ -184,6 +214,7 @@ export const DirectorDashboard: React.FC = () => {
         />
       )}
       <ActiveTracksPanel isOpen={isActiveTracksPanelOpen} onClose={() => setIsActiveTracksPanelOpen(false)} />
+      <QuickDomainConfigModal isOpen={isQuickConfigOpen} onClose={() => setIsQuickConfigOpen(false)} />
     </div>
   );
 };

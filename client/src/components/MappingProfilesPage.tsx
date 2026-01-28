@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Save, Trash2, RefreshCw } from 'lucide-react';
+import { QuickDomainConfigModal } from './QuickDomainConfigModal';
 import { useStore, MappingProfile, ServiceMapping, Service } from '../store/useStore';
 
 type EditableMapping = Omit<ServiceMapping, 'id' | 'mappingProfileId'> & { id?: string };
@@ -32,6 +33,7 @@ const MappingProfilesPage: React.FC = () => {
   const [mappings, setMappings] = useState<EditableMapping[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [isQuickConfigOpen, setIsQuickConfigOpen] = useState(false);
 
   useEffect(() => {
     fetchMappingProfiles();
@@ -210,17 +212,34 @@ const handleAddMapping = () => {
         </div>
       </div>
       {services.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm">
-          Load domain config to fetch teams and services for mapping profiles. Use the Configure tab to save your
-          API token and From Email, then load teams/services.
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-md text-sm flex items-center justify-between gap-3">
+          <div>
+            Load domain config to fetch teams and services for mapping profiles. Use the Configure tab to save your
+            API token and From Email, then load teams/services.
+          </div>
+          <button
+            className="px-3 py-1.5 bg-white border border-yellow-300 text-yellow-900 rounded-md text-xs font-semibold hover:bg-yellow-100"
+            onClick={() => setIsQuickConfigOpen(true)}
+          >
+            Load Here
+          </button>
         </div>
       )}
       {missingCredentials && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-md text-sm">
-          Missing credentials: API token and From Email are required to load services. Use the Configure tab to
-          add credentials.
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-md text-sm flex items-center justify-between gap-3">
+          <div>
+            Missing credentials: API token and From Email are required to load services. Use the Configure tab to
+            add credentials.
+          </div>
+          <button
+            className="px-3 py-1.5 bg-white border border-blue-300 text-blue-900 rounded-md text-xs font-semibold hover:bg-blue-100"
+            onClick={() => setIsQuickConfigOpen(true)}
+          >
+            Load Here
+          </button>
         </div>
       )}
+      <QuickDomainConfigModal isOpen={isQuickConfigOpen} onClose={() => setIsQuickConfigOpen(false)} />
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="w-64 bg-white border border-gray-200 rounded-lg p-3 overflow-y-auto">
