@@ -1,5 +1,6 @@
 import React from 'react';
 import { useServerSimulation } from '../hooks/useServerSimulation';
+import { useStore } from '../store/useStore';
 import { Square, Activity, Loader2, X } from 'lucide-react';
 
 interface ActiveTracksPanelProps {
@@ -9,8 +10,29 @@ interface ActiveTracksPanelProps {
 
 export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, onClose }) => {
   const { currentSimState, stopTrack } = useServerSimulation();
+  const { trackRunsById, goldenDemos } = useStore();
 
   const scenarioTracks = currentSimState?.tracks?.filter(t => t.type === 'scenario' && t.status === 'running') || [];
+  const sharedScenarioRuns = Object.values(trackRunsById || {})
+    .filter(run => run.isActive && run.trackId)
+    .map(run => ({
+      id: run.trackId as string,
+      name: run.goldenDemoId
+        ? goldenDemos.find(demo => demo.id === run.goldenDemoId)?.name
+        : null,
+      runId: run.trackRunId,
+    }));
+
+  const combinedScenarioTracks = [
+    ...scenarioTracks.map(track => ({
+      id: track.id,
+      name: track.name,
+      runId: undefined,
+    })),
+    ...sharedScenarioRuns,
+  ].filter(
+    (track, idx, arr) => arr.findIndex(t => t.id === track.id) === idx
+  );
 
   return (
     <div 
@@ -25,7 +47,7 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
         </h3>
         <div className="flex items-center gap-2">
           <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
-            {scenarioTracks.length}
+            {combinedScenarioTracks.length}
           </span>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-4 h-4" />
@@ -34,10 +56,10 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
       </div>
 
       <div className="p-4 space-y-4">
-        {scenarioTracks.length === 0 ? (
+        {combinedScenarioTracks.length === 0 ? (
           <p className="text-sm text-gray-500 text-center italic">No active scenarios running.</p>
         ) : (
-          scenarioTracks.map((track) => (
+          combinedScenarioTracks.map((track) => (
             <div key={track.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm relative overflow-hidden">
               {/* Status Indicator */}
               <div className="absolute top-0 left-0 bottom-0 w-1 bg-green-500 animate-pulse"></div>

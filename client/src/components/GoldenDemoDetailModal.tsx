@@ -28,6 +28,7 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
   // Inline Editing State
   const [editingLogicalService, setEditingLogicalService] = useState<string | null>(null);
   const [selectedRealServiceId, setSelectedRealServiceId] = useState<string>('');
+  const [serviceQueryByLogical, setServiceQueryByLogical] = useState<Record<string, string>>({});
   const [isSavingMapping, setIsSavingMapping] = useState(false);
 
   // Find the profile object based on local selection
@@ -60,11 +61,19 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
   const handleStartEdit = (logicalName: string, currentRealServiceId?: string) => {
     setEditingLogicalService(logicalName);
     setSelectedRealServiceId(currentRealServiceId || '');
+    const currentName = services.find(s => s.id === currentRealServiceId)?.name || '';
+    setServiceQueryByLogical(prev => ({ ...prev, [logicalName]: currentName }));
   };
 
   const handleCancelEdit = () => {
     setEditingLogicalService(null);
     setSelectedRealServiceId('');
+  };
+
+  const handleServiceQueryChange = (logicalName: string, value: string) => {
+    setServiceQueryByLogical(prev => ({ ...prev, [logicalName]: value }));
+    const match = services.find(s => s.name === value);
+    setSelectedRealServiceId(match?.id || '');
   };
 
   const handleSaveMapping = async (logicalName: string) => {
@@ -237,14 +246,21 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700">
                               {isEditing && typeIdx === 0 ? (
-                                <select
+                                <div>
+                                  <input
                                     className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    value={selectedRealServiceId}
-                                    onChange={(e) => setSelectedRealServiceId(e.target.value)}
-                                >
+                                    list={`service-options-${ls.name}`}
+                                    placeholder="Type to search services..."
+                                    value={serviceQueryByLogical[ls.name] || ''}
+                                    onChange={(e) => handleServiceQueryChange(ls.name, e.target.value)}
+                                  />
+                                  <datalist id={`service-options-${ls.name}`}>
                                     <option value="">-- Unmapped --</option>
-                                    {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
+                                    {services.map(s => (
+                                      <option key={s.id} value={s.name} />
+                                    ))}
+                                  </datalist>
+                                </div>
                               ) : (
                                 result.effectiveServiceName || 'N/A'
                               )}

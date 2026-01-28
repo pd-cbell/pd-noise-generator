@@ -27,6 +27,7 @@ const TREND_WINDOW_MS = 15 * 60 * 1000;
 
 export type TrackRunState = {
   trackRunId: string;
+  trackId?: string;
   goldenDemoId?: string;
   startedAt: number;
   finishedAt?: number;
@@ -160,9 +161,10 @@ export class SimulationSession {
     }
   }
 
-  private initializeTrackRun(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null, requesterId?: string) {
+  private initializeTrackRun(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null, requesterId?: string, trackId?: string) {
     const run: TrackRunState = {
       trackRunId,
+      trackId,
       goldenDemoId,
       mappingProfileId: mappingProfileId || null,
       startedAt: Date.now(),
@@ -363,7 +365,7 @@ export class SimulationSession {
           };
           const trackRunId = crypto.randomUUID();
           const requester = requesterId || this.userId;
-          this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId, requester);
+          this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId, requester, id);
           track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io, {
             trackRunId,
             onEventSent: (payload) => this.registerTrackEvent(trackRunId, payload),

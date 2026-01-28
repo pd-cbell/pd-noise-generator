@@ -29,6 +29,7 @@ export type ServiceMappingInput = {
 
 export type TrackRunState = {
   trackRunId: string;
+  trackId?: string;
   goldenDemoId?: string | null;
   mappingProfileId?: string | null;
   startedAt: number;
