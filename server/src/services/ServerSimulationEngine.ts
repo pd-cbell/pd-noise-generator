@@ -325,16 +325,23 @@ export class SimulationSession {
 
   // --- Track Management ---
 
-  public async startTrack(type: 'background' | 'scenario', configOrItems: any, trackId?: string) {
+  public async startTrack(
+    type: 'background' | 'scenario',
+    configOrItems: any,
+    trackId?: string,
+    mappingProfileId?: string
+  ) {
       const id = trackId || crypto.randomUUID();
       
       let track: SimulationTrack;
 
       if (type === 'scenario') {
           // configOrItems is items array for scenario
+          const effectiveMappingProfileId = mappingProfileId || this.config.mappingProfileId || null;
           const scenarioConfig: SimulationConfig = {
               ...this.config, // Inherit base config
-              items: configOrItems // Override items
+              items: configOrItems, // Override items
+              mappingProfileId: effectiveMappingProfileId,
           };
           const trackRunId = crypto.randomUUID();
           this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
@@ -357,8 +364,11 @@ export class SimulationSession {
       // Current injectGoldenDemoItems passed mappingProfileId.
       
       this.tracks.set(id, track);
+      if (type === 'scenario' && mappingProfileId) {
+        await this.applyMappingToNewTrack(track, mappingProfileId);
+      }
       if (this.state.isRunning) {
-          track.start();
+        track.start();
       }
       return track;
   }

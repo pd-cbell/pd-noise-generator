@@ -193,10 +193,7 @@ io.on('connection', async (socket) => {
         };
         session = await simulationManager.createOrUpdate(userId, baseConfig, credentials);
       }
-      const track = await session.startTrack('scenario', items);
-      if (mappingProfileId) {
-        await session.applyMappingToNewTrack(track, mappingProfileId);
-      }
+      await session.startTrack('scenario', items, undefined, mappingProfileId);
       if (callback) callback(null);
     } catch (err: any) {
       console.error('inject_golden_demo_items error:', err);
