@@ -84,6 +84,8 @@ export class SimulationSession {
   private pdClient: PagerDutyClient; // Still needed for some session-level ops or just passing to tracks
   private trackRuns: Map<string, TrackRunState> = new Map();
   private trackRunByTrackId: Map<string, string> = new Map();
+  private trackRunRequesters: Map<string, string> = new Map();
+  private trackRequesters: Map<string, string> = new Map();
   private metricIncidentState: Map<string, { acked: boolean; resolved: boolean }> = new Map();
 
   constructor(userId: string, config: SimulationConfig, credentials: SimulationCredentials, io: SocketIOServer) {
@@ -136,17 +138,29 @@ export class SimulationSession {
       startedAt: Date.now(),
     };
     this.io.to(this.userId).emit('track_run_started', payload);
+    const requesterId = this.trackRunRequesters.get(trackRunId);
+    if (requesterId && requesterId !== this.userId) {
+      this.io.to(requesterId).emit('track_run_started', payload);
+    }
   }
 
   private emitTrackRunUpdate(run: TrackRunState) {
     this.io.to(this.userId).emit('track_run_update', run);
+    const requesterId = this.trackRunRequesters.get(run.trackRunId);
+    if (requesterId && requesterId !== this.userId) {
+      this.io.to(requesterId).emit('track_run_update', run);
+    }
   }
 
   private emitTrackRunFinished(run: TrackRunState) {
     this.io.to(this.userId).emit('track_run_finished', run);
+    const requesterId = this.trackRunRequesters.get(run.trackRunId);
+    if (requesterId && requesterId !== this.userId) {
+      this.io.to(requesterId).emit('track_run_finished', run);
+    }
   }
 
-  private initializeTrackRun(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null) {
+  private initializeTrackRun(trackRunId: string, goldenDemoId?: string, mappingProfileId?: string | null, requesterId?: string) {
     const run: TrackRunState = {
       trackRunId,
       goldenDemoId,
@@ -158,6 +172,9 @@ export class SimulationSession {
       errors: [],
     };
     this.trackRuns.set(trackRunId, run);
+    if (requesterId) {
+      this.trackRunRequesters.set(trackRunId, requesterId);
+    }
   }
 
   private registerTrackEvent(
@@ -329,7 +346,8 @@ export class SimulationSession {
     type: 'background' | 'scenario',
     configOrItems: any,
     trackId?: string,
-    mappingProfileId?: string
+    mappingProfileId?: string,
+    requesterId?: string
   ) {
       const id = trackId || crypto.randomUUID();
       
@@ -344,7 +362,8 @@ export class SimulationSession {
               mappingProfileId: effectiveMappingProfileId,
           };
           const trackRunId = crypto.randomUUID();
-          this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
+          const requester = requesterId || this.userId;
+          this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId, requester);
           track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io, {
             trackRunId,
             onEventSent: (payload) => this.registerTrackEvent(trackRunId, payload),
@@ -352,6 +371,7 @@ export class SimulationSession {
             callbacks: this.getMetricCallbacks(),
           });
           this.trackRunByTrackId.set(id, trackRunId);
+          this.trackRequesters.set(id, requester);
           this.emitTrackRunStarted(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId);
       } else {
           // Background
@@ -365,7 +385,7 @@ export class SimulationSession {
       
       this.tracks.set(id, track);
       if (type === 'scenario' && mappingProfileId) {
-        await this.applyMappingToNewTrack(track, mappingProfileId);
+        await this.applyMappingToNewTrack(track, mappingProfileId, requesterId);
       }
       if (this.state.isRunning) {
         track.start();
@@ -382,7 +402,9 @@ export class SimulationSession {
           if (runId) {
             this.finishTrackRun(runId);
             this.trackRunByTrackId.delete(trackId);
+            this.trackRunRequesters.delete(runId);
           }
+          this.trackRequesters.delete(trackId);
       }
   }
 
@@ -412,9 +434,17 @@ export class SimulationSession {
   }
 
   // Manually applying mapping profile to a specific new track (used by socket handler)
-  public async applyMappingToNewTrack(track: SimulationTrack, mappingProfileId: string) {
-      const profile = await mappingProfileService.getMappingProfileById(mappingProfileId, this.userId);
+  public async applyMappingToNewTrack(track: SimulationTrack, mappingProfileId: string, requesterId?: string) {
+      const profile = await mappingProfileService.getMappingProfileById(mappingProfileId, requesterId || this.userId);
       await track.applyMappingProfile(profile);
+  }
+
+  public hasTrack(trackId: string) {
+    return this.tracks.has(trackId);
+  }
+
+  public canControlTrack(trackId: string, requesterId: string) {
+    return this.userId === requesterId || this.trackRequesters.get(trackId) === requesterId;
   }
 
   // --- Actions ---
@@ -790,6 +820,13 @@ export class SimulationManager {
       if (instance.state.isRunning && activeSubdomain && activeSubdomain === normalized) {
         return userId;
       }
+    }
+    return null;
+  }
+
+  findSessionByTrackId(trackId: string) {
+    for (const instance of this.instances.values()) {
+      if (instance.hasTrack(trackId)) return instance;
     }
     return null;
   }

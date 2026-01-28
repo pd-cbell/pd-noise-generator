@@ -139,3 +139,9 @@ This release lays the groundwork for:
 - Change template authoring and management UI
 - Scenario-specific noise profiles
 - Richer change → alert → incident correlation narratives
+
+---
+
+## Bugs / Follow-Ups
+
+- Impersonation + Director track ownership: launching a demo track while impersonating appears to attach the run to the original user (track visibility/ownership mismatch). Validate and fix.

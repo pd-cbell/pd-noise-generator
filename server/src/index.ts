@@ -128,7 +128,13 @@ io.on('connection', async (socket) => {
         if (callback) callback({ message: 'Forbidden' });
         return;
       }
-      const session = simulationManager.get(userId);
+      let session = simulationManager.get(userId);
+      if (!session) {
+        const ownerSession = simulationManager.findSessionByTrackId(trackId);
+        if (ownerSession && ownerSession.canControlTrack(trackId, userId)) {
+          session = ownerSession;
+        }
+      }
       if (!session) {
         if (callback) callback({ message: 'Session not found' });
         return;
@@ -199,7 +205,7 @@ io.on('connection', async (socket) => {
         };
         session = await simulationManager.createOrUpdate(userId, baseConfig, credentials);
       }
-      await session.startTrack('scenario', items, undefined, mappingProfileId);
+      await session.startTrack('scenario', items, undefined, mappingProfileId, userId);
       if (callback) callback(null);
     } catch (err: any) {
       console.error('inject_golden_demo_items error:', err);
