@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Save, Trash2, RefreshCw } from 'lucide-react';
 import { QuickDomainConfigModal } from './QuickDomainConfigModal';
-import { useStore, MappingProfile, ServiceMapping, Service } from '../store/useStore';
+import { useStore, MappingProfile, ServiceMapping } from '../store/useStore';
 
 type EditableMapping = Omit<ServiceMapping, 'id' | 'mappingProfileId'> & { id?: string };
 
@@ -93,12 +93,18 @@ const MappingProfilesPage: React.FC = () => {
     setMappings((prev) => prev.map((m, i) => (i === index ? { ...m, ...updates } : m)));
   };
 
-  const handleServiceSelect = (index: number, field: 'incident' | 'change', serviceId: string) => {
-    const svc: Service | undefined = services.find((s) => s.id === serviceId);
+  const getServiceNameById = (serviceId?: string | null) =>
+    services.find((s) => s.id === serviceId)?.name;
+
+  const handleServiceInput = (index: number, field: 'incident' | 'change', value: string) => {
+    const match = services.find((s) => s.name === value);
+    const serviceId = match?.id || '';
+    const serviceName = value;
+
     if (field === 'incident') {
       handleMappingChange(index, {
         incidentServiceId: serviceId,
-        incidentServiceName: svc?.name || serviceId,
+        incidentServiceName: serviceName,
       });
       if (mappings[index]?.useIncidentForChange) {
         handleMappingChange(index, {
@@ -109,7 +115,7 @@ const MappingProfilesPage: React.FC = () => {
     } else {
       handleMappingChange(index, {
         changeServiceId: serviceId,
-        changeServiceName: svc?.name || serviceId,
+        changeServiceName: serviceName,
       });
     }
   };
@@ -351,8 +357,14 @@ const handleAddMapping = () => {
                 </thead>
                 <tbody>
                   {mappings.map((mapping, idx) => {
-                    const incidentLabel = mapping.incidentServiceName || mapping.incidentServiceId;
-                    const changeLabel = mapping.changeServiceName || mapping.changeServiceId;
+                    const incidentLabel =
+                      mapping.incidentServiceName ||
+                      getServiceNameById(mapping.incidentServiceId) ||
+                      mapping.incidentServiceId;
+                    const changeLabel =
+                      mapping.changeServiceName ||
+                      getServiceNameById(mapping.changeServiceId) ||
+                      mapping.changeServiceId;
                     return (
                       <tr key={idx} className="border-t">
                         <td className="px-3 py-2 align-top">
@@ -365,16 +377,18 @@ const handleAddMapping = () => {
                           />
                         </td>
                         <td className="px-3 py-2 align-top">
-                          <select
+                          <input
                             className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
-                            value={mapping.incidentServiceId || ''}
-                            onChange={(e) => handleServiceSelect(idx, 'incident', e.target.value)}
-                          >
-                            <option value="">Select service</option>
+                            list={`incident-services-${idx}`}
+                            placeholder="Type to search services..."
+                            value={incidentLabel || ''}
+                            onChange={(e) => handleServiceInput(idx, 'incident', e.target.value)}
+                          />
+                          <datalist id={`incident-services-${idx}`}>
                             {serviceOptions.map((svc) => (
-                              <option key={svc.id} value={svc.id}>{svc.name}</option>
+                              <option key={svc.id} value={svc.name} />
                             ))}
-                          </select>
+                          </datalist>
                           {incidentLabel && <p className="text-[11px] text-gray-500 mt-1">{incidentLabel}</p>}
                         </td>
                         <td className="px-3 py-2 align-top">
@@ -390,17 +404,21 @@ const handleAddMapping = () => {
                           {mapping.useIncidentForChange ? (
                             <div className="text-xs text-gray-500 italic">Using incident service</div>
                           ) : (
-                            <select
-                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
-                              value={mapping.changeServiceId || ''}
-                              onChange={(e) => handleServiceSelect(idx, 'change', e.target.value)}
-                              disabled={mapping.useIncidentForChange}
-                            >
-                              <option value="">Select service</option>
-                              {serviceOptions.map((svc) => (
-                                <option key={svc.id} value={svc.id}>{svc.name}</option>
-                              ))}
-                            </select>
+                            <div>
+                              <input
+                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                                list={`change-services-${idx}`}
+                                placeholder="Type to search services..."
+                                value={changeLabel || ''}
+                                onChange={(e) => handleServiceInput(idx, 'change', e.target.value)}
+                                disabled={mapping.useIncidentForChange}
+                              />
+                              <datalist id={`change-services-${idx}`}>
+                                {serviceOptions.map((svc) => (
+                                  <option key={svc.id} value={svc.name} />
+                                ))}
+                              </datalist>
+                            </div>
                           )}
                           {!mapping.useIncidentForChange && changeLabel && (
                             <p className="text-[11px] text-gray-500 mt-1">{changeLabel}</p>
