@@ -458,44 +458,57 @@ export const useStore = create<AppState>()(
           }
 
           const allServices: Service[] = [];
+          const chunkArray = <T,>(items: T[], size: number) => {
+            const chunks: T[][] = [];
+            for (let i = 0; i < items.length; i += size) {
+              chunks.push(items.slice(i, i + size));
+            }
+            return chunks;
+          };
           let offset = 0;
-          let more = true;
           const CHANGE_INTEGRATION_TYPES = [
             "events_api_v2_inbound_integration",
             "change_event_transform_inbound_integration",
             "generic_events_api_inbound_integration",
           ];
 
-          while (more) {
-            const data = await api.getServices(targetTeamIds, { token: apiToken, fromEmail }, 100, offset);
-            
-            const batch = data.services.map((svc: any) => {
-              const changeIntegrations = (svc.integrations || [])
-                .filter((integration: any) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
-                .map((integration: any) => ({
-                  id: integration.id,
-                  name: integration.summary || integration.name || integration.type,
-                  integrationKey: integration.integration_key,
-                  vendor: integration.vendor?.summary || integration.vendor?.name || null,
-                }));
+          const teamChunks = targetTeamIds.length > 0 ? chunkArray(targetTeamIds, 50) : [[]];
 
-              return {
-                id: svc.id,
-                name: svc.name,
-                html_url: svc.html_url,
-                teams: (svc.teams || []).map((t: any) => ({ id: t.id, name: t.name })),
-                changeIntegrations,
-                include: currentServices.find(s => s.id === svc.id)?.include || false,
-              };
-            });
+          for (const chunk of teamChunks) {
+            offset = 0;
+            let more = true;
+            while (more) {
+              const data = await api.getServices(chunk, { token: apiToken, fromEmail }, 100, offset);
+              
+              const batch = data.services.map((svc: any) => {
+                const changeIntegrations = (svc.integrations || [])
+                  .filter((integration: any) => CHANGE_INTEGRATION_TYPES.includes(integration?.type) && integration.integration_key)
+                  .map((integration: any) => ({
+                    id: integration.id,
+                    name: integration.summary || integration.name || integration.type,
+                    integrationKey: integration.integration_key,
+                    vendor: integration.vendor?.summary || integration.vendor?.name || null,
+                  }));
 
-            allServices.push(...batch);
-            more = data.more;
-            offset += data.limit || 100;
+                return {
+                  id: svc.id,
+                  name: svc.name,
+                  html_url: svc.html_url,
+                  teams: (svc.teams || []).map((t: any) => ({ id: t.id, name: t.name })),
+                  changeIntegrations,
+                  include: currentServices.find(s => s.id === svc.id)?.include || false,
+                };
+              });
+
+              allServices.push(...batch);
+              more = data.more;
+              offset += data.limit || 100;
+            }
           }
 
-          set({ services: allServices, isLoadingServices: false });
-          get().addLog(`Loaded ${allServices.length} services.`);
+          const uniqueServices = Array.from(new Map(allServices.map(s => [s.id, s])).values());
+          set({ services: uniqueServices, isLoadingServices: false });
+          get().addLog(`Loaded ${uniqueServices.length} services.`);
         } catch (error: any) {
           get().addLog(`Failed to load services: ${error.message}`, 'error');
           set({ isLoadingServices: false });
