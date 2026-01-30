@@ -5,6 +5,12 @@
 ## Status
 v2.4 is complete. v2.4.1 is in progress with local validation done and cloud validation pending.
 
+## v2.4.1 Focus
+- Scenario payload normalization + summary enforcement
+- Shared subdomain scenario injection + requester visibility
+- Agentic narrative persistence and change routing defaults
+- Mapping UX improvements (type-ahead + quick domain config)
+
 ## Current Platform Snapshot
 - **App name:** PagerDuty Customer Sim & Demo Platform (formerly “PagerDuty Noise Simulator”).
 - **Multi-simulation runtime:** Server supports multiple concurrent tracks (background noise + Golden Demo scenario tracks) per user session.
