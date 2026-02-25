@@ -1,16 +1,16 @@
-# PagerDuty Golden Demo Platform v2.4.1
+# PagerDuty Golden Demo Platform v2.4.2
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.4.1-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.4.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-Status: v2.4 complete. v2.4.1 in progress (local validation done; cloud validation pending).
+Status: v2.4 complete. v2.4.2 in progress (cleanup, UX polish, and bug fixes).
 
-## 🚀 New in v2.4 (baseline for v2.4.1)
+## 🚀 New in v2.4 (baseline for v2.4.2)
 
-v2.4 focuses on presenter-ready run monitoring, narrative guidance, and editor domain configuration. v2.4.1 is a patch release that hardens those workflows.
+v2.4 focuses on presenter-ready run monitoring, narrative guidance, and editor domain configuration. v2.4.2 is a patch release that hardens those workflows with cleanup, UX polish, and bug fixes.
 
 -   **Track Run Monitor:** Track run lifecycle panel with incident timelines and status.
 -   **Presenter Guide:** Narrative stage prompts plus beat-by-beat script cues.

@@ -20,12 +20,13 @@ interface SimulationContextType {
   isSimRunning: boolean;
   socketStatus: 'disconnected' | 'connecting' | 'connected' | 'error';
   socketError: string | null;
+  directorLaunchError: string | null;
   reconnectSocket: () => void;
   requestSimState: () => void;
   startSimulation: (overrideConfig?: any) => void;
   stopSimulation: () => void;
   stopTrack: (trackId: string) => void; // Added stopTrack
-  injectGoldenDemo: (items: any[], mappingProfileId?: string) => void; 
+  injectGoldenDemo: (items: any[], mappingProfileId?: string) => Promise<void>;
   isLoading: boolean;
   ackIncident: (dedupKey: string) => void;
   resolveIncident: (dedupKey: string) => void;
@@ -43,6 +44,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [isLoading, setIsLoading] = useState(false);
   const [socketStatus, setSocketStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [socketError, setSocketError] = useState<string | null>(null);
+  const [directorLaunchError, setDirectorLaunchError] = useState<string | null>(null);
 
   const startSimulation = useCallback((overrideConfig?: any) => {
     if (!(user && credentials)) {
@@ -125,15 +127,29 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   }, []);
 
   const injectGoldenDemo = useCallback((items: any[], mappingProfileId?: string) => {
-    if (socketRef.current && user && credentials) {
-      // Don't block UI for injection
+    return new Promise<void>((resolve, reject) => {
+      if (!(socketRef.current && user && credentials)) {
+        const msg = 'Socket not connected or credentials unavailable.';
+        setDirectorLaunchError(msg);
+        reject(new Error(msg));
+        return;
+      }
+
+      setDirectorLaunchError(null);
       const pdSubdomain = useStore.getState().pdSubdomain;
       socketRef.current.emit('inject_golden_demo_items', { items, mappingProfileId, pdSubdomain }, (err: any) => {
         if (err) {
+          const msg = err?.message || 'Failed to inject Golden Demo items';
           console.error('SimulationProvider: inject_golden_demo_items callback error', err);
+          setDirectorLaunchError(msg);
+          useStore.getState().addLog(`Director launch failed: ${msg}`, 'error');
+          reject(new Error(msg));
+          return;
         }
+        setDirectorLaunchError(null);
+        resolve();
       });
-    }
+    });
   }, [user, credentials]);
 
   // Actions
@@ -174,6 +190,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       console.log('SimulationProvider: Socket Connected');
       setSocketStatus('connected');
       setSocketError(null);
+      setDirectorLaunchError(null);
       setIsLoading(false);
       socket.emit('request_sim_state');
     });
@@ -191,6 +208,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setCurrentSimState(null);
         setIsSimRunning(false);
         setIsLoading(false);
+        setDirectorLaunchError(null);
       });
 
     socket.on('sim_state', (state: ServerSimulationState) => {
@@ -269,7 +287,7 @@ export const SimulationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   return (
     <SimulationContext.Provider value={{ 
-        currentSimState, isSimRunning, socketStatus, socketError, reconnectSocket, requestSimState,
+        currentSimState, isSimRunning, socketStatus, socketError, directorLaunchError, reconnectSocket, requestSimState,
         startSimulation, stopSimulation, stopTrack, injectGoldenDemo, isLoading,
         ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents
     }}>

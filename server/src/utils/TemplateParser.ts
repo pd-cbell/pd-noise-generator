@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker';
+import { fakerService } from '../services/FakerService';
 
 export class TemplateParser {
   /**
@@ -13,12 +14,8 @@ export class TemplateParser {
   static parse(input: string): string {
     if (!input) return input;
 
-    // 1. Faker replacement: {{faker.module.method}}
-    let output = input.replace(/\{\{faker\.(\w+)\.(\w+)\}\}/g, (_match, module, method) => {
-      // @ts-ignore
-      const fn = faker[module]?.[method];
-      return typeof fn === 'function' ? fn() : _match;
-    });
+    // 1. Faker replacement (delegates to shared parser for legacy/new token variants)
+    let output = fakerService.renderString(input);
 
     // 2. Crux Integers: {{int(min,max)}}
     output = output.replace(/\{\{int\((\d+),(\d+)\)\}\}/g, (_match, min, max) => {
@@ -47,6 +44,10 @@ export class TemplateParser {
         const items = content.split(',').map((s: string) => s.trim());
         return faker.helpers.arrayElement(items);
     });
+
+    if (output.includes('{{faker.')) {
+      console.warn('TemplateParser: Unresolved faker token(s) remain after parse.');
+    }
 
     return output;
   }

@@ -79,6 +79,7 @@ const agentService = new AgentService(goldenDemoService); // Instantiate AgentSe
 
 io.on('connection', async (socket) => {
   const userId = socket.data.user.userId;
+  const impersonatorId = socket.data.user.impersonatorId as string | undefined;
   socket.join(userId);
   console.log(`User ${userId} connected via Socket.io`);
   let user: { role: Role; agentEnabled: boolean } | null = null;
@@ -154,7 +155,10 @@ io.on('connection', async (socket) => {
         return;
       }
       let session = simulationManager.get(userId);
-      if (!session && pdSubdomain) {
+      // When impersonating, do not auto-attach Director launches to another user's
+      // active shared-subdomain session. Keep ownership/visibility scoped to the
+      // impersonated user to avoid track-run mismatch.
+      if (!session && pdSubdomain && !impersonatorId) {
         const ownerId = simulationManager.findActiveBySubdomain(pdSubdomain);
         if (ownerId) {
           session = simulationManager.get(ownerId);

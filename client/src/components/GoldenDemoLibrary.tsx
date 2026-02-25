@@ -74,7 +74,7 @@ const GoldenDemoLibrary: React.FC = () => {
   };
 
   const handleLaunchSimulation = (demo: GoldenDemo) => {
-    // TODO: Implement actual simulation launch logic based on demo.configJson
+    // Library launch is currently a lightweight preview/log action; Director handles live track injection.
     addLog(`Launching simulation for Golden Demo: "${demo.name}"`, 'info');
     // For now, just log the config
     console.log('Simulation Config:', demo.configJson);

@@ -308,7 +308,7 @@ export class SimulationSession {
     
     console.log('SimulationSession: Starting for user', this.userId);
     this.timer = setInterval(() => this.tick(), 1000);
-    this.addLog("Simulation Session Started", 'info');
+    this.addLog('Simulation session started', 'info');
     if (!this.credentials.globalRoutingKey) {
       console.warn('SimulationSession: Global routing key missing; alert events will not be sent.');
       this.addLog('Global routing key missing; alert events will not be sent.', 'warn');
@@ -334,7 +334,7 @@ export class SimulationSession {
     this.timer = null;
     
     console.log('SimulationSession: Stopping for user', this.userId);
-    this.addLog("Simulation Session Stopped", 'info');
+    this.addLog('Simulation session stopped', 'info');
 
     // Stop all tracks
     this.tracks.forEach(track => track.stop());

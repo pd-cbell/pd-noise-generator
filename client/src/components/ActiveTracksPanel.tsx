@@ -1,6 +1,7 @@
 import React from 'react';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { useStore } from '../store/useStore';
+import { useAuth } from '../contexts/AuthContext';
 import { Square, Activity, Loader2, X } from 'lucide-react';
 
 interface ActiveTracksPanelProps {
@@ -10,7 +11,8 @@ interface ActiveTracksPanelProps {
 
 export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, onClose }) => {
   const { currentSimState, stopTrack } = useServerSimulation();
-  const { trackRunsById, goldenDemos } = useStore();
+  const { trackRunsById, goldenDemos, mappingProfiles } = useStore();
+  const { impersonatorId } = useAuth();
 
   const scenarioTracks = currentSimState?.tracks?.filter(t => t.type === 'scenario' && t.status === 'running') || [];
   const sharedScenarioRuns = Object.values(trackRunsById || {})
@@ -19,8 +21,11 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
       id: run.trackId as string,
       name: run.goldenDemoId
         ? goldenDemos.find(demo => demo.id === run.goldenDemoId)?.name
-        : null,
+        : null as string | null,
       runId: run.trackRunId,
+      goldenDemoId: run.goldenDemoId || null,
+      mappingProfileId: run.mappingProfileId || null,
+      source: 'shared-run' as const,
     }));
 
   const combinedScenarioTracks = [
@@ -28,11 +33,36 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
       id: track.id,
       name: track.name,
       runId: undefined,
+      goldenDemoId: null,
+      mappingProfileId: null,
+      source: 'session-track' as const,
     })),
     ...sharedScenarioRuns,
-  ].filter(
-    (track, idx, arr) => arr.findIndex(t => t.id === track.id) === idx
-  );
+  ].reduce<Array<{
+    id: string;
+    name?: string | null;
+    runId?: string;
+    goldenDemoId?: string | null;
+    mappingProfileId?: string | null;
+    source: 'session-track' | 'shared-run';
+  }>>((acc, track) => {
+    const existingIdx = acc.findIndex((t) => t.id === track.id);
+    if (existingIdx === -1) {
+      acc.push(track);
+      return acc;
+    }
+    const existing = acc[existingIdx];
+    acc[existingIdx] = {
+      ...existing,
+      ...track,
+      name: track.name || existing.name,
+      runId: existing.runId || track.runId,
+      goldenDemoId: existing.goldenDemoId || track.goldenDemoId,
+      mappingProfileId: existing.mappingProfileId || track.mappingProfileId,
+      source: existing.source === 'session-track' || track.source === 'session-track' ? 'session-track' : 'shared-run',
+    };
+    return acc;
+  }, []);
 
   return (
     <div 
@@ -65,13 +95,32 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
               <div className="absolute top-0 left-0 bottom-0 w-1 bg-green-500 animate-pulse"></div>
               
               <div className="ml-2">
-                <h4 className="text-sm font-bold text-gray-900 truncate" title={track.name}>
+                <h4 className="text-sm font-bold text-gray-900 truncate" title={track.name || undefined}>
                   {track.name || 'Unnamed Scenario'} - <span className="text-gray-500 text-xs font-normal">{track.id.substring(0, 8)}</span>
                 </h4>
                 <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Running...
                 </p>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                    track.source === 'session-track'
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {track.source === 'session-track' ? 'Owned by current session' : 'Shared-subdomain run'}
+                  </span>
+                  {impersonatorId && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+                      Impersonating
+                    </span>
+                  )}
+                  {track.mappingProfileId && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border bg-gray-50 text-gray-700 border-gray-200">
+                      Profile: {mappingProfiles.find((p) => p.id === track.mappingProfileId)?.name || 'Mapped'}
+                    </span>
+                  )}
+                </div>
                 
                 <div className="mt-3 flex justify-end">
                   <button 

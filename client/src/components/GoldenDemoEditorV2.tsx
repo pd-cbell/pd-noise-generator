@@ -82,6 +82,69 @@ const normalizeStages = (configJson: any): StageState => {
   };
 };
 
+const extractStageStateFromNarrative = (rawText: string): StageState => {
+  const text = (rawText || '').trim();
+  if (!text) return { ...defaultStageState };
+
+  const stageTerms: Record<StageKey, string[]> = {
+    routine_change_minor: ['routine change', 'minor incidents'],
+    business_impact: ['business impact'],
+    triage_context: ['triage', 'context'],
+    resolution_pir: ['resolution', 'post-incident review'],
+  };
+
+  const normalize = (line: string) =>
+    line
+      .toLowerCase()
+      .replace(/[`*_>#]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const matchesTerms = (line: string, key: StageKey) => {
+    const n = normalize(line);
+    return stageTerms[key].every((term) => n.includes(term));
+  };
+
+  const lines = text.split('\n');
+  const result: StageState = { ...defaultStageState };
+  let currentKey: StageKey | null = null;
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (!currentKey) return;
+    const value = buffer.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+    if (value) result[currentKey] = value;
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const normalized = normalize(line);
+    if (
+      normalized.includes('pagerduty operations cloud value') ||
+      normalized.includes('where pagerduty') ||
+      normalized.includes('post-incident review creates a learning')
+    ) {
+      flush();
+      currentKey = null;
+      continue;
+    }
+
+    const matchedKey = (Object.keys(stageTerms) as StageKey[]).find((key) => matchesTerms(line, key)) || null;
+    if (matchedKey) {
+      flush();
+      currentKey = matchedKey;
+      continue;
+    }
+
+    if (currentKey) {
+      buffer.push(line);
+    }
+  }
+  flush();
+
+  return result;
+};
+
 const normalizeImportedOffsets = (events: ImportedGoldenDemoEvent[]): ImportedGoldenDemoEvent[] =>
   events.map((evt) => {
     const baseSeconds =
@@ -143,6 +206,25 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
   const handleEventChange = (field: keyof EditableEvent, value: any) => {
     if (!editingEvent) return;
     setEditingEvent({ ...editingEvent, [field]: value });
+  };
+
+  const handleReextractNarrativeStages = () => {
+    const source = (meta.fullNarrative || meta.narrative || '').trim();
+    if (!source) {
+      setError('No narrative source available to extract stages from.');
+      return;
+    }
+
+    const nextStages = extractStageStateFromNarrative(source);
+    const populatedCount = Object.values(nextStages).filter((v) => v.trim().length > 0).length;
+    if (populatedCount === 0) {
+      setError('Could not detect narrative stage sections in the current narrative source.');
+      return;
+    }
+
+    setStageState(nextStages);
+    setError(null);
+    addLog(`Re-extracted ${populatedCount}/4 narrative stages from narrative source.`, 'info');
   };
 
   const persistEvent = () => {
@@ -265,24 +347,25 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       setError('Maturity is required.');
       return;
     }
-    for (const evt of events) {
+    for (let i = 0; i < events.length; i++) {
+      const evt = events[i];
       if (!evt.logicalServiceName.trim()) {
-        setError('Each event requires a logical service name.');
+        setError(`Event ${i + 1} requires a logical service name.`);
         return;
       }
       if (!evt.type.trim()) {
-        setError('Each event requires an event type.');
+        setError(`Event ${i + 1} requires an event type.`);
         return;
       }
       // Validate payload JSON
       try {
         validateAndParsePayload(evt.payloadText);
       } catch (e: any) {
-        setError(e.message);
+        setError(`Event ${i + 1}: ${e.message}`);
         return;
       }
       if (evt.offsetSeconds == null || isNaN(evt.offsetSeconds)) {
-        setError('Each event requires an offset in seconds.');
+        setError(`Event ${i + 1} requires an offset in seconds.`);
         return;
       }
     }
@@ -314,8 +397,12 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
         addLog(`Updated Golden Demo "${meta.name}"`, 'info');
       }
       onClose();
-    } catch (e) {
-      setError('Failed to save Golden Demo.');
+    } catch (e: any) {
+      const message =
+        e?.message?.includes('Conflict')
+          ? 'A Golden Demo with this name already exists for this user.'
+          : e?.message || 'Failed to save Golden Demo.';
+      setError(message);
     } finally {
       setIsSaving(false);
     }
@@ -357,7 +444,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Name</label>
                 <input
                   type="text"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className={`w-full border rounded-md px-3 py-2 text-sm ${!meta.name.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
                   value={meta.name}
                   onChange={(e) => setMeta({ ...meta, name: e.target.value })}
                   required
@@ -367,7 +454,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
                 <input
                   type="text"
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className={`w-full border rounded-md px-3 py-2 text-sm ${!meta.vertical.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
                   value={meta.vertical}
                   onChange={(e) => setMeta({ ...meta, vertical: e.target.value })}
                   required
@@ -377,7 +464,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Maturity</label>
                 <select
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+                  className={`w-full border rounded-md px-3 py-2 text-sm bg-white ${!meta.maturityLevel.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
                   value={meta.maturityLevel}
                   onChange={(e) => setMeta({ ...meta, maturityLevel: e.target.value })}
                   required
@@ -446,6 +533,13 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-gray-800">Narrative Stages</h4>
+              <button
+                type="button"
+                onClick={handleReextractNarrativeStages}
+                className="px-3 py-1.5 text-xs font-semibold border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Re-extract From Narrative Source
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {(Object.keys(stageLabels) as StageKey[]).map((key) => (

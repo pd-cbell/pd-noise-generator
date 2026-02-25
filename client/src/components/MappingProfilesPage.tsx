@@ -34,6 +34,8 @@ const MappingProfilesPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [isQuickConfigOpen, setIsQuickConfigOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formNotice, setFormNotice] = useState<string | null>(null);
 
   useEffect(() => {
     fetchMappingProfiles();
@@ -78,6 +80,8 @@ const MappingProfilesPage: React.FC = () => {
       }))
     );
     setSelectedMappingProfileId(id);
+    setFormError(null);
+    setFormNotice(null);
   };
 
   const handleNewProfile = () => {
@@ -87,6 +91,8 @@ const MappingProfilesPage: React.FC = () => {
     setProfileForm(fresh);
     setMappings([]);
     setSelectedMappingProfileId(null);
+    setFormError(null);
+    setFormNotice('New profile draft created. Save to create it.');
   };
 
   const handleMappingChange = (index: number, updates: Partial<EditableMapping>) => {
@@ -140,9 +146,35 @@ const handleAddMapping = () => {
   };
 
   const handleSave = async () => {
+    setFormError(null);
+    setFormNotice(null);
     if (!profileForm.name.trim()) {
-      alert('Profile name is required.');
+      setFormError('Profile name is required.');
       return;
+    }
+
+    const seenLogicalNames = new Set<string>();
+    for (const mapping of mappings) {
+      const logical = (mapping.logicalServiceName || '').trim();
+      const rowHasData =
+        logical.length > 0 ||
+        !!(mapping.incidentServiceId || '').trim() ||
+        !!(mapping.incidentServiceName || '').trim() ||
+        !!(mapping.incidentRoutingKeyOverride || '').trim() ||
+        !!(mapping.changeServiceId || '').trim() ||
+        !!(mapping.changeServiceName || '').trim();
+      if (rowHasData && !logical) {
+        setFormError('Each populated mapping row must include a logical service name.');
+        return;
+      }
+      if (logical) {
+        const key = logical.toLowerCase();
+        if (seenLogicalNames.has(key)) {
+          setFormError(`Duplicate logical service mapping: "${logical}"`);
+          return;
+        }
+        seenLogicalNames.add(key);
+      }
     }
 
     setIsSaving(true);
@@ -173,8 +205,9 @@ const handleAddMapping = () => {
       }
       setIsCreatingNew(false);
       loadProfile(saved.id);
-    } catch (e) {
-      alert('Failed to save mapping profile.');
+      setFormNotice(`Saved mapping profile "${saved.name}".`);
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to save mapping profile.');
     } finally {
       setIsSaving(false);
     }
@@ -184,10 +217,16 @@ const handleAddMapping = () => {
     if (!activeProfile) return;
     const confirmDelete = window.confirm(`Delete mapping profile "${activeProfile.name}"?`);
     if (!confirmDelete) return;
-    await deleteMappingProfile(activeProfile.id);
-    setActiveProfileId(null);
-    setProfileForm(emptyProfile());
-    setMappings([]);
+    try {
+      await deleteMappingProfile(activeProfile.id);
+      setActiveProfileId(null);
+      setProfileForm(emptyProfile());
+      setMappings([]);
+      setFormError(null);
+      setFormNotice(`Deleted mapping profile "${activeProfile.name}".`);
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to delete mapping profile.');
+    }
   };
 
   const serviceOptions = services || [];
@@ -246,6 +285,16 @@ const handleAddMapping = () => {
         </div>
       )}
       <QuickDomainConfigModal isOpen={isQuickConfigOpen} onClose={() => setIsQuickConfigOpen(false)} />
+      {formError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+          {formError}
+        </div>
+      )}
+      {formNotice && !formError && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md text-sm">
+          {formNotice}
+        </div>
+      )}
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="w-64 bg-white border border-gray-200 rounded-lg p-3 overflow-y-auto">
@@ -305,6 +354,9 @@ const handleAddMapping = () => {
                   onChange={(e) => setProfileForm({ ...profileForm, globalIncidentRoutingKey: e.target.value })}
                   placeholder="Overrides per-service only when blank"
                 />
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Applies when no per-service incident routing-key override is set. Director applies the selected profile to scenario tracks.
+                </p>
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -316,6 +368,22 @@ const handleAddMapping = () => {
                 <Save className="w-4 h-4" />
                 {isSaving ? 'Saving...' : 'Save Profile'}
               </button>
+              {activeProfile && (
+                <button
+                  className={`px-4 py-2 rounded-md text-sm border ${
+                    selectedMappingProfileId === activeProfile.id
+                      ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  }`}
+                  onClick={() => {
+                    setSelectedMappingProfileId(activeProfile.id);
+                    setFormError(null);
+                    setFormNotice(`"${activeProfile.name}" is now the Director default mapping profile.`);
+                  }}
+                >
+                  {selectedMappingProfileId === activeProfile.id ? 'Director Default (Selected)' : 'Use In Director By Default'}
+                </button>
+              )}
               {activeProfile && (
                 <button
                   className="px-4 py-2 bg-red-50 text-red-600 rounded-md text-sm flex items-center gap-2 hover:bg-red-100"
@@ -333,6 +401,7 @@ const handleAddMapping = () => {
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">Service Mappings</h3>
                 <p className="text-xs text-gray-500">Map Golden Demo logical services to PagerDuty services.</p>
+                <p className="text-xs text-gray-500">Rows without a logical service name are ignored. Duplicate logical service names are blocked on save.</p>
               </div>
               <button
                 className="px-3 py-2 bg-white border border-gray-200 rounded-md text-sm flex items-center gap-2 hover:bg-gray-50"

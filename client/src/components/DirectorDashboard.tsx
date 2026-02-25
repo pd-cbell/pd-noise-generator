@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Play, Layers, AlertTriangle, Loader2, ListEnd } from 'lucide-react'; // Added ListEnd icon
 import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
+import { useAuth } from '../contexts/AuthContext';
 import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
 import { ActiveTracksPanel } from './ActiveTracksPanel';
 import { QuickDomainConfigModal } from './QuickDomainConfigModal';
@@ -20,7 +21,8 @@ export const DirectorDashboard: React.FC = () => {
     apiToken,
     fromEmail,
   } = useStore();
-  const { injectGoldenDemo } = useServerSimulation();
+  const { injectGoldenDemo, directorLaunchError } = useServerSimulation();
+  const { impersonatorId } = useAuth();
   
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,14 +44,18 @@ export const DirectorDashboard: React.FC = () => {
     [mappingProfiles, selectedMappingProfileId]
   );
 
-  const handleLaunch = (demo: GoldenDemo) => {
-    injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined);
-
-    addLog(
-      `Injecting Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
-      'info'
-    );
-    setIsActiveTracksPanelOpen(true); // Open panel when demo is launched
+  const handleLaunch = async (demo: GoldenDemo) => {
+    try {
+      await injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined);
+      addLog(
+        `Injecting Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
+        'info'
+      );
+    } catch {
+      // Error is surfaced via SimulationContext and store log.
+    } finally {
+      setIsActiveTracksPanelOpen(true);
+    }
   };
 
   const handleCardClick = (demo: GoldenDemo) => {
@@ -92,6 +98,11 @@ export const DirectorDashboard: React.FC = () => {
           </button>
         </div>
       )}
+      {directorLaunchError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm mb-4">
+          Director launch failed: {directorLaunchError}
+        </div>
+      )}
       {/* Header & Filters */}
       <div className="flex flex-col sm:flex-row items-center justify-between mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
         <div className="flex items-center gap-3 mb-4 sm:mb-0">
@@ -118,8 +129,21 @@ export const DirectorDashboard: React.FC = () => {
                     ))}
                 </select>
                 <div className="mt-1 text-xs text-gray-500">
-                    Profile: {selectedProfile ? selectedProfile.name : 'None'}{selectedProfile ? ` • Mapped: ${selectedProfile.serviceMappings?.length || 0}` : ''}{selectedProfile?.globalIncidentRoutingKey ? ` • RK: ${selectedProfile.globalIncidentRoutingKey}` : ''}
+                    Profile: {selectedProfile ? selectedProfile.name : 'None'}
+                    {selectedProfile ? ` • Mapped: ${selectedProfile.serviceMappings?.length || 0}` : ''}
+                    {selectedProfile?.globalIncidentRoutingKey ? ' • Global RK override set' : ''}
+                    {' • Applies to scenario tracks'}
                 </div>
+                {selectedProfile && (selectedProfile.serviceMappings?.length || 0) === 0 && (
+                  <div className="mt-1 text-xs text-amber-700">
+                    Warning: zero service mappings. Scenario launches will rely on defaults/global routing behavior.
+                  </div>
+                )}
+                {impersonatorId && (
+                  <div className="mt-1 text-xs text-indigo-700">
+                    Impersonation active. Director launches remain scoped to the impersonated user.
+                  </div>
+                )}
             </div>
             <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
@@ -189,7 +213,7 @@ export const DirectorDashboard: React.FC = () => {
                               </div>
                               
                               <button
-                                  onClick={(e) => { e.stopPropagation(); handleLaunch(demo); }} // Prevent modal from opening when launching
+                                  onClick={(e) => { e.stopPropagation(); void handleLaunch(demo); }} // Prevent modal from opening when launching
                                   className={`w-full py-2 rounded flex items-center justify-center gap-2 text-sm font-semibold transition-colors
                                       bg-green-50 text-green-600 hover:bg-green-600 hover:text-white border border-green-100 hover:border-green-600
                                   }`}

@@ -4,7 +4,7 @@ import prisma from '../prisma';
 export class GoldenDemoService {
   async listGoldenDemos(userId: string, role: Role, vertical?: string): Promise<GoldenDemo[]> {
     const where: Prisma.GoldenDemoWhereInput = {};
-    if (role === Role.VIEWER) {
+    if (role !== Role.ADMIN) {
       where.OR = [{ createdByUserId: userId }, { isShared: true }];
     }
     if (vertical) {
@@ -14,7 +14,7 @@ export class GoldenDemoService {
   }
 
   async getGoldenDemo(id: string, userId?: string, role?: Role): Promise<GoldenDemo | null> {
-    if (!userId || !role || role === Role.EDITOR || role === Role.ADMIN) {
+    if (!userId || !role || role === Role.ADMIN) {
       return prisma.goldenDemo.findFirst({ where: { id } });
     }
     return prisma.goldenDemo.findFirst({
@@ -99,8 +99,7 @@ export class GoldenDemoService {
       }
     }
 
-    const where =
-      role === Role.EDITOR || role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
+    const where = role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
     try {
       return await prisma.goldenDemo.update({ where, data });
     } catch (error: any) {
@@ -122,8 +121,7 @@ export class GoldenDemoService {
       }
     }
 
-    const where =
-      role === Role.EDITOR || role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
+    const where = role === Role.ADMIN ? { id } : { id, createdByUserId: userId };
     return prisma.goldenDemo.delete({ where });
   }
 }

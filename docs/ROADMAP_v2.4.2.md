@@ -1,147 +1,149 @@
 # Roadmap — v2.4.2
 
-**Focus:** Realistic Background Change Noise + Faker Stability
+**Focus:** Cleanup, UX Improvements, and Bug Fixes
 
 ---
 
 ## Theme
 
-v2.4.2 focuses on improving the ambient realism of the simulator by upgrading background change noise from flat, generic payloads to adapter- and template-driven change events, while also addressing known faker determinism and behavior inconsistencies across events and changes.
+v2.4.2 is a stabilization and quality release. The goal is to improve reliability and day-to-day usability after v2.4.1, while avoiding major architectural shifts.
 
-Golden Demos remain unchanged in this release; this work targets background noise generation only.
+Planned architectural work (seeded randomness, DB-backed background change adapters/templates) is deferred to `v2.5`.
 
 ---
 
 ## Primary Objectives
 
-### 1. Database-Backed Change Adapter System (Background Noise Only)
+### 1. Runtime Reliability Cleanup (Simulation/Tracks)
 
-Introduce a persistent, extensible framework for generating realistic background change events using adapter- and template-based rendering.
+Reduce inconsistent behavior during start/stop/restart cycles and improve demo operator confidence.
 
 Scope
-- Applies only to background noise changes
-- Does not modify Golden Demo authoring or execution
-- Replaces the current flat, hardcoded CI/CD change generator
+- Background track lifecycle behavior
+- Track stop semantics and delayed work cleanup
+- Logging clarity for skipped/failed follow-up events
 
 Deliverables
-- Prisma models for:
-  - `ChangeAdapter`
-  - `ChangeTemplate`
-- Seed data for initial adapters and templates
-- Adapter selection via weighted randomization
-- Template rendering into:
-  - `payload.summary`
-  - `payload.source`
-  - `payload.custom_details`
-
-Initial Adapters
-- GitHub Actions
-- ServiceNow
-- Generic CI/CD Pipeline
-
-Initial Templates (per adapter)
-- Routine deploy
-- Rollback / hotfix
-- Standard / emergency change (ServiceNow)
-- Pipeline deploy / configuration update
+- Ensure background track stop prevents delayed follow-up emits (timeouts / deferred actions)
+- Audit async follow-up work for safe no-op behavior after track stop
+- Improve logs for "skipped" vs "failed" change/incident-related actions
+- Small refactors only where needed to support reliability
 
 ---
 
-### 2. Realistic Change Payload Rendering
+### 2. User Workflow Improvements (Director / Editor / Mapping)
 
-Upgrade background change payloads to look vendor-native while preserving the existing event envelope.
+Improve common operator and editor flows without changing core demo authoring models.
 
-Guaranteed Output Shape
-```json
-{
-  "routing_key": "...",
-  "payload": {
-    "summary": "...",
-    "timestamp": "...",
-    "source": "...",
-    "custom_details": { }
-  }
-}
-```
+Candidate Improvements
+- Director run visibility and ownership consistency (including impersonation scenarios)
+- Better inline validation and error messaging in demo/editor forms
+- Mapping profile UX polish (service mapping clarity, defaults, save flows)
+- Presenter-facing clarity improvements in monitoring panels and status labels
 
-Key Behaviors
-- Vendor-specific fields (e.g., `change_number`, `run_id`, `commit_sha`)
-- Deterministic randomness via seeded generation
-- Always produces a non-empty `summary`
-- Preserves existing routing key and timestamp logic
+Principles
+- No major UI redesign
+- No breaking API changes
+- Prioritize friction removal in high-frequency workflows
 
 ---
 
-### 3. Backwards-Compatible Fallback
+### 3. Bug Fixes and Quality-of-Life
 
-Ensure simulator stability if templates are missing or misconfigured.
+Close known issues and reduce noise before the next major release.
 
-Behavior
-- If no enabled change templates are available:
-  - Fall back to the legacy flat CI/CD change generator
-- No breaking changes to existing simulations
+Target Areas
+- Impersonation + Director track ownership / visibility mismatch
+- Race-condition edge cases around track launches and status updates
+- Inconsistent version metadata / release labeling across docs and package manifests
+- Minor cleanup of stale comments/TODOs and dead paths discovered during fixes
 
 ---
 
-## Faker & Randomization Stability Improvements
+### 4. Release Readiness & Dev Ergonomics (Lightweight)
 
-### 4. Faker Determinism & Consistency Fixes
+Tighten release hygiene without introducing a new tooling stack.
 
-Address known issues where faker-generated fields behave inconsistently across events and changes.
-
-Problem Areas
-- Non-deterministic values across identical simulation runs
-- Inconsistent faker usage between alerts and changes
-- Over-randomization producing unrealistic noise patterns
-
-Fixes
-- Centralize faker and random helpers behind a seeded utility
-- Ensure identical inputs produce identical outputs within a run
-- Align faker behavior across:
-  - Alerts
-  - Background changes
-  - Scenario-driven noise
-
-Outcome
-- More predictable demos
-- Easier testing and replay
-- Fewer "why did this look different?" moments
+Deliverables
+- Align version strings where appropriate for the 2.4.x line
+- Add or document a basic validation checklist for local/cloud verification
+- Optional: add minimal server scripts (`lint` and/or smoke tests) if low-risk and quick
 
 ---
 
 ## Non-Goals (Explicitly Out of Scope)
 
-- Golden Demo change/event authoring updates
-- Change template authoring UI
-- Alert adapter refactors
-- Scenario-level template overrides
-- Advanced conditional logic in templates
+- Seeded randomness / deterministic simulation architecture
+- DB-backed background change adapter/template system
+- Major simulation engine refactors
+- Golden Demo schema redesign
+- New template authoring UI
 
-These items are candidates for future minor releases.
+These items move to `v2.5`.
 
 ---
 
 ## Acceptance Criteria
 
-- Background noise changes are generated from DB-backed templates
-- At least 3 adapters and ~9 templates are seeded
-- Generated changes appear vendor-realistic
-- Existing change envelope shape is preserved
-- Faker output is deterministic within a simulation run
-- Simulator functions correctly with zero template configuration (fallback enabled)
+- No known stop/restart leakage of delayed background actions in normal testing
+- Impersonation + Director run ownership issue is validated and fixed (or explicitly documented with repro and follow-up)
+- At least 2-4 user-facing workflow improvements land with no breaking behavior changes
+- Release docs/version labeling are internally consistent for the shipped 2.4.x patch
+- v2.5 roadmap is created and captures deferred architecture work
 
 ---
 
-## Forward-Looking (Post–2.4.2)
+## Forward-Looking (v2.5)
 
-This release lays the groundwork for:
-- Reusing adapters and templates for Golden Demos
-- Change template authoring and management UI
-- Scenario-specific noise profiles
-- Richer change → alert → incident correlation narratives
+Planned next-major focus includes:
+- Seeded randomness and deterministic replay behavior
+- DB-backed change adapters/templates for realistic background change noise
+- Cleaner simulation architecture seams for testability and extensibility
 
 ---
 
 ## Bugs / Follow-Ups
 
 - Impersonation + Director track ownership: launching a demo track while impersonating appears to attach the run to the original user (track visibility/ownership mismatch). Validate and fix.
+- Background track delayed actions may outlive stop/restart boundaries. Validate and harden.
+
+---
+
+## Prioritized Implementation Checklist (Quick Wins First)
+
+### P0 (Do First) - Reliability / Bug Fixes
+
+- [x] Harden `BackgroundTrack` stop behavior so delayed follow-up actions do not emit after stop/restart
+- [x] Validate and fix impersonation + Director track ownership/visibility mismatch
+- [x] Audit track-start/stop logs and status transitions for misleading states
+
+### P1 - User Improvements (High-Frequency Flows)
+
+- [x] Improve Director Active Tracks visibility labels for owned/shared/impersonated runs
+- [x] Surface Director launch/socket errors in UI (not console-only)
+- [x] Clarify mapping profile effective behavior and zero-mapping warnings
+- [x] Add/clarify inline validation and error feedback in editor forms where failures are currently opaque
+- [x] Polish mapping profile save/default flows (reduce confusion around effective routing keys)
+
+### P2 - Cleanup / Release Hygiene
+
+- [x] Align 2.4.x version metadata across README/package manifests/tags as appropriate
+- [x] Clean up stale comments/TODOs encountered during fixes
+- [x] Document a lightweight local + cloud patch validation checklist
+- [x] Cap/prune completed track-run history in client store to reduce UI clutter
+- [x] Normalize track lifecycle log messages across Session/Background/Scenario
+
+### P3 - Optional (Time-Boxed)
+
+- [ ] Add minimal server validation script(s) (`lint` and/or smoke checks) if low-risk
+- [ ] Small internal refactors that directly reduce bug risk without changing behavior
+
+---
+
+## Suggested Execution Order (Post-P0)
+
+1. Surface Director launch/socket errors in UI (fastest operator impact)
+2. Improve Director Active Tracks visibility labels for owned/shared/impersonated runs
+3. Clarify mapping profile effective behavior and zero-mapping warnings
+4. Align version metadata + add patch validation checklist
+5. Cap/prune completed track-run history

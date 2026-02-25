@@ -46,15 +46,29 @@ export class ScenarioTrack extends SimulationTrack {
   }
 
   public start(): void {
-    this.status = 'running';
-    if (this.config.items && Array.isArray(this.config.items) && this.config.items.length > 0) {
-      this.scheduleItems(this.config.items);
+    if (this.status === 'running') return;
+
+    this.clearTimers();
+    this.threadState.clear();
+
+    if (!this.config.items || !Array.isArray(this.config.items) || this.config.items.length === 0) {
+      this.status = 'completed';
+      this.addLog('Scenario track completed: no items to schedule.', 'info');
+      this.onComplete?.();
+      return;
     }
+
+    this.status = 'running';
+    this.addLog('Scenario track started', 'info');
+    this.scheduleItems(this.config.items);
   }
 
   public stop(): void {
+    if (this.status === 'stopped') return;
+
     this.status = 'stopped';
     this.clearTimers();
+    this.addLog('Scenario track stopped', 'info');
   }
 
   public override getTrackInfo() {
@@ -99,6 +113,10 @@ export class ScenarioTrack extends SimulationTrack {
     this.addLog(`Scheduled ${items.length} scenario items.`, 'info');
     if (items.length > 0 && this.onComplete) {
       const finalTimer = setTimeout(() => {
+        if (this.status !== 'running') return;
+        this.status = 'completed';
+        this.clearTimers();
+        this.addLog('Scenario track completed', 'info');
         this.onComplete?.();
       }, cumulativeMs + 250);
       this.timers.push(finalTimer);

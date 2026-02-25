@@ -25,6 +25,7 @@ type FailureContext = {
 export class BackgroundTrack extends SimulationTrack {
   public type: 'background' | 'scenario' = 'background';
   private timer: NodeJS.Timeout | null = null;
+  private deferredTimers: Set<NodeJS.Timeout> = new Set();
   // Queues for batching API calls
   private pendingAcks: Set<string> = new Set<string>();
   private pendingResolves: Set<string> = new Set<string>();
@@ -52,6 +53,7 @@ export class BackgroundTrack extends SimulationTrack {
   }
 
   public start(): void {
+    if (this.status === 'running') return;
     // Background track logic is driven by the Session tick, 
     // but it might have internal state to reset.
     this.status = 'running';
@@ -59,11 +61,15 @@ export class BackgroundTrack extends SimulationTrack {
   }
 
   public stop(): void {
+    if (this.status === 'stopped') return;
+    this.clearDeferredTimers();
     this.status = 'stopped';
     this.addLog('Background noise track stopped', 'info');
   }
 
   public async tick(): Promise<void> {
+    if (!this.isTrackRunning()) return;
+
     const now = Date.now();
 
     // --- State Sync (Polling) ---
@@ -322,6 +328,50 @@ export class BackgroundTrack extends SimulationTrack {
     }
   }
 
+  private isTrackRunning(): boolean {
+    return this.status === 'running';
+  }
+
+  private clearDeferredTimers(): void {
+    for (const timer of this.deferredTimers) {
+      clearTimeout(timer);
+    }
+    this.deferredTimers.clear();
+  }
+
+  private waitWithTrackCancellation(ms: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.isTrackRunning()) {
+        resolve(false);
+        return;
+      }
+
+      const timer = setTimeout(() => {
+        this.deferredTimers.delete(timer);
+        resolve(this.isTrackRunning());
+      }, ms);
+
+      this.deferredTimers.add(timer);
+    });
+  }
+
+  private scheduleDeferredAction(ms: number, action: () => Promise<void> | void): void {
+    if (!this.isTrackRunning()) return;
+
+    const timer = setTimeout(async () => {
+      this.deferredTimers.delete(timer);
+      if (!this.isTrackRunning()) return;
+
+      try {
+        await action();
+      } catch (e: any) {
+        this.addLog(`Deferred action failed: ${e?.message || 'unknown error'}`, 'warn');
+      }
+    }, ms);
+
+    this.deferredTimers.add(timer);
+  }
+
   // Helper methods copied and adapted
   private async ensurePdUserId() {
       // Simple cache check? In base class?
@@ -575,10 +625,14 @@ export class BackgroundTrack extends SimulationTrack {
   }
 
   private async triggerRelatedChangeEvents(targetServices: Service[]) {
+      if (!this.isTrackRunning()) return;
+
       const count = Math.min(targetServices.length, getRandomInt(1, 3));
       const selectedServices = targetServices.sort(() => 0.5 - Math.random()).slice(0, count);
 
       for (const service of selectedServices) {
+          if (!this.isTrackRunning()) return;
+
           const logicalServiceName = this.getLogicalServiceName(service);
 
           let changeRoutingKeyCandidate = this.config.changeRoutingKey ?? this.simulatorConfig.pdChangeEventsRoutingKey ?? null;
@@ -619,7 +673,13 @@ export class BackgroundTrack extends SimulationTrack {
               }
           };
 
-          await new Promise(r => setTimeout(r, getRandomInt(500, 2000)));
+          const shouldContinue = await this.waitWithTrackCancellation(getRandomInt(500, 2000));
+          if (!shouldContinue) {
+              this.addLog(`Cancelled related change event for ${effectiveServiceName} after track stop`, 'info');
+              return;
+          }
+
+          if (!this.isTrackRunning()) return;
 
           this.pdClient.triggerChangeEvent(body)
             .then(() => {
@@ -630,6 +690,8 @@ export class BackgroundTrack extends SimulationTrack {
   }
 
   private async triggerTeamFailureScenario() {
+      if (!this.isTrackRunning()) return;
+
       const { selectedServices } = this.config;
       if (!selectedServices || selectedServices.length === 0) return;
   
@@ -665,14 +727,14 @@ export class BackgroundTrack extends SimulationTrack {
           incidentDedupKeys.push(dedupKey);
           
           const delay = idx * getRandomInt(2000, 5000);
-          setTimeout(async () => {
-               await this.triggerIncident(svc, { 
-                   id: failureId, 
-                   summary: `Team Failure: ${targetTeam.name} - Systematic Outage`,
-                   isMajor: isMajorScenario,
-                   preGeneratedDedupKey: dedupKey 
-               });
-          }, delay);
+          this.scheduleDeferredAction(delay, async () => {
+            await this.triggerIncident(svc, {
+              id: failureId,
+              summary: `Team Failure: ${targetTeam.name} - Systematic Outage`,
+              isMajor: isMajorScenario,
+              preGeneratedDedupKey: dedupKey
+            });
+          });
       });
       
       if (incidentDedupKeys.length > 1) {
@@ -684,6 +746,6 @@ export class BackgroundTrack extends SimulationTrack {
           });
       }
   
-      this.triggerRelatedChangeEvents(targetServices);
+      void this.triggerRelatedChangeEvents(targetServices);
   }
 }

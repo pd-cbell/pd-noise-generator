@@ -322,6 +322,27 @@ interface AppState extends SimulationState, ConfigurationState {
 }
 
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
+const MAX_TRACK_RUNS = 80;
+const MAX_COMPLETED_TRACK_RUNS = 40;
+
+const pruneTrackRunsById = (trackRunsById: Record<string, TrackRunState>) => {
+  const runs = Object.values(trackRunsById);
+  if (runs.length <= MAX_TRACK_RUNS) return trackRunsById;
+
+  const activeRuns = runs.filter((run) => run.isActive);
+  const completedRuns = runs
+    .filter((run) => !run.isActive)
+    .sort((a, b) => (b.finishedAt || b.startedAt || 0) - (a.finishedAt || a.startedAt || 0))
+    .slice(0, MAX_COMPLETED_TRACK_RUNS);
+
+  return [...activeRuns, ...completedRuns]
+    .sort((a, b) => (b.finishedAt || b.startedAt || 0) - (a.finishedAt || a.startedAt || 0))
+    .slice(0, MAX_TRACK_RUNS)
+    .reduce<Record<string, TrackRunState>>((acc, run) => {
+      acc[run.trackRunId] = run;
+      return acc;
+    }, {});
+};
 
 export const useStore = create<AppState>()(
   persist(
@@ -763,22 +784,29 @@ export const useStore = create<AppState>()(
       },
 
       upsertTrackRun: (run) => {
-        set((state) => ({
-          trackRunsById: { ...state.trackRunsById, [run.trackRunId]: { ...(state.trackRunsById[run.trackRunId] || {}), ...run } },
-          activeTrackRunId: run.trackRunId,
-          selectedTrackRunId: state.trackSelectionMode === 'auto' ? run.trackRunId : state.selectedTrackRunId,
-        }));
+        set((state) => {
+          const nextTrackRunsById = pruneTrackRunsById({
+            ...state.trackRunsById,
+            [run.trackRunId]: { ...(state.trackRunsById[run.trackRunId] || {}), ...run },
+          });
+          return {
+            trackRunsById: nextTrackRunsById,
+            activeTrackRunId: run.trackRunId,
+            selectedTrackRunId: state.trackSelectionMode === 'auto' ? run.trackRunId : state.selectedTrackRunId,
+          };
+        });
       },
 
       finishTrackRun: (runId) => {
         set((state) => {
           const existing = state.trackRunsById[runId];
           if (!existing) return state;
-          return {
-            trackRunsById: {
+          const nextTrackRunsById = pruneTrackRunsById({
               ...state.trackRunsById,
               [runId]: { ...existing, isActive: false, finishedAt: existing.finishedAt || Date.now() },
-            },
+            });
+          return {
+            trackRunsById: nextTrackRunsById,
             activeTrackRunId: state.activeTrackRunId === runId ? null : state.activeTrackRunId,
           };
         });

@@ -363,24 +363,80 @@ Do NOT output JSON in this step. This is narrative planning only.
         const fullNarrativeSource = state.goldenDemoNarrative || state.planSummary;
         if (fullNarrativeSource) {
             const extractTldr = (text: string) => {
-                const tldrMatch = text.match(/TL;DR[:\s]*([\s\S]*?)(?:\n\s*\n|$)/i);
-                if (tldrMatch && tldrMatch[1]) {
-                    return tldrMatch[1].trim();
+                const sanitize = (value: string) =>
+                    value
+                        .replace(/^[\s>*-]+/gm, '')
+                        .replace(/\*\*/g, '')
+                        .replace(/`/g, '')
+                        .trim();
+                const tldrLine = text.match(/^\s*(?:[-*]\s*)?(?:\*\*)?TL;DR(?:\*\*)?\s*:?\s*(.+)$/im);
+                if (tldrLine?.[1]) {
+                    const cleaned = sanitize(tldrLine[1]);
+                    if (cleaned.length >= 12) return cleaned;
                 }
-                const firstParagraph = text.split(/\n\s*\n/)[0];
-                return firstParagraph.trim();
+                const paragraphs = text
+                    .split(/\n\s*\n/)
+                    .map((p) => sanitize(p))
+                    .filter((p) => p.length >= 20);
+                return paragraphs[0] || sanitize(text).slice(0, 280);
             };
             const extractStageBlock = (text: string, stageNumber: number) => {
-                const stageHeader = new RegExp(`(?:^|\\n)\\s*(?:#{2,3}\\s*)?Stage\\s*${stageNumber}\\b[\\s\\S]*?\\n`, 'i');
-                const headerMatch = text.match(stageHeader);
-                if (!headerMatch || headerMatch.index === undefined) return '';
-                const startIndex = headerMatch.index + headerMatch[0].length;
-                const tail = text.slice(startIndex);
-                const nextHeader = tail.match(
-                    /(?:\n\s*(?:#{2,3}\s*)?Stage\s*\d+\b|\n\s*(?:#{2,3}\s*)?PagerDuty Operations Cloud Value\b)/i
-                );
-                const endIndex = nextHeader && nextHeader.index !== undefined ? startIndex + nextHeader.index : text.length;
-                return text.slice(startIndex, endIndex).trim();
+                const labels: Record<number, string[]> = {
+                    1: ['routine change', 'minor incidents'],
+                    2: ['business impact'],
+                    3: ['triage', 'context'],
+                    4: ['resolution', 'post-incident review'],
+                };
+                const normalize = (line: string) =>
+                    line
+                        .toLowerCase()
+                        .replace(/[`*_>#]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                const isStageHeader = (line: string, targetStage?: number) => {
+                    const n = normalize(line);
+                    const numbered = n.match(/^(?:[-*]\s*)?(?:stage\s*)?([1-4])(?:[\).:\-]|\s)/);
+                    if (numbered) {
+                        const stage = Number(numbered[1]);
+                        if (targetStage && stage !== targetStage) return false;
+                        const requiredTerms = labels[stage] || [];
+                        return requiredTerms.length === 0 || requiredTerms.every((term) => n.includes(term));
+                    }
+                    if (!targetStage) {
+                        return Object.entries(labels).some(([idx, terms]) => terms.every((term) => n.includes(term)));
+                    }
+                    return (labels[targetStage] || []).every((term) => n.includes(term));
+                };
+
+                const lines = text.split('\n');
+                let collecting = false;
+                const collected: string[] = [];
+
+                for (const line of lines) {
+                    if (isStageHeader(line)) {
+                        if (collecting && !isStageHeader(line, stageNumber)) break;
+                        if (isStageHeader(line, stageNumber)) {
+                            collecting = true;
+                            continue;
+                        }
+                    }
+                    if (!collecting) continue;
+
+                    const normalized = normalize(line);
+                    if (
+                        normalized.includes('pagerduty operations cloud value') ||
+                        normalized.includes('where pagerduty')
+                    ) {
+                        break;
+                    }
+                    collected.push(line);
+                }
+
+                return collected
+                    .join('\n')
+                    .replace(/^\s+|\s+$/g, '')
+                    .replace(/\n{3,}/g, '\n\n')
+                    .trim();
             };
             if (!goldenDemoOutput.configJson) {
                 goldenDemoOutput.configJson = {};
