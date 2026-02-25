@@ -77,4 +77,4 @@ Admins can manage user roles and agent access:
 - **Agent blocked:** Admin must enable agent access for the user.
 
 ## Cloud Validation
-v2.4.1 is in progress with local validation done. Cloud validation is pending.
+v2.4.2 is in progress with local validation in progress. Cloud validation is pending.

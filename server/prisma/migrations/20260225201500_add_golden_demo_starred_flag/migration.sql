@@ -1,0 +1,2 @@
+ALTER TABLE "GoldenDemo"
+ADD COLUMN "isStarred" BOOLEAN NOT NULL DEFAULT false;

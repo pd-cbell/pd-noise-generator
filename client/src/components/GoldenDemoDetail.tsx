@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { GoldenDemo } from '../store/useStore';
-import { Play, History, Link as LinkIcon, Copy, Shield, Download } from 'lucide-react';
+import { Play, History, Download, Star } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
 import { useStore } from '../store/useStore';
+import { useAuth, UserRole } from '../contexts/AuthContext';
 
 interface GoldenDemoDetailProps {
   demo: GoldenDemo;
@@ -11,22 +12,15 @@ interface GoldenDemoDetailProps {
 }
 
 const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onEdit }) => {
-  const { mappingProfiles, selectedMappingProfileId, setSelectedMappingProfileId } = useStore();
-  const webhookBase = import.meta.env.VITE_WEBHOOK_BASE_URL || window.location.origin;
-  const webhookUrl = `${webhookBase}/api/golden-demos/${demo.id}/trigger`;
+  const { user } = useAuth();
+  const { updateGoldenDemo, addLog } = useStore();
   const fullNarrative = demo.configJson?.narrative?.full || '';
   const showFullNarrative =
     Boolean(fullNarrative && fullNarrative.trim()) &&
     fullNarrative.trim() !== demo.narrative.trim();
   const [isFullNarrativeOpen, setIsFullNarrativeOpen] = useState(false);
-
-  const copyText = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // ignore
-    }
-  };
+  const [isUpdatingStar, setIsUpdatingStar] = useState(false);
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   const handleExport = () => {
     const payload = {
@@ -42,11 +36,28 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
     URL.revokeObjectURL(url);
   };
 
+  const handleToggleStar = async () => {
+    if (!isAdmin || isUpdatingStar) return;
+    setIsUpdatingStar(true);
+    try {
+      await updateGoldenDemo(demo.id, { isStarred: !demo.isStarred });
+      addLog(`${!demo.isStarred ? 'Starred' : 'Unstarred'} Golden Demo "${demo.name}"`, 'info');
+    } finally {
+      setIsUpdatingStar(false);
+    }
+  };
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-full flex flex-col overflow-y-auto">
       <div className="flex items-center justify-between mb-4 border-b pb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-2xl font-bold text-gray-900">{demo.name}</h2>
+          {demo.isStarred && (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded flex items-center gap-1">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+              Approved / Tested
+            </span>
+          )}
           {demo.isShared && (
             <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">
               Shared
@@ -60,6 +71,20 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
               className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
             >
               Edit Details
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => void handleToggleStar()}
+              disabled={isUpdatingStar}
+              className={`px-4 py-2 rounded-md transition-colors flex items-center gap-2 ${
+                demo.isStarred
+                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              } disabled:opacity-50`}
+            >
+              <Star size={18} className={demo.isStarred ? 'fill-amber-400 text-amber-500' : ''} />
+              {demo.isStarred ? 'Unstar' : 'Star as Approved'}
             </button>
           )}
           <button
@@ -127,60 +152,6 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
             Session History
         </h3>
         <SessionHistory goldenDemoId={demo.id} />
-      </div>
-
-      <div className="mt-8 border-t pt-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <LinkIcon className="w-5 h-5 text-gray-500" />
-          Triggers (Webhook)
-        </h3>
-        <div className="space-y-3 text-sm text-gray-700">
-          <div className="flex items-center gap-2">
-            <div className="font-semibold">Webhook URL</div>
-            <button
-              className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-1"
-              onClick={() => copyText(webhookUrl)}
-            >
-              <Copy className="w-3 h-3" />
-              Copy
-            </button>
-          </div>
-          <code className="block bg-gray-100 border border-gray-200 rounded px-3 py-2 text-xs break-all">
-            {webhookUrl}
-          </code>
-          <div className="flex flex-col gap-2">
-            <div className="font-semibold">Mapping Profile (optional)</div>
-            <select
-              className="w-64 border border-gray-300 rounded px-2 py-1 text-sm"
-              value={selectedMappingProfileId || ''}
-              onChange={(e) => setSelectedMappingProfileId(e.target.value || null)}
-            >
-              <option value="">None</option>
-              {mappingProfiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-gray-500">
-              Include header <code>x-mapping-profile-id</code> or JSON body <code>{`{ "mappingProfileId": "<id>" }`}</code> to force a profile.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <div className="font-semibold flex items-center gap-2">
-              <Shield className="w-4 h-4 text-gray-500" />
-              Example curl
-            </div>
-            <code className="block bg-gray-100 border border-gray-200 rounded px-3 py-2 text-xs break-all">
-{`curl -X POST ${webhookUrl} \\
-  -H "Content-Type: application/json" \\
-  -H "x-pd-routing-key: $PD_EVENTS_KEY" \\
-  -H "x-pd-change-routing-key: $PD_CHANGE_KEY" \\
-  ${selectedMappingProfileId ? `-H "x-mapping-profile-id: ${selectedMappingProfileId}" \\\n  ` : ''}-d '{}'`}
-            </code>
-            <p className="text-xs text-gray-500">
-              Provide routing keys or defaults from server env will be used. Trigger starts this Golden Demo server-side.
-            </p>
-          </div>
-        </div>
       </div>
 
       <div className="mt-auto border-t pt-4 text-sm text-gray-500 flex justify-between">

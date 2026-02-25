@@ -3,13 +3,14 @@
 **Branch:** `main`
 
 ## Status
-v2.4 is complete. v2.4.1 is in progress with local validation done and cloud validation pending.
+v2.4 is complete. v2.4.2 is in progress with local validation in progress and cloud validation pending.
 
-## v2.4.1 Focus
-- Scenario payload normalization + summary enforcement
-- Shared subdomain scenario injection + requester visibility
-- Agentic narrative persistence and change routing defaults
-- Mapping UX improvements (type-ahead + quick domain config)
+## v2.4.2 Focus
+- Runtime reliability hardening (track stop/restart, lifecycle status/log cleanup)
+- Director UX polish (track visibility labels, launch error surfacing, webhook copy links)
+- Golden Demo UX improvements (session history for Director/Webhook launches)
+- Agentic quality fixes (narrative stage extraction + faker token compatibility)
+- Mapping/editor validation and workflow clarity
 
 ## Current Platform Snapshot
 - **App name:** PagerDuty Customer Sim & Demo Platform (formerly “PagerDuty Noise Simulator”).
@@ -27,9 +28,10 @@ v2.4 is complete. v2.4.1 is in progress with local validation done and cloud val
 - **Admin Impersonation:** Admins can impersonate users and exit impersonation.
 
 ## Validation / Release Focus
-- Track run monitor + presenter guide behavior during active sessions.
-- Editor domain config flow and service loading.
-- Admin impersonation enter/exit.
+- Director Golden Demo launches populate Session History (launcher + mapping profile + source).
+- Webhook-triggered Golden Demo launches create scenario tracks and history rows.
+- Editor stage re-extraction from narrative source works for existing demos.
+- Quick domain config modal masks API token input.
 - Cloud: cookie/CORS + socket auth validation pending.
 
 ## Gotchas / Notes

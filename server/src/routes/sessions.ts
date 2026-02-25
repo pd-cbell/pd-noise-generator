@@ -15,7 +15,7 @@ export default (simulationManager: SimulationManager) => {
   router.post('/start', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
     try {
       const { goldenDemoId, name, notes } = req.body;
-      const userId = req.user!.userId;
+      const { userId } = req.user!;
 
       if (!goldenDemoId) {
         return res.status(400).json({ message: 'goldenDemoId is required' });
@@ -25,6 +25,8 @@ export default (simulationManager: SimulationManager) => {
         goldenDemoId,
         name,
         notes,
+        source: 'PRESENTER',
+        launchedByUserId: userId,
         createdByUserId: userId,
       });
 
@@ -70,9 +72,9 @@ export default (simulationManager: SimulationManager) => {
   // GET /api/sessions
   router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
     try {
-      const userId = req.user!.userId;
+      const { userId, role } = req.user!;
       const { goldenDemoId } = req.query;
-      const sessions = await sessionService.listSessions(userId, goldenDemoId ? String(goldenDemoId) : undefined);
+      const sessions = await sessionService.listSessions(userId, role, goldenDemoId ? String(goldenDemoId) : undefined);
       res.json(sessions);
     } catch (error) {
       console.error('Error listing sessions:', error);
@@ -83,8 +85,8 @@ export default (simulationManager: SimulationManager) => {
   // GET /api/sessions/:id
   router.get('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
       try {
-          const userId = req.user!.userId;
-          const session = await sessionService.getSession(req.params.id, userId);
+          const { userId, role } = req.user!;
+          const session = await sessionService.getSession(req.params.id, userId, role);
           if (!session) return res.status(404).json({ message: 'Session not found' });
           res.json(session);
       } catch (error) {

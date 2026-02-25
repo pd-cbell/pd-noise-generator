@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Play, Layers, AlertTriangle, Loader2, ListEnd } from 'lucide-react'; // Added ListEnd icon
+import { Play, Layers, AlertTriangle, Loader2, ListEnd, Link2, Star } from 'lucide-react'; // Added ListEnd icon
 import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,6 +8,7 @@ import { ActiveTracksPanel } from './ActiveTracksPanel';
 import { QuickDomainConfigModal } from './QuickDomainConfigModal';
 
 export const DirectorDashboard: React.FC = () => {
+  const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
   const {
     addLog,
     goldenDemos,
@@ -63,6 +64,23 @@ export const DirectorDashboard: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleCopyWebhookLink = async (demo: GoldenDemo) => {
+    try {
+      const params = new URLSearchParams();
+      if (selectedMappingProfileId) {
+        params.set('mappingProfileId', selectedMappingProfileId);
+      }
+      const url = `${API_BASE}/api/golden-demos/${demo.id}/trigger${params.toString() ? `?${params.toString()}` : ''}`;
+      await navigator.clipboard.writeText(url);
+      addLog(
+        `Copied webhook launch link for "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
+        'info'
+      );
+    } catch (e: any) {
+      addLog(`Failed to copy webhook link: ${e?.message || 'clipboard unavailable'}`, 'error');
+    }
+  };
+
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedDemo(null);
@@ -71,11 +89,19 @@ export const DirectorDashboard: React.FC = () => {
   const [filterVertical, setFilterVertical] = useState<string>('');
   const [filterMaturity, setFilterMaturity] = useState<string>('');
 
-  const filteredDemos = goldenDemos.filter(demo => {
-    const matchesVertical = filterVertical ? demo.vertical === filterVertical : true;
-    const matchesMaturity = filterMaturity ? demo.maturityLevel === filterMaturity : true;
-    return matchesVertical && matchesMaturity;
-  });
+  const filteredDemos = goldenDemos
+    .filter(demo => {
+      const matchesVertical = filterVertical ? demo.vertical === filterVertical : true;
+      const matchesMaturity = filterMaturity ? demo.maturityLevel === filterMaturity : true;
+      return matchesVertical && matchesMaturity;
+    })
+    .sort((a, b) => {
+      const starDelta = Number(Boolean(b.isStarred)) - Number(Boolean(a.isStarred));
+      if (starDelta !== 0) return starDelta;
+      return a.name.localeCompare(b.name);
+    });
+
+  const starredCount = filteredDemos.filter((d) => d.isStarred).length;
 
   const uniqueVerticals = Array.from(new Set(goldenDemos.map(demo => demo.vertical)));
   const uniqueMaturityLevels = Array.from(new Set(goldenDemos.map(demo => demo.maturityLevel)));
@@ -144,6 +170,12 @@ export const DirectorDashboard: React.FC = () => {
                     Impersonation active. Director launches remain scoped to the impersonated user.
                   </div>
                 )}
+                {starredCount > 0 && (
+                  <div className="mt-1 text-xs text-amber-700 flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                    {starredCount} approved/tested demo{starredCount === 1 ? '' : 's'} surfaced first
+                  </div>
+                )}
             </div>
             <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
@@ -201,12 +233,27 @@ export const DirectorDashboard: React.FC = () => {
                           {/* Golden Demo Header */}
                           <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                               <AlertTriangle className="w-4 h-4 text-gray-400" />
+                              {demo.isStarred && <Star className="w-4 h-4 text-amber-500 fill-amber-400" />}
                               <h3 className="font-bold text-gray-800 truncate" title={demo.name}>{demo.name}</h3>
+                              <button
+                                  onClick={(e) => { e.stopPropagation(); void handleCopyWebhookLink(demo); }}
+                                  className="ml-auto text-gray-400 hover:text-indigo-600 p-1 rounded hover:bg-white border border-transparent hover:border-gray-200"
+                                  title={`Copy webhook launch link${selectedProfile ? ` (${selectedProfile.name})` : ''}`}
+                                  aria-label="Copy webhook launch link"
+                              >
+                                  <Link2 className="w-4 h-4" />
+                              </button>
                           </div>
                           
                           {/* Golden Demo Details */}
                           <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
                               <div>
+                                  {demo.isStarred && (
+                                    <div className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 mb-2">
+                                      <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                                      Approved / Tested
+                                    </div>
+                                  )}
                                   <p className="text-xs text-gray-500">Vertical: <span className="font-medium text-gray-700">{demo.vertical}</span></p>
                                   <p className="text-xs text-gray-500">Maturity: <span className="font-medium text-gray-700">{demo.maturityLevel}</span></p>
                                   <p className="text-sm text-gray-600 mt-2 line-clamp-3">{demo.narrative}</p>

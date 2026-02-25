@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore, GoldenDemo } from '../store/useStore';
-import { Loader2, Plus, Edit, Trash2, Upload } from 'lucide-react';
+import { Loader2, Plus, Edit, Trash2, Upload, Star } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
 import { GoldenDemoEditorV2 } from './GoldenDemoEditorV2';
 import { useAuth, UserRole } from '../contexts/AuthContext';
@@ -14,10 +14,12 @@ const GoldenDemoLibrary: React.FC = () => {
     addLog,
     pendingEditGoldenDemoId,
     clearEditGoldenDemoRequest,
+    updateGoldenDemo,
   } = useStore();
   
   const { user } = useAuth();
   const canEditAll = user?.role === UserRole.EDITOR || user?.role === UserRole.ADMIN;
+  const isAdmin = user?.role === UserRole.ADMIN;
   const canCreate = Boolean(user);
 
   const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
@@ -78,6 +80,16 @@ const GoldenDemoLibrary: React.FC = () => {
     addLog(`Launching simulation for Golden Demo: "${demo.name}"`, 'info');
     // For now, just log the config
     console.log('Simulation Config:', demo.configJson);
+  };
+
+  const handleToggleStar = async (demo: GoldenDemo) => {
+    if (!isAdmin) return;
+    try {
+      await updateGoldenDemo(demo.id, { isStarred: !demo.isStarred });
+      addLog(`${!demo.isStarred ? 'Starred' : 'Unstarred'} Golden Demo "${demo.name}"`, 'info');
+    } catch {
+      // error already logged by store
+    }
   };
 
   const buildUniqueName = (baseName: string) => {
@@ -204,12 +216,24 @@ const GoldenDemoLibrary: React.FC = () => {
                   onClick={() => setSelectedDemoId(demo.id)}
                 >
                   <div>
-                    <p className="font-medium text-gray-800">{demo.name}</p>
+                    <p className="font-medium text-gray-800 flex items-center gap-1">
+                      {demo.name}
+                      {demo.isStarred && <Star size={12} className="text-amber-500 fill-amber-400" />}
+                    </p>
                     <p className="text-sm text-gray-500">{demo.vertical} - {demo.maturityLevel}</p>
                   </div>
                   <div className="flex space-x-2">
                     {(canEditAll || demo.createdByUserId === user?.id) && (
                       <>
+                        {isAdmin && (
+                          <button
+                            className={`${demo.isStarred ? 'text-amber-500 hover:text-amber-600' : 'text-gray-400 hover:text-amber-500'}`}
+                            title={demo.isStarred ? 'Unstar approved demo' : 'Star as approved/tested demo'}
+                            onClick={(e) => { e.stopPropagation(); void handleToggleStar(demo); }}
+                          >
+                            <Star size={16} className={demo.isStarred ? 'fill-amber-400' : ''} />
+                          </button>
+                        )}
                         <button 
                           className="text-gray-500 hover:text-blue-600" 
                           title="Edit"

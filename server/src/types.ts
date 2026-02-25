@@ -226,6 +226,7 @@ export interface GoldenDemo {
   configJson: GoldenDemoConfig; // Use the specific config structure
   personaNotes?: string;
   isShared: boolean;
+  isStarred?: boolean;
   createdByUserId: string;
   createdAt: Date;
   updatedAt: Date;

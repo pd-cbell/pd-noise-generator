@@ -62,7 +62,7 @@ Includes CloudFormation template (`deploy/aws-cfn.yaml`) for EC2 deployment.
 
 ## 📚 Legacy Docs
 Historical docs are kept in `docs/ARCHIVE`.
-Recent changelog: `docs/CHANGELOG_v2.3.md`.
+Recent changelog: `docs/CHANGELOG_v2.4.2.md`.
 
 ## 📜 License
 Provided as-is for demonstration purposes.

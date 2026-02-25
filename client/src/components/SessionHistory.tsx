@@ -5,10 +5,18 @@ import { Clock, Calendar, FileText } from 'lucide-react';
 interface Session {
   id: string;
   name: string | null;
+  source?: 'PRESENTER' | 'DIRECTOR' | 'WEBHOOK';
+  mappingProfileId?: string | null;
+  mappingProfileName?: string | null;
+  launchedByUserId?: string | null;
+  launchedByName?: string | null;
+  launchedByEmail?: string | null;
+  trackRunId?: string | null;
   startedAt: string;
   endedAt: string | null;
   metricsSnapshotJson: any;
   notes: string | null;
+  goldenDemo?: { name?: string };
 }
 
 interface SessionHistoryProps {
@@ -38,6 +46,12 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ goldenDemoId }) 
 
   if (sessions.length === 0) return <div className="text-gray-400 text-sm italic">No past sessions found.</div>;
 
+  const sourceLabel = (source?: Session['source']) => {
+    if (source === 'DIRECTOR') return 'Director';
+    if (source === 'WEBHOOK') return 'Webhook';
+    return 'Presenter';
+  };
+
   return (
     <div className="space-y-4">
       {sessions.map(session => (
@@ -62,6 +76,18 @@ export const SessionHistory: React.FC<SessionHistoryProps> = ({ goldenDemoId }) 
                      Events: {session.metricsSnapshotJson.totalEvents || 0}
                  </div>
              )}
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-[11px] mb-2">
+            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {sourceLabel(session.source)}
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+              Launched by: {session.launchedByName || session.launchedByEmail || session.launchedByUserId || 'Unknown'}
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+              Mapping: {session.mappingProfileName || (session.mappingProfileId ? 'Mapped Profile' : 'None')}
+            </span>
           </div>
 
           {session.notes && (

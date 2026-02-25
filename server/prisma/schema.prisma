@@ -97,6 +97,7 @@ model GoldenDemo {
   configJson      Json      // Stores the full simulation configuration, including beats
   personaNotes    String?
   isShared        Boolean   @default(false)
+  isStarred       Boolean   @default(false)
   createdByUserId String
   user            User      @relation(fields: [createdByUserId], references: [id])
   sessions        Session[] // Inverse relation for Session
@@ -111,6 +112,13 @@ model Session {
   goldenDemoId        String
   goldenDemo          GoldenDemo @relation(fields: [goldenDemoId], references: [id], onDelete: Cascade)
   name                String?    // e.g., "Demo for Acme Corp"
+  source              SessionSource @default(PRESENTER)
+  trackRunId          String?    @unique
+  mappingProfileId    String?
+  mappingProfileName  String?
+  launchedByUserId    String?
+  launchedByName      String?
+  launchedByEmail     String?
   startedAt           DateTime   @default(now())
   endedAt             DateTime?
   metricsSnapshotJson Json?      // Stores MTTA, MTTR, Incident Counts at session end
@@ -152,4 +160,10 @@ enum Role {
   ADMIN
   EDITOR
   VIEWER
+}
+
+enum SessionSource {
+  PRESENTER
+  DIRECTOR
+  WEBHOOK
 }

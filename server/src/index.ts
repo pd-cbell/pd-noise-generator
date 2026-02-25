@@ -19,7 +19,7 @@ import { SimulationManager } from './services/ServerSimulationEngine';
 import { GoldenDemoService } from './services/GoldenDemoService'; // New import
 import { AgentService } from './services/AgentService'; // New import
 import prisma from './prisma'; // New import for prisma client
-import { Role } from '@prisma/client';
+import { Role, SessionSource } from '@prisma/client';
 import {
   DEFAULT_AUTO_HEAL_CONFIG,
   DEFAULT_SEVERITY_CONFIGS,
@@ -82,11 +82,11 @@ io.on('connection', async (socket) => {
   const impersonatorId = socket.data.user.impersonatorId as string | undefined;
   socket.join(userId);
   console.log(`User ${userId} connected via Socket.io`);
-  let user: { role: Role; agentEnabled: boolean } | null = null;
+  let user: { role: Role; agentEnabled: boolean; name: string | null; email: string } | null = null;
   try {
     user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true, agentEnabled: true },
+      select: { role: true, agentEnabled: true, name: true, email: true },
     });
   } catch (err) {
     socket.disconnect();
@@ -209,7 +209,15 @@ io.on('connection', async (socket) => {
         };
         session = await simulationManager.createOrUpdate(userId, baseConfig, credentials);
       }
-      await session.startTrack('scenario', items, undefined, mappingProfileId, userId);
+      if (!session.state.isRunning) {
+        session.start();
+      }
+      await session.startTrack('scenario', items, undefined, mappingProfileId, {
+        requesterId: userId,
+        requesterName: user.name,
+        requesterEmail: user.email,
+        source: SessionSource.DIRECTOR,
+      });
       if (callback) callback(null);
     } catch (err: any) {
       console.error('inject_golden_demo_items error:', err);

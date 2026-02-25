@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { GoldenDemoService } from '../services/GoldenDemoService';
 import { authenticateUser } from '../middleware/auth';
 import { checkRole } from '../middleware/rbac'; // Import checkRole middleware
-import { Role } from '@prisma/client'; // Import Role enum
+import { Role, SessionSource } from '@prisma/client'; // Import Role enum
 import { z } from 'zod'; // For validation
 import { simulationManager } from '../index';
 import { serverConfig } from '../config';
+import prisma from '../prisma';
+import { decrypt } from '../utils/crypto';
 
 const router = Router();
 const goldenDemoService = new GoldenDemoService();
@@ -19,6 +21,7 @@ const createGoldenDemoSchema = z.object({
   configJson: z.any(), // Loosely typed for now, can be more specific later
   personaNotes: z.string().max(1000).optional(),
   isShared: z.boolean().optional(),
+  isStarred: z.boolean().optional(),
 });
 
 // Zod schema for GoldenDemo update validation
@@ -30,17 +33,15 @@ const updateGoldenDemoSchema = z.object({
   configJson: z.any().optional(),
   personaNotes: z.string().max(1000).optional(),
   isShared: z.boolean().optional(),
+  isStarred: z.boolean().optional(),
 });
 
-// All Golden Demo routes require authentication, then role-based checks
-router.use(authenticateUser); 
-
-// --- Webhook trigger (public, no role check) ---
-router.post('/:id/trigger', async (req, res) => {
+const triggerGoldenDemo = async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const mappingProfileId =
       (req.headers['x-mapping-profile-id'] as string) ||
+      (req.query && req.query.mappingProfileId) ||
       (req.body && req.body.mappingProfileId) ||
       null;
 
@@ -55,21 +56,42 @@ router.post('/:id/trigger', async (req, res) => {
       return res.status(404).json({ message: 'Golden Demo not found' });
     }
 
-    // Build credentials from headers/body/env (best-effort)
+    const owner = await prisma.user.findUnique({
+      where: { id: demo.createdByUserId },
+      select: {
+        encryptedPagerDutyApiToken: true,
+        encryptedGlobalRoutingKey: true,
+        encryptedFromEmail: true,
+        pdRegion: true,
+      }
+    });
+
+    // Build credentials from headers/body/query/owner/env (best-effort)
     const globalRoutingKey =
       (req.headers['x-pd-routing-key'] as string) ||
+      (req.query && req.query.globalRoutingKey) ||
       (req.body && req.body.globalRoutingKey) ||
+      (owner?.encryptedGlobalRoutingKey ? decrypt(owner.encryptedGlobalRoutingKey) : '') ||
       serverConfig.pdEventsRoutingKey;
     const changeRoutingKey =
       (req.headers['x-pd-change-routing-key'] as string) ||
+      (req.query && req.query.changeRoutingKey) ||
       (req.body && req.body.changeRoutingKey) ||
       serverConfig.pdChangeEventsRoutingKey;
 
     const credentials = {
-      apiToken: (req.body && req.body.apiToken) || '',
-      fromEmail: (req.body && req.body.fromEmail) || '',
+      apiToken:
+        (req.body && req.body.apiToken) ||
+        (req.query && req.query.apiToken) ||
+        (owner?.encryptedPagerDutyApiToken ? decrypt(owner.encryptedPagerDutyApiToken) : '') ||
+        '',
+      fromEmail:
+        (req.body && req.body.fromEmail) ||
+        (req.query && req.query.fromEmail) ||
+        (owner?.encryptedFromEmail ? decrypt(owner.encryptedFromEmail) : '') ||
+        '',
       globalRoutingKey: globalRoutingKey || '',
-      pdRegion: req.body?.pdRegion || 'US',
+      pdRegion: req.body?.pdRegion || req.query?.pdRegion || owner?.pdRegion || 'US',
     };
 
     if (!credentials.globalRoutingKey) {
@@ -83,13 +105,25 @@ router.post('/:id/trigger', async (req, res) => {
       goldenDemoId: demo.id,
     };
 
+    const items = Array.isArray((demo.configJson as any)?.items) ? (demo.configJson as any).items : [];
+    if (items.length === 0) {
+      return res.status(400).json({ message: 'Golden Demo has no scenario items to launch.' });
+    }
+
     // Use the userId from the Golden Demo creator for the simulation session
     const instance = await simulationManager.createOrUpdate(demo.createdByUserId, simConfig, credentials);
-    instance.start();
+    if (!instance.state.isRunning) {
+      instance.start();
+    }
+    await instance.startTrack('scenario', items, undefined, mappingProfileId, {
+      requesterId: userId,
+      source: SessionSource.WEBHOOK,
+    });
 
     res.status(202).json({
-      message: 'Golden Demo simulation started',
+      message: 'Golden Demo scenario track started',
       goldenDemo: demo.name,
+      mappingProfileId: mappingProfileId || null,
     });
   } catch (error) {
     console.error('Golden Demo webhook trigger failed:', error);
@@ -98,7 +132,14 @@ router.post('/:id/trigger', async (req, res) => {
       error: error instanceof Error ? error.message : String(error),
     });
   }
-});
+};
+
+// --- Webhook trigger (public, no role check) ---
+router.get('/:id/trigger', triggerGoldenDemo);
+router.post('/:id/trigger', triggerGoldenDemo);
+
+// All Golden Demo routes require authentication, then role-based checks
+router.use(authenticateUser); 
 
 // GET /api/golden-demos - List all golden demos for the authenticated user
 router.get('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, res) => {
@@ -139,6 +180,10 @@ router.post('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, 
     const { userId, role } = (req as any).user!;
     const validation = createGoldenDemoSchema.safeParse(req.body);
 
+    if (validation.success && 'isStarred' in validation.data && role !== Role.ADMIN) {
+      validation.data.isStarred = false;
+    }
+
     if (!validation.success) {
       return res.status(400).json({ message: 'Validation failed', errors: validation.error.issues });
     }
@@ -169,6 +214,9 @@ router.put('/:id', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req
 
     if (!validation.success) {
       return res.status(400).json({ message: 'Validation failed', errors: validation.error.issues });
+    }
+    if ('isStarred' in validation.data && role !== Role.ADMIN) {
+      delete (validation.data as any).isStarred;
     }
 
     const updatedGoldenDemo = await goldenDemoService.updateGoldenDemo(

@@ -21,8 +21,11 @@ import { BackgroundTrack } from './tracks/BackgroundTrack';
 import { ScenarioTrack } from './tracks/ScenarioTrack';
 import { fakerService } from './FakerService';
 import { integrationService } from './IntegrationService';
+import { SessionService } from './SessionService';
+import { SessionSource } from '@prisma/client';
 
 const mappingProfileService = new MappingProfileService();
+const sessionService = new SessionService();
 const TREND_WINDOW_MS = 15 * 60 * 1000; 
 
 export type TrackRunState = {
@@ -226,8 +229,45 @@ export class SimulationSession {
     const stillUnresolved = Object.values(run.incidentsByDedupKey || {}).some((i) => i.status !== 'resolved');
     run.isActive = false;
     this.emitTrackRunUpdate(run);
+    void sessionService.endSessionByTrackRunId(trackRunId, {
+      source: 'track_run',
+      trackRunId,
+      goldenDemoId: run.goldenDemoId || null,
+      sentEvents: run.sentEvents.length,
+      trackedIncidents: Object.keys(run.incidentsByDedupKey || {}).length,
+      unresolvedIncidents: Object.values(run.incidentsByDedupKey || {}).filter((i) => i.status !== 'resolved').length,
+      errors: (run.errors || []).length,
+      finishedAt: run.finishedAt,
+    });
     if (!stillUnresolved) {
       this.emitTrackRunFinished(run);
+    }
+  }
+
+  private async persistScenarioTrackSession(params: {
+    trackRunId: string;
+    goldenDemoId?: string;
+    mappingProfileId?: string | null;
+    requesterId?: string;
+    requesterName?: string | null;
+    requesterEmail?: string | null;
+    source?: SessionSource;
+  }) {
+    if (!params.goldenDemoId) return;
+    try {
+      await sessionService.startTrackRunSession({
+        goldenDemoId: params.goldenDemoId,
+        sessionOwnerUserId: this.userId,
+        trackRunId: params.trackRunId,
+        source: params.source || SessionSource.DIRECTOR,
+        mappingProfileId: params.mappingProfileId || null,
+        launchedByUserId: params.requesterId || null,
+        launchedByName: params.requesterName || null,
+        launchedByEmail: params.requesterEmail || null,
+        name: null,
+      });
+    } catch (e: any) {
+      this.addLog(`Failed to persist scenario session history: ${e.message || 'unknown error'}`, 'warn');
     }
   }
 
@@ -349,7 +389,12 @@ export class SimulationSession {
     configOrItems: any,
     trackId?: string,
     mappingProfileId?: string,
-    requesterId?: string
+    launchContext?: {
+      requesterId?: string;
+      requesterName?: string | null;
+      requesterEmail?: string | null;
+      source?: SessionSource;
+    }
   ) {
       const id = trackId || crypto.randomUUID();
       
@@ -364,8 +409,17 @@ export class SimulationSession {
               mappingProfileId: effectiveMappingProfileId,
           };
           const trackRunId = crypto.randomUUID();
-          const requester = requesterId || this.userId;
+          const requester = launchContext?.requesterId || this.userId;
           this.initializeTrackRun(trackRunId, scenarioConfig.goldenDemoId, scenarioConfig.mappingProfileId, requester, id);
+          void this.persistScenarioTrackSession({
+            trackRunId,
+            goldenDemoId: scenarioConfig.goldenDemoId,
+            mappingProfileId: scenarioConfig.mappingProfileId,
+            requesterId: requester,
+            requesterName: launchContext?.requesterName || null,
+            requesterEmail: launchContext?.requesterEmail || null,
+            source: launchContext?.source || SessionSource.DIRECTOR,
+          });
           track = new ScenarioTrack(id, scenarioConfig, this.credentials, this.io, {
             trackRunId,
             onEventSent: (payload) => this.registerTrackEvent(trackRunId, payload),
@@ -387,7 +441,7 @@ export class SimulationSession {
       
       this.tracks.set(id, track);
       if (type === 'scenario' && mappingProfileId) {
-        await this.applyMappingToNewTrack(track, mappingProfileId, requesterId);
+        await this.applyMappingToNewTrack(track, mappingProfileId, launchContext?.requesterId);
       }
       if (this.state.isRunning) {
         track.start();

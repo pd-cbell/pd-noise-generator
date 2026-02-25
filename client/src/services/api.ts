@@ -276,6 +276,8 @@ export const api = {
     narrative: string;
     configJson: any; // Using any for now, will refine with types.ts GoldenDemoConfig
     personaNotes?: string;
+    isShared?: boolean;
+    isStarred?: boolean;
   }) =>
     fetchFromProxy('/api/golden-demos', {
       method: 'POST',
@@ -290,6 +292,8 @@ export const api = {
     narrative?: string;
     configJson?: any;
     personaNotes?: string;
+    isShared?: boolean;
+    isStarred?: boolean;
   }) =>
     fetchFromProxy(`/api/golden-demos/${id}`, {
       method: 'PUT',
