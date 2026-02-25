@@ -132,10 +132,11 @@ export const ConfigurationForm: React.FC = () => {
                id="pdRegion"
                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
                value={useStore(state => state.pdRegion)}
-               onChange={(e) => setCredentials({ pdRegion: e.target.value as 'US' | 'EU' })}
+               onChange={(e) => setCredentials({ pdRegion: e.target.value as 'US' | 'EU' | 'STAGING' })}
              >
                <option value="US">US (api.pagerduty.com)</option>
                <option value="EU">EU (api.eu.pagerduty.com)</option>
+               <option value="STAGING">Staging (api.pd-staging.com)</option>
              </select>
           </div>
           <div>

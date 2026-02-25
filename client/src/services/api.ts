@@ -16,6 +16,7 @@ export async function fetchFromProxy(url: string, options: RequestInit = {}) {
 export interface ApiConfig {
   token?: string;
   fromEmail?: string;
+  pdRegion?: 'US' | 'EU' | 'STAGING';
 }
 
 export interface AgentBuildParams { 
@@ -41,6 +42,9 @@ function getHeaders(config?: ApiConfig) {
   }
   if (config?.fromEmail) {
     headers['From'] = config.fromEmail;
+  }
+  if (config?.pdRegion) {
+    headers['X-PD-Region'] = config.pdRegion;
   }
   return headers;
 }

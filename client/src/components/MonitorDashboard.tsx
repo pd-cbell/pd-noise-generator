@@ -5,7 +5,7 @@ import { PlayCircle, StopCircle, Zap } from 'lucide-react';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 
 export const MonitorDashboard: React.FC = () => {
-  const { pdSubdomain, trackRunsById, selectedTrackRunId, setSelectedTrackRunId, activeTrackRunId, goldenDemos } = useStore();
+  const { pdSubdomain, pdRegion, trackRunsById, selectedTrackRunId, setSelectedTrackRunId, activeTrackRunId, goldenDemos } = useStore();
   const { currentSimState, isSimRunning, socketStatus, socketError, reconnectSocket, requestSimState, stopTrack, ackIncident, resolveIncident, clearActiveIncidents, resolveAllIncidents } = useServerSimulation();
   
   const logContainerRef = useRef<HTMLDivElement>(null);
@@ -82,6 +82,7 @@ export const MonitorDashboard: React.FC = () => {
     const value = typeof ts === 'string' ? Date.parse(ts) : ts;
     return Number.isNaN(value) ? '--' : new Date(value).toLocaleTimeString();
   };
+  const pagerDutyAppHost = pdRegion === 'STAGING' ? 'pd-staging.com' : 'pagerduty.com';
   const showTrackRunsPanel = false;
 
   return (
@@ -378,7 +379,7 @@ export const MonitorDashboard: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {incident.incidentId ? (
-                              <a href={`https://${pdSubdomain}.pagerduty.com/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                              <a href={`https://${pdSubdomain}.${pagerDutyAppHost}/incidents/${incident.incidentId}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                                 {incident.incidentId}
                               </a>
                             ) : (

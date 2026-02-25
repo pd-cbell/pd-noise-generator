@@ -19,6 +19,8 @@ export class PagerDutyClient {
     let apiBase = 'https://api.pagerduty.com';
     if (config.pdRegion === 'EU') {
         apiBase = 'https://api.eu.pagerduty.com';
+    } else if (config.pdRegion === 'STAGING') {
+        apiBase = 'https://api.pd-staging.com';
     }
 
     this.config = {

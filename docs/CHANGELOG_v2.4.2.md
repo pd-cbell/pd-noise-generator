@@ -17,6 +17,7 @@ Status: Local validation in progress; cloud validation pending.
 - Mapping Profiles page now provides inline validation and save/delete feedback.
 - Golden Demo editor can re-extract narrative stages from the stored narrative source (no rebuild required).
 - Quick Domain Config modal masks the API token field.
+- PagerDuty `STAGING` region support added for REST API calls, domain config loading, and Monitor incident links (`api.pd-staging.com` / `<domain>.pd-staging.com`).
 - Golden Demo visibility for `EDITOR` role is limited to owned + shared demos (admin remains unrestricted).
 - Version references aligned to `v2.4.2` and patch validation checklist added.
 

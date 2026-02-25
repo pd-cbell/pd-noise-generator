@@ -128,7 +128,7 @@ export interface SimulationCredentials {
   apiToken: string;
   fromEmail: string;
   globalRoutingKey: string;
-  pdRegion?: string; // New: PagerDuty region (e.g., "US", "EU")
+  pdRegion?: string; // PagerDuty region (e.g., "US", "EU", "STAGING")
 }
 
 export interface SimulationLogEntry {

@@ -241,7 +241,7 @@ export interface ConfigurationState {
   pdSubdomain: string;
   fromEmail: string;
   globalRoutingKey: string;
-  pdRegion: 'US' | 'EU'; 
+  pdRegion: 'US' | 'EU' | 'STAGING';
   selectedTeamIds: string[];
   selectedEPIds: string[];
   
@@ -447,13 +447,13 @@ export const useStore = create<AppState>()(
       fetchTeams: async () => {
         set({ isLoadingTeams: true });
         try {
-          const { apiToken, fromEmail } = get();
+          const { apiToken, fromEmail, pdRegion } = get();
           const allTeams: Team[] = [];
           let offset = 0;
           let more = true;
 
           while (more) {
-            const data = await api.getTeams({ token: apiToken, fromEmail }, 100, offset);
+            const data = await api.getTeams({ token: apiToken, fromEmail, pdRegion }, 100, offset);
             allTeams.push(...data.teams);
             more = data.more;
             offset += data.limit || 100;
@@ -470,7 +470,7 @@ export const useStore = create<AppState>()(
       fetchServices: async () => {
         set({ isLoadingServices: true });
         try {
-          const { teams, services: currentServices, apiToken, fromEmail } = get();
+          const { teams, services: currentServices, apiToken, fromEmail, pdRegion } = get();
           const targetTeamIds = teams.map(t => t.id);
 
           if (!apiToken) {
@@ -500,7 +500,7 @@ export const useStore = create<AppState>()(
             offset = 0;
             let more = true;
             while (more) {
-              const data = await api.getServices(chunk, { token: apiToken, fromEmail }, 100, offset);
+              const data = await api.getServices(chunk, { token: apiToken, fromEmail, pdRegion }, 100, offset);
               
               const batch = data.services.map((svc: any) => {
                 const changeIntegrations = (svc.integrations || [])
@@ -540,7 +540,7 @@ export const useStore = create<AppState>()(
       fetchEscalationPolicies: async () => {
         set({ isLoadingEscalationPolicies: true });
         try {
-          const { selectedTeamIds, apiToken, fromEmail } = get();
+          const { selectedTeamIds, apiToken, fromEmail, pdRegion } = get();
           if (!apiToken) {
             get().addLog('API Token is missing, cannot fetch escalation policies.', 'warn');
             set({ isLoadingEscalationPolicies: false });
@@ -552,7 +552,7 @@ export const useStore = create<AppState>()(
           let more = true;
 
           while (more) {
-            const data = await api.getEscalationPolicies(selectedTeamIds, { token: apiToken, fromEmail }, 100, offset);
+            const data = await api.getEscalationPolicies(selectedTeamIds, { token: apiToken, fromEmail, pdRegion }, 100, offset);
             allPolicies.push(...data.escalation_policies);
             more = data.more;
             offset += data.limit || 100;

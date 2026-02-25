@@ -12,6 +12,13 @@ const PD_EVENTS_URL = 'https://events.pagerduty.com/v2/enqueue';
 const PD_CHANGE_EVENTS_URL = 'https://events.pagerduty.com/v2/change/enqueue';
 const pdRestBase = PD_API_BASE.replace(/\/$/, '');
 
+function regionRestBase(req: any) {
+  const region = String(req.get('X-PD-Region') || req.get('x-pd-region') || 'US').toUpperCase();
+  if (region === 'EU') return 'https://api.eu.pagerduty.com';
+  if (region === 'STAGING') return 'https://api.pd-staging.com';
+  return pdRestBase;
+}
+
 // Helper to build headers
 function buildRestHeaders(req: any) {
   const fromHeader = req.get('From') || PD_FROM_EMAIL;
@@ -47,8 +54,8 @@ async function proxyRequest(targetUrl: string, options: any, res: any) {
   }
 }
 
-function restUrl(path: string) {
-  return `${pdRestBase}${path}`;
+function restUrl(req: any, path: string) {
+  return `${regionRestBase(req)}${path}`;
 }
 
 function restBody(req: any) {
@@ -103,7 +110,7 @@ router.use(async (req, res) => {
 
   // Strip the '/proxy' prefix from the URL path
   const path = req.originalUrl.replace(/^\/proxy/, '');
-  await proxyRequest(restUrl(path), options, res);
+  await proxyRequest(restUrl(req, path), options, res);
 });
 
 export default router;

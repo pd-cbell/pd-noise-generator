@@ -9,11 +9,12 @@ interface QuickDomainConfigModalProps {
 }
 
 export const QuickDomainConfigModal: React.FC<QuickDomainConfigModalProps> = ({ isOpen, onClose }) => {
-  const { apiToken, fromEmail, pdSubdomain, setCredentials, fetchTeams, fetchServices } = useStore();
+  const { apiToken, fromEmail, pdSubdomain, pdRegion, setCredentials, fetchTeams, fetchServices } = useStore();
   const { updateCredentials } = useAuth();
   const [localToken, setLocalToken] = useState(apiToken || '');
   const [localEmail, setLocalEmail] = useState(fromEmail || '');
   const [localSubdomain, setLocalSubdomain] = useState(pdSubdomain || '');
+  const [localRegion, setLocalRegion] = useState<'US' | 'EU' | 'STAGING'>(pdRegion || 'US');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -30,6 +31,7 @@ export const QuickDomainConfigModal: React.FC<QuickDomainConfigModalProps> = ({ 
       pdSubdomain: localSubdomain.trim(),
       apiToken: localToken.trim(),
       fromEmail: localEmail.trim(),
+      pdRegion: localRegion,
     });
     try {
       await updateCredentials({
@@ -64,6 +66,21 @@ export const QuickDomainConfigModal: React.FC<QuickDomainConfigModalProps> = ({ 
               value={localSubdomain}
               onChange={(e) => setLocalSubdomain(e.target.value)}
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Staging users sign in at <code>{'<domain>.pd-staging.com'}</code>.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">PagerDuty Region</label>
+            <select
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+              value={localRegion}
+              onChange={(e) => setLocalRegion(e.target.value as 'US' | 'EU' | 'STAGING')}
+            >
+              <option value="US">US (api.pagerduty.com)</option>
+              <option value="EU">EU (api.eu.pagerduty.com)</option>
+              <option value="STAGING">Staging (api.pd-staging.com)</option>
+            </select>
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">API Token</label>
