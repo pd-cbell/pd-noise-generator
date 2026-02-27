@@ -30,7 +30,7 @@ export const MonitorDashboard: React.FC = () => {
   // Auto-scroll for log viewer
   useEffect(() => {
     if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      logContainerRef.current.scrollTop = 0;
     }
   }, [log]);
 
