@@ -260,9 +260,17 @@ export class ScenarioTrack extends SimulationTrack {
       return;
     }
 
-    if (!payload.severity) {
-      payload.severity = 'error';
-    }
+    const normalizeSeverity = (value: any): 'info' | 'warning' | 'error' | 'critical' | null => {
+      if (!value || typeof value !== 'string') return null;
+      const next = value.trim().toLowerCase();
+      if (next === 'info' || next === 'warning' || next === 'error' || next === 'critical') return next;
+      return null;
+    };
+
+    const itemSeverity = normalizeSeverity(item.severity);
+    const payloadSeverity = normalizeSeverity(payload.severity);
+    // Event-level severity from the scenario item takes precedence over payload JSON.
+    payload.severity = itemSeverity || payloadSeverity || 'error';
     if (!payload.summary || String(payload.summary).trim().length === 0) {
       payload.summary = item.summary || item.stepName || `Event for ${logicalServiceName}`;
     }

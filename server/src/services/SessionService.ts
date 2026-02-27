@@ -127,9 +127,12 @@ export class SessionService {
     } else if (goldenDemoId) {
       where = {
         goldenDemoId,
-        goldenDemo: {
-          OR: [{ createdByUserId: userId }, { isShared: true }],
-        },
+        OR: [
+          { createdByUserId: userId },
+          { launchedByUserId: userId },
+          { goldenDemo: { createdByUserId: userId } },
+          { goldenDemo: { isShared: true } },
+        ],
       };
     } else {
       where = {

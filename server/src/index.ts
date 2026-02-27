@@ -148,7 +148,7 @@ io.on('connection', async (socket) => {
     }
   });
 
-  socket.on('inject_golden_demo_items', async ({ items, mappingProfileId, pdSubdomain }: { items: any[], mappingProfileId?: string, pdSubdomain?: string }, callback?: (err?: any) => void) => {
+  socket.on('inject_golden_demo_items', async ({ items, mappingProfileId, goldenDemoId, pdSubdomain }: { items: any[], mappingProfileId?: string, goldenDemoId?: string, pdSubdomain?: string }, callback?: (err?: any) => void) => {
     try {
       if (!canLaunchScenario(socket.data.user.role)) {
         if (callback) callback({ message: 'Forbidden' });
@@ -206,6 +206,7 @@ io.on('connection', async (socket) => {
           selectedServices: [],
           selectedTeamIds: [],
           mappingProfileId: mappingProfileId || null,
+          goldenDemoId: goldenDemoId || undefined,
         };
         session = await simulationManager.createOrUpdate(userId, baseConfig, credentials);
       }
@@ -217,7 +218,7 @@ io.on('connection', async (socket) => {
         requesterName: user.name,
         requesterEmail: user.email,
         source: SessionSource.DIRECTOR,
-      });
+      }, goldenDemoId);
       if (callback) callback(null);
     } catch (err: any) {
       console.error('inject_golden_demo_items error:', err);

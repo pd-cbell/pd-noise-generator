@@ -48,7 +48,7 @@ export const DirectorDashboard: React.FC = () => {
 
   const handleLaunch = async (demo: GoldenDemo) => {
     try {
-      await injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined);
+      await injectGoldenDemo(demo.configJson.items, selectedMappingProfileId || undefined, demo.id);
       addLog(
         `Injecting Golden Demo: "${demo.name}"${selectedProfile ? ` with mapping profile "${selectedProfile.name}"` : ''}`,
         'info'
