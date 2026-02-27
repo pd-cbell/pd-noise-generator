@@ -3,6 +3,7 @@ import { Sparkles, Bot, Loader2, CheckCircle, Settings } from 'lucide-react';
 import { api } from '../services/api';
 import { useStore } from '../store/useStore';
 import { ServiceSelector } from './ServiceSelector';
+import { GOLDEN_DEMO_INDUSTRY_OPTIONS, GOLDEN_DEMO_USE_CASE_OPTIONS } from '../constants/goldenDemoTaxonomy';
 
 import { GoldenDemo } from '../../../server/src/types'; // Import GoldenDemo type
 
@@ -20,12 +21,12 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
   const [status, setStatus] = useState<'idle' | 'proposing' | 'proposed' | 'building'>('idle');
   const [proposal, setProposal] = useState<string>(''); // This will serve as narrative
   const [error, setError] = useState<string | null>(null);
-  const [provider, setProvider] = useState<string>('google');
+  const [provider, setProvider] = useState<string>('openai');
 
   // New High-Control State (GoldenDemo Metadata)
   const [goldenDemoName, setGoldenDemoName] = useState('');
-  const [vertical, setVertical] = useState('');
-  const [maturityLevel, setMaturityLevel] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [useCase, setUseCase] = useState('');
   const [personaNotes, setPersonaNotes] = useState('');
 
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
@@ -61,8 +62,8 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
           prompt, 
           provider,
           services: targetServices,
-          vertical,
-          maturityLevel
+          industry,
+          useCase
       });
       setProposal(res.summary);
       setStatus('proposed');
@@ -85,8 +86,8 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
         return;
     }
 
-    if (!goldenDemoName.trim() || !vertical.trim() || !maturityLevel.trim()) {
-      setError("Please fill in all Golden Demo metadata fields (Name, Vertical, Maturity Level).");
+    if (!goldenDemoName.trim() || !industry.trim() || !useCase.trim()) {
+      setError("Please fill in all Golden Demo metadata fields (Name, Industry, Use Case).");
       setStatus('proposed');
       return;
     }
@@ -101,8 +102,8 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
           eventCount,
           changeCount,
           goldenDemoName,
-          vertical,
-          maturityLevel,
+          industry,
+          useCase,
           narrative: proposal, // Use the edited proposal as the narrative
           personaNotes: personaNotes || undefined, // Optional
           createdByUserId: user?.id || 'anonymous', // Use actual user ID
@@ -181,28 +182,31 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Vertical</label>
-                        <input
-                            type="text"
-                            value={vertical}
-                            onChange={(e) => setVertical(e.target.value)}
-                            className="w-full border border-gray-300 rounded p-2 text-sm"
-                            placeholder="e.g., Retail, FinServ"
-                            disabled={status !== 'idle' && status !== 'proposed'}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Maturity Level</label>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Industry</label>
                         <select
-                            value={maturityLevel}
-                            onChange={(e) => setMaturityLevel(e.target.value)}
-                            className="w-full border border-gray-300 rounded p-2 text-sm"
+                            value={industry}
+                            onChange={(e) => setIndustry(e.target.value)}
+                            className="w-full border border-gray-300 rounded p-2 text-sm bg-white"
                             disabled={status !== 'idle' && status !== 'proposed'}
                         >
-                            <option value="">Select Level</option>
-                            <option value="Reactive">Reactive</option>
-                            <option value="Proactive">Proactive</option>
-                            <option value="Preventative">Preventative</option>
+                            <option value="">Select Industry</option>
+                            {GOLDEN_DEMO_INDUSTRY_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 mb-1">Use Case</label>
+                        <select
+                            value={useCase}
+                            onChange={(e) => setUseCase(e.target.value)}
+                            className="w-full border border-gray-300 rounded p-2 text-sm bg-white"
+                            disabled={status !== 'idle' && status !== 'proposed'}
+                        >
+                            <option value="">Select Use Case</option>
+                            {GOLDEN_DEMO_USE_CASE_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
                         </select>
                     </div>
                 </div>
@@ -229,7 +233,7 @@ export const AgentBuilder: React.FC<AgentBuilderProps> = ({ onBuildComplete }) =
                 <div className="flex justify-end pt-2">
                     <button
                         onClick={handleAnalyze}
-                        disabled={!prompt.trim() || !vertical || !maturityLevel || selectedServiceIds.length === 0}
+                        disabled={!prompt.trim() || !industry || !useCase || selectedServiceIds.length === 0}
                         className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Sparkles className="w-5 h-5" />

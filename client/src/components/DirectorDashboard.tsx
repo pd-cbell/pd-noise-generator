@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
 import { ActiveTracksPanel } from './ActiveTracksPanel';
 import { QuickDomainConfigModal } from './QuickDomainConfigModal';
+import { getGoldenDemoQualityVerdict, hasGoldenDemoTaxonomy } from '../constants/goldenDemoTaxonomy';
 
 export const DirectorDashboard: React.FC = () => {
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -86,14 +87,14 @@ export const DirectorDashboard: React.FC = () => {
     setSelectedDemo(null);
   };
 
-  const [filterVertical, setFilterVertical] = useState<string>('');
-  const [filterMaturity, setFilterMaturity] = useState<string>('');
+  const [filterIndustry, setFilterIndustry] = useState<string>('');
+  const [filterUseCase, setFilterUseCase] = useState<string>('');
 
   const filteredDemos = goldenDemos
     .filter(demo => {
-      const matchesVertical = filterVertical ? demo.vertical === filterVertical : true;
-      const matchesMaturity = filterMaturity ? demo.maturityLevel === filterMaturity : true;
-      return matchesVertical && matchesMaturity;
+      const matchesIndustry = filterIndustry ? demo.industry === filterIndustry : true;
+      const matchesUseCase = filterUseCase ? demo.useCase === filterUseCase : true;
+      return matchesIndustry && matchesUseCase;
     })
     .sort((a, b) => {
       const starDelta = Number(Boolean(b.isStarred)) - Number(Boolean(a.isStarred));
@@ -103,8 +104,8 @@ export const DirectorDashboard: React.FC = () => {
 
   const starredCount = filteredDemos.filter((d) => d.isStarred).length;
 
-  const uniqueVerticals = Array.from(new Set(goldenDemos.map(demo => demo.vertical)));
-  const uniqueMaturityLevels = Array.from(new Set(goldenDemos.map(demo => demo.maturityLevel)));
+  const uniqueIndustries = Array.from(new Set(goldenDemos.map(demo => demo.industry).filter(Boolean) as string[]));
+  const uniqueUseCases = Array.from(new Set(goldenDemos.map(demo => demo.useCase).filter(Boolean) as string[]));
   const missingCredentials = !apiToken || !fromEmail;
 
   return (
@@ -178,25 +179,25 @@ export const DirectorDashboard: React.FC = () => {
                 )}
             </div>
             <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Industry</label>
                 <select
                     className="w-36 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-indigo-500"
-                    value={filterVertical}
-                    onChange={(e) => setFilterVertical(e.target.value)}
+                    value={filterIndustry}
+                    onChange={(e) => setFilterIndustry(e.target.value)}
                 >
                     <option value="">All</option>
-                    {uniqueVerticals.map(v => <option key={v} value={v}>{v}</option>)}
+                    {uniqueIndustries.map(v => <option key={v} value={v}>{v}</option>)}
                 </select>
             </div>
             <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Maturity Level</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Use Case</label>
                 <select
                     className="w-36 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium focus:ring-2 focus:ring-indigo-500"
-                    value={filterMaturity}
-                    onChange={(e) => setFilterMaturity(e.target.value)}
+                    value={filterUseCase}
+                    onChange={(e) => setFilterUseCase(e.target.value)}
                 >
                     <option value="">All</option>
-                    {uniqueMaturityLevels.map(m => <option key={m} value={m}>{m}</option>)}
+                    {uniqueUseCases.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
             </div>
              {/* Toggle for Active Tracks Panel */}
@@ -224,7 +225,17 @@ export const DirectorDashboard: React.FC = () => {
       ) : (
           <div className="flex-1 overflow-y-auto pr-2">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredDemos.map(demo => (
+                  {filteredDemos.map(demo => {
+                      const quality = getGoldenDemoQualityVerdict(demo);
+                      const qualityLabel =
+                        quality.status === 'pass' ? 'PASS' : quality.status === 'warn' ? 'WARN' : 'Unscored';
+                      const qualityClass =
+                        quality.status === 'pass'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : quality.status === 'warn'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-gray-50 text-gray-600 border-gray-200';
+                      return (
                       <div 
                           key={demo.id} 
                           className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow"
@@ -254,8 +265,20 @@ export const DirectorDashboard: React.FC = () => {
                                       Approved / Tested
                                     </div>
                                   )}
-                                  <p className="text-xs text-gray-500">Vertical: <span className="font-medium text-gray-700">{demo.vertical}</span></p>
-                                  <p className="text-xs text-gray-500">Maturity: <span className="font-medium text-gray-700">{demo.maturityLevel}</span></p>
+                                  <div
+                                    className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border mb-2 ${qualityClass}`}
+                                    title={quality.issues.join(' • ')}
+                                  >
+                                    Quality {qualityLabel}
+                                  </div>
+                                  {hasGoldenDemoTaxonomy(demo) ? (
+                                    <>
+                                      <p className="text-xs text-gray-500">Industry: <span className="font-medium text-gray-700">{demo.industry}</span></p>
+                                      <p className="text-xs text-gray-500">Use Case: <span className="font-medium text-gray-700">{demo.useCase}</span></p>
+                                    </>
+                                  ) : (
+                                    <p className="text-xs text-amber-700">Needs taxonomy update</p>
+                                  )}
                                   <p className="text-sm text-gray-600 mt-2 line-clamp-3">{demo.narrative}</p>
                               </div>
                               
@@ -270,7 +293,8 @@ export const DirectorDashboard: React.FC = () => {
                               </button>
                           </div>
                       </div>
-                  ))}
+                      );
+                  })}
               </div>
           </div>
       )}

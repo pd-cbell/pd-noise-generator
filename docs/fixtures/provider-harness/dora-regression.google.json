@@ -1,0 +1,229 @@
+{
+  "startedAt": "2026-02-27T15:06:45.769Z",
+  "completedAt": "2026-02-27T15:08:13.337Z",
+  "provider": "google",
+  "case": {
+    "id": "dora-regression",
+    "prompt": "A deployment automation regression increases incident volume and slows recovery. Emphasize remediation and measurable operational learning.",
+    "industry": "Public Sector",
+    "useCase": "DORA Compliance",
+    "eventCount": 8,
+    "changeCount": 2
+  },
+  "proposal": "Here is the structured planning summary for the failure narrative.\n\n***\n\n### **Narrative TL;DR**\n\nA low-risk update to a deployment automation script for the **Payment Gateway** introduces a subtle memory leak, triggering minor, ignorable alerts. When citizen transaction volume peaks, this unresolved issue escalates into a major, service-impacting outage. PagerDuty's AIOps and Change Correlation capabilities enable rapid triage and rollback, while the DORA-compliant Post-Incident Review creates new automated workflows to prevent a recurrence.\n\n---\n\n### **Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:00 PM, the SRE team deploys a routine update to a deployment automation script for the **Payment Gateway**. The change is intended to add more verbose logging and is considered low-risk. However, the new script contains a subtle regression that causes a minor memory leak in the gateway's transaction processing pods.\n\n    At 2:05 PM, PagerDuty generates a **P4 (Low Severity) incident**: `High Memory Utilization on Payment Gateway Worker Node 7`. Because the service is load-balanced and traffic is low, there is no user-facing impact. The on-call engineer acknowledges the alert, assumes it's a transient issue that auto-scaling will resolve, and takes no further action.\n\n*   **Industry Framing (Public Sector):** The **Payment Gateway** is critical infrastructure for collecting citizen payments for taxes, permits, and utilities. While uptime is paramount, isolated resource alerts on a single node are often dismissed as operational noise.\n*   **Use Case Framing (DORA Compliance):** This P4 alert is a minor ICT-related incident. Under DORA, the inability to recognize the pattern and link it to a recent change represents a gap in operational awareness. *If this early signal had been correlated with the deployment, the major incident could have been prevented entirely.*\n\n---\n\n### **Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    Time passes. At 2:20 PM, transaction volume naturally increases as citizens rush to meet an end-of-day payment deadline. The memory leak, previously isolated, now cascades across the entire **Payment Gateway** fleet as new pods are scaled up with the flawed configuration.\n\n    At 2:22 PM, PagerDuty triggers a **P1 (Critical Severity) incident**: `5xx Error Rate > 5% on Payment Gateway`. Simultaneously, business health monitoring triggers another P1: `Citizen Payment Transaction Failures > 10%`. Citizens attempting to pay their bills online are met with errors and timeouts, flooding the public service helpdesk with calls and eroding trust in the digital service.\n\n*   **Industry Framing (Public Sector):** This is a highly visible failure that directly impacts citizens and halts revenue collection. The reputational damage to the public agency is significant.\n*   **Use Case Framing (DORA Compliance):** This has now escalated to a \"major ICT-related incident.\" It requires immediate classification, a coordinated response, and formal reporting to regulatory bodies. The key challenge is to quickly understand the root cause and restore service to meet resilience objectives. The incident clearly traces back to the ignored memory alerts and the initial automation script change.\n\n---\n\n### **Stage 3: Triage & Context — Connecting Signals, Changes, and Services**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander is engaged and opens the PagerDuty incident view. Instead of a chaotic sea of alerts, they are presented with immediate, actionable context.\n\n    At 2:25 PM, PagerDuty’s AIOps has already connected the dots:\n    1.  **Related Incidents:** The P1 `5xx Error Rate` incident is automatically grouped with the earlier P4 `High Memory Utilization` incidents. This immediately focuses the team on a resource exhaustion problem, not a network or database issue.\n    2.  **Change Correlation:** The incident timeline prominently displays the `Deployment: Automation Script Update` change event from 2:00 PM, showing it occurred just minutes before the first memory alerts.\n    3.  **Service Graph:** The Service Graph confirms the **Payment Gateway** is the epicenter of the issue, with no upstream dependencies showing signs of failure.\n\n    With this context, the team forms a high-confidence hypothesis in under three minutes: the script deployment caused the memory leak. The right SREs are already on the call, mobilized by PagerDuty's escalation policies.\n\n*   **Industry Framing (Public Sector):** Fast, accurate triage restores public trust quickly and demonstrates competent management of critical digital infrastructure.\n*   **Use Case Framing (DORA Compliance):** PagerDuty provides the \"single pane of glass\" for incident management that DORA requires. The ability to automatically correlate disparate technical signals with change events drastically reduces Mean Time to Acknowledge (MTTA) and provides a clear audit trail for regulators.\n\n---\n\n### **Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:28 PM, based on the clear evidence, the Incident Commander triggers a \"Rollback Last Deployment\" runbook directly from the PagerDuty incident using PagerDuty Automation Actions. The automation connects to the CI/CD tool and redeploys the last known-good version of the automation script.\n\n    By 2:32 PM, memory usage stabilizes, error rates drop to zero, and the incident is resolved.\n\n    In the **Post-Incident Review (PIR)**, the team uses PagerDuty's timeline as the source of truth. Their goal is not just to fix the bug, but to satisfy DORA's requirement for continuous learning and resilience improvement. They establish two key actions:\n    1.  **Improve Detection:** An Event Orchestration rule is created. *If* a `High Memory Utilization` alert occurs on the `Payment Gateway` service *within 30 minutes* of a change event, PagerDuty will automatically upgrade the incident to **P2**, add the change details to the incident notes, and engage the SRE team immediately.\n    2.  **Automate Remediation:** The rollback runbook is enhanced. The new P2 workflow will now include an automated diagnostic step and present a \"One-Click Rollback\" option in the incident's Slack channel, empowering the first responder to take safe, immediate action without waiting for the IC.\n\n*   **Industry Framing (Public Sector):** The agency can now demonstrate to stakeholders and oversight bodies that they have a mature process for not only resolving incidents but also preventing their recurrence.\n*   **Use Case Framing (DORA Compliance):** The PIR is a formal process that produces a clear, auditable record. The resulting automations are tangible proof of improved operational resilience, directly addressing DORA's core tenets. The learning loop is closed, turning a reactive failure into a proactive strength.\n\n---\n\n### **PagerDuty Value Highlights**\n\n*   **AIOps & Change Events:** PagerDuty uniquely connected the lagging business impact (error rates) to the early, noisy technical signal (memory alert) and the root cause (the deployment). This turned hours of guesswork into minutes of focused action.\n*   **Automation:** PagerDuty Automation Actions provided a direct path from diagnosis to resolution (rollback) and will now power the new, improved remediation workflow defined in the PIR.\n*   **Service Graph:** Provided immediate clarity on the incident's blast radius, confirming the **Payment Gateway** as the source of the problem.\n*   **Post-Incident Review & Learning:** The PIR process, built on PagerDuty's immutable incident timeline, transformed a reactive failure into a proactive improvement. This creates a measurable, auditable, and DORA-compliant learning cycle that strengthens the organization's operational resilience against future deployment regressions.",
+  "goldenDemo": {
+    "id": "d1e7420a-edbe-4ff1-a7b3-19cbbeed1e9a",
+    "name": "Deployment Regression Impacts Citizen Payments",
+    "vertical": "Public Sector",
+    "maturityLevel": "Deprecated",
+    "industry": "Public Sector",
+    "useCase": "DORA Compliance",
+    "narrative": "Here is the structured planning summary for the failure narrative.",
+    "configJson": {
+      "name": "DORA: Deployment Regression & Resilience",
+      "beats": [
+        {
+          "id": "1",
+          "title": "The Hidden Threat",
+          "whatToSay": "Our story begins with a routine, low-risk change to our citizen Payment Gateway. Shortly after, a low-severity memory alert fires. In many organizations, this is just operational noise, acknowledged and ignored. This is a minor ICT-related incident under DORA, but its connection to the change is missed.",
+          "description": "A routine change is deployed, followed by a low-severity alert that is initially dismissed as noise.",
+          "approxTimingSec": 45,
+          "whatToShowInPagerDuty": "The PagerDuty web UI showing the Change Event and the initial P4 incident on the Payment Gateway service."
+        },
+        {
+          "id": "2",
+          "title": "Escalation & Business Impact",
+          "whatToSay": "Now, as citizen activity peaks, that 'noise' escalates into a major outage. We see critical alerts for high error rates and, more importantly, for citizen transaction failures. This is now a 'major ICT-related incident' under DORA, directly impacting the public and halting revenue collection.",
+          "description": "As transaction volume increases, the minor issue cascades into a major, citizen-impacting outage.",
+          "approxTimingSec": 180,
+          "whatToShowInPagerDuty": "The service activity view, showing a flood of new P1 incidents for 5xx errors and transaction failures."
+        },
+        {
+          "id": "3",
+          "title": "AI-Powered Triage",
+          "whatToSay": "Instead of chaos, the Incident Commander sees a clear, consolidated picture. PagerDuty's AIOps has automatically correlated the business impact, the early technical signal, and the root cause—the deployment. This turns hours of guesswork into minutes of focused triage, providing a clear audit trail for regulators.",
+          "description": "PagerDuty AIOps automatically correlates the signals and the change event, providing immediate context.",
+          "approxTimingSec": 240,
+          "whatToShowInPagerDuty": "The merged P1 incident view. Point out the 'Related Incidents' section showing the earlier P4s, and the 'Recent Changes' section highlighting the deployment."
+        },
+        {
+          "id": "4",
+          "title": "Automated Resolution & Learning",
+          "whatToSay": "With a high-confidence hypothesis, the team uses an Automation Action to safely roll back the change, resolving the incident in minutes. In the DORA-compliant Post-Incident Review, they don't just fix the bug; they build new automations to prevent this from ever happening again, closing the learning loop and proving improved resilience to auditors.",
+          "description": "The team uses Automation Actions to roll back and then creates new workflows in the Post-Incident Review.",
+          "approxTimingSec": 300,
+          "whatToShowInPagerDuty": "Show the incident timeline with the rollback change event. Verbally describe the PIR process and the new Event Orchestration rule and Automation Action that will be created."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "Jenkins",
+            "summary": "Deployment: Automation Script Update for verbose logging",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "build_id": "pipeline-{{faker.datatype.number(1000, 9999)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway",
+              "change_details": "CI/CD Pipeline deployed `payment-gateway-deploy:v1.2.1` to production. Change initiated by sre-team@public-agency.gov."
+            }
+          },
+          "service": "Payment Gateway",
+          "stepName": "Stage 1: Deploy Automation Script Update",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway"
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "Datadog",
+            "summary": "P4: High Memory Utilization on Payment Gateway Worker Node 7",
+            "severity": "warning",
+            "custom_details": {
+              "node_ip": "{{faker.internet.ip}}",
+              "memory_usage": "91%",
+              "service_name": "Payment Gateway",
+              "dora_classification": "Minor ICT-related incident"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Stage 1: Initial Low-Severity Alert",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway"
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "Datadog",
+            "summary": "P4: High Memory Utilization on Payment Gateway Worker Node 12",
+            "severity": "warning",
+            "custom_details": {
+              "node_ip": "{{faker.internet.ip}}",
+              "memory_usage": "92%",
+              "service_name": "Payment Gateway",
+              "dora_classification": "Minor ICT-related incident"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Stage 1: Second Low-Severity Alert (Noise)",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 45,
+          "logicalServiceName": "Payment Gateway"
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "APM",
+            "summary": "P1: 5xx Error Rate > 5% on Payment Gateway",
+            "severity": "critical",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "error_rate": "7.8%",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}",
+              "dora_classification": "Major ICT-related incident"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Stage 2: Escalation - 5xx Error Rate Spike",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 120,
+          "logicalServiceName": "Payment Gateway"
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "Business Health Monitor",
+            "summary": "P1: Citizen Payment Transaction Failures > 10%",
+            "severity": "critical",
+            "custom_details": {
+              "impact": "Halting revenue collection for taxes and permits.",
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}",
+              "failed_transactions_per_min": "{{faker.datatype.number(100, 500)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Stage 2: Escalation - Citizen Transaction Failures",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway"
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "PagerDuty Automation Actions",
+            "summary": "Rollback: Reverted Payment Gateway deployment to v1.2.0",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "incident_id": "P1ABCDE",
+              "service_name": "Payment Gateway",
+              "triggered_by": "Incident Commander",
+              "change_details": "Rollback triggered via PagerDuty Automation Actions. Reverting to last known-good configuration `payment-gateway-deploy:v1.2.0`."
+            }
+          },
+          "service": "Payment Gateway",
+          "stepName": "Stage 4: Trigger Rollback via Automation Actions",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 150,
+          "logicalServiceName": "Payment Gateway"
+        }
+      ],
+      "narrative": {
+        "full": "Here is the structured planning summary for the failure narrative.\n\n***\n\n### **Narrative TL;DR**\n\nA low-risk update to a deployment automation script for the **Payment Gateway** introduces a subtle memory leak, triggering minor, ignorable alerts. When citizen transaction volume peaks, this unresolved issue escalates into a major, service-impacting outage. PagerDuty's AIOps and Change Correlation capabilities enable rapid triage and rollback, while the DORA-compliant Post-Incident Review creates new automated workflows to prevent a recurrence.\n\n---\n\n### **Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:00 PM, the SRE team deploys a routine update to a deployment automation script for the **Payment Gateway**. The change is intended to add more verbose logging and is considered low-risk. However, the new script contains a subtle regression that causes a minor memory leak in the gateway's transaction processing pods.\n\n    At 2:05 PM, PagerDuty generates a **P4 (Low Severity) incident**: `High Memory Utilization on Payment Gateway Worker Node 7`. Because the service is load-balanced and traffic is low, there is no user-facing impact. The on-call engineer acknowledges the alert, assumes it's a transient issue that auto-scaling will resolve, and takes no further action.\n\n*   **Industry Framing (Public Sector):** The **Payment Gateway** is critical infrastructure for collecting citizen payments for taxes, permits, and utilities. While uptime is paramount, isolated resource alerts on a single node are often dismissed as operational noise.\n*   **Use Case Framing (DORA Compliance):** This P4 alert is a minor ICT-related incident. Under DORA, the inability to recognize the pattern and link it to a recent change represents a gap in operational awareness. *If this early signal had been correlated with the deployment, the major incident could have been prevented entirely.*\n\n---\n\n### **Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    Time passes. At 2:20 PM, transaction volume naturally increases as citizens rush to meet an end-of-day payment deadline. The memory leak, previously isolated, now cascades across the entire **Payment Gateway** fleet as new pods are scaled up with the flawed configuration.\n\n    At 2:22 PM, PagerDuty triggers a **P1 (Critical Severity) incident**: `5xx Error Rate > 5% on Payment Gateway`. Simultaneously, business health monitoring triggers another P1: `Citizen Payment Transaction Failures > 10%`. Citizens attempting to pay their bills online are met with errors and timeouts, flooding the public service helpdesk with calls and eroding trust in the digital service.\n\n*   **Industry Framing (Public Sector):** This is a highly visible failure that directly impacts citizens and halts revenue collection. The reputational damage to the public agency is significant.\n*   **Use Case Framing (DORA Compliance):** This has now escalated to a \"major ICT-related incident.\" It requires immediate classification, a coordinated response, and formal reporting to regulatory bodies. The key challenge is to quickly understand the root cause and restore service to meet resilience objectives. The incident clearly traces back to the ignored memory alerts and the initial automation script change.\n\n---\n\n### **Stage 3: Triage & Context — Connecting Signals, Changes, and Services**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander is engaged and opens the PagerDuty incident view. Instead of a chaotic sea of alerts, they are presented with immediate, actionable context.\n\n    At 2:25 PM, PagerDuty’s AIOps has already connected the dots:\n    1.  **Related Incidents:** The P1 `5xx Error Rate` incident is automatically grouped with the earlier P4 `High Memory Utilization` incidents. This immediately focuses the team on a resource exhaustion problem, not a network or database issue.\n    2.  **Change Correlation:** The incident timeline prominently displays the `Deployment: Automation Script Update` change event from 2:00 PM, showing it occurred just minutes before the first memory alerts.\n    3.  **Service Graph:** The Service Graph confirms the **Payment Gateway** is the epicenter of the issue, with no upstream dependencies showing signs of failure.\n\n    With this context, the team forms a high-confidence hypothesis in under three minutes: the script deployment caused the memory leak. The right SREs are already on the call, mobilized by PagerDuty's escalation policies.\n\n*   **Industry Framing (Public Sector):** Fast, accurate triage restores public trust quickly and demonstrates competent management of critical digital infrastructure.\n*   **Use Case Framing (DORA Compliance):** PagerDuty provides the \"single pane of glass\" for incident management that DORA requires. The ability to automatically correlate disparate technical signals with change events drastically reduces Mean Time to Acknowledge (MTTA) and provides a clear audit trail for regulators.\n\n---\n\n### **Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:28 PM, based on the clear evidence, the Incident Commander triggers a \"Rollback Last Deployment\" runbook directly from the PagerDuty incident using PagerDuty Automation Actions. The automation connects to the CI/CD tool and redeploys the last known-good version of the automation script.\n\n    By 2:32 PM, memory usage stabilizes, error rates drop to zero, and the incident is resolved.\n\n    In the **Post-Incident Review (PIR)**, the team uses PagerDuty's timeline as the source of truth. Their goal is not just to fix the bug, but to satisfy DORA's requirement for continuous learning and resilience improvement. They establish two key actions:\n    1.  **Improve Detection:** An Event Orchestration rule is created. *If* a `High Memory Utilization` alert occurs on the `Payment Gateway` service *within 30 minutes* of a change event, PagerDuty will automatically upgrade the incident to **P2**, add the change details to the incident notes, and engage the SRE team immediately.\n    2.  **Automate Remediation:** The rollback runbook is enhanced. The new P2 workflow will now include an automated diagnostic step and present a \"One-Click Rollback\" option in the incident's Slack channel, empowering the first responder to take safe, immediate action without waiting for the IC.\n\n*   **Industry Framing (Public Sector):** The agency can now demonstrate to stakeholders and oversight bodies that they have a mature process for not only resolving incidents but also preventing their recurrence.\n*   **Use Case Framing (DORA Compliance):** The PIR is a formal process that produces a clear, auditable record. The resulting automations are tangible proof of improved operational resilience, directly addressing DORA's core tenets. The learning loop is closed, turning a reactive failure into a proactive strength.\n\n---\n\n### **PagerDuty Value Highlights**\n\n*   **AIOps & Change Events:** PagerDuty uniquely connected the lagging business impact (error rates) to the early, noisy technical signal (memory alert) and the root cause (the deployment). This turned hours of guesswork into minutes of focused action.\n*   **Automation:** PagerDuty Automation Actions provided a direct path from diagnosis to resolution (rollback) and will now power the new, improved remediation workflow defined in the PIR.\n*   **Service Graph:** Provided immediate clarity on the incident's blast radius, confirming the **Payment Gateway** as the source of the problem.\n*   **Post-Incident Review & Learning:** The PIR process, built on PagerDuty's immutable incident timeline, transformed a reactive failure into a proactive improvement. This creates a measurable, auditable, and DORA-compliant learning cycle that strengthens the organization's operational resilience against future deployment regressions.",
+        "stages": {
+          "resolution_pir": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:28 PM, based on the clear evidence, the Incident Commander triggers a \"Rollback Last Deployment\" runbook directly from the PagerDuty incident using PagerDuty Automation Actions. The automation connects to the CI/CD tool and redeploys the last known-good version of the automation script.\n\n    By 2:32 PM, memory usage stabilizes, error rates drop to zero, and the incident is resolved.\n\n    In the **Post-Incident Review (PIR)**, the team uses PagerDuty's timeline as the source of truth. Their goal is not just to fix the bug, but to satisfy DORA's requirement for continuous learning and resilience improvement. They establish two key actions:\n    1.  **Improve Detection:** An Event Orchestration rule is created. *If* a `High Memory Utilization` alert occurs on the `Payment Gateway` service *within 30 minutes* of a change event, PagerDuty will automatically upgrade the incident to **P2**, add the change details to the incident notes, and engage the SRE team immediately.\n    2.  **Automate Remediation:** The rollback runbook is enhanced. The new P2 workflow will now include an automated diagnostic step and present a \"One-Click Rollback\" option in the incident's Slack channel, empowering the first responder to take safe, immediate action without waiting for the IC.\n\n*   **Industry Framing (Public Sector):** The agency can now demonstrate to stakeholders and oversight bodies that they have a mature process for not only resolving incidents but also preventing their recurrence.\n*   **Use Case Framing (DORA Compliance):** The PIR is a formal process that produces a clear, auditable record. The resulting automations are tangible proof of improved operational resilience, directly addressing DORA's core tenets. The learning loop is closed, turning a reactive failure into a proactive strength.\n\n---\n\n### **PagerDuty Value Highlights**"
+          },
+          "triage_context": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander is engaged and opens the PagerDuty incident view. Instead of a chaotic sea of alerts, they are presented with immediate, actionable context.\n\n    At 2:25 PM, PagerDuty’s AIOps has already connected the dots:\n    1.  **Related Incidents:** The P1 `5xx Error Rate` incident is automatically grouped with the earlier P4 `High Memory Utilization` incidents. This immediately focuses the team on a resource exhaustion problem, not a network or database issue.\n    2.  **Change Correlation:** The incident timeline prominently displays the `Deployment: Automation Script Update` change event from 2:00 PM, showing it occurred just minutes before the first memory alerts.\n    3.  **Service Graph:** The Service Graph confirms the **Payment Gateway** is the epicenter of the issue, with no upstream dependencies showing signs of failure.\n\n    With this context, the team forms a high-confidence hypothesis in under three minutes: the script deployment caused the memory leak. The right SREs are already on the call, mobilized by PagerDuty's escalation policies.\n\n*   **Industry Framing (Public Sector):** Fast, accurate triage restores public trust quickly and demonstrates competent management of critical digital infrastructure.\n*   **Use Case Framing (DORA Compliance):** PagerDuty provides the \"single pane of glass\" for incident management that DORA requires. The ability to automatically correlate disparate technical signals with change events drastically reduces Mean Time to Acknowledge (MTTA) and provides a clear audit trail for regulators.\n\n---"
+          },
+          "business_impact": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    Time passes. At 2:20 PM, transaction volume naturally increases as citizens rush to meet an end-of-day payment deadline. The memory leak, previously isolated, now cascades across the entire **Payment Gateway** fleet as new pods are scaled up with the flawed configuration.\n\n    At 2:22 PM, PagerDuty triggers a **P1 (Critical Severity) incident**: `5xx Error Rate > 5% on Payment Gateway`. Simultaneously, business health monitoring triggers another P1: `Citizen Payment Transaction Failures > 10%`. Citizens attempting to pay their bills online are met with errors and timeouts, flooding the public service helpdesk with calls and eroding trust in the digital service.\n\n*   **Industry Framing (Public Sector):** This is a highly visible failure that directly impacts citizens and halts revenue collection. The reputational damage to the public agency is significant.\n*   **Use Case Framing (DORA Compliance):** This has now escalated to a \"major ICT-related incident.\" It requires immediate classification, a coordinated response, and formal reporting to regulatory bodies. The key challenge is to quickly understand the root cause and restore service to meet resilience objectives. The incident clearly traces back to the ignored memory alerts and the initial automation script change.\n\n---"
+          },
+          "routine_change_minor": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 2:00 PM, the SRE team deploys a routine update to a deployment automation script for the **Payment Gateway**. The change is intended to add more verbose logging and is considered low-risk. However, the new script contains a subtle regression that causes a minor memory leak in the gateway's transaction processing pods.\n\n    At 2:05 PM, PagerDuty generates a **P4 (Low Severity) incident**: `High Memory Utilization on Payment Gateway Worker Node 7`. Because the service is load-balanced and traffic is low, there is no user-facing impact. The on-call engineer acknowledges the alert, assumes it's a transient issue that auto-scaling will resolve, and takes no further action.\n\n*   **Industry Framing (Public Sector):** The **Payment Gateway** is critical infrastructure for collecting citizen payments for taxes, permits, and utilities. While uptime is paramount, isolated resource alerts on a single node are often dismissed as operational noise.\n*   **Use Case Framing (DORA Compliance):** This P4 alert is a minor ICT-related incident. Under DORA, the inability to recognize the pattern and link it to a recent change represents a gap in operational awareness. *If this early signal had been correlated with the deployment, the major incident could have been prevented entirely.*\n\n---"
+          }
+        }
+      },
+      "description": "Demonstrates how PagerDuty helps public sector organizations meet DORA compliance by rapidly identifying a deployment regression, restoring service, and creating automated resilience improvements."
+    },
+    "personaNotes": "This demo is for a Public Sector SRE or IT Operations leader concerned with stability and regulatory compliance like DORA. Emphasize how PagerDuty moves their organization from a reactive state to a proactive, learning-oriented one. Focus on three key moments: 1) The initial 'noise' of the P4 alert being ignored. 2) The 'Aha!' moment when AIOps automatically connects the change event to the flood of P1 alerts, providing instant context. 3) The 'proof' of improvement, where the PIR leads to new automations that make the system more resilient, satisfying DORA's requirements for continuous learning.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T15:08:13.330Z",
+    "updatedAt": "2026-02-27T15:08:13.330Z"
+  },
+  "summary": {
+    "eventCount": 6,
+    "changeCount": 2,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

@@ -5,6 +5,7 @@ import { resolveEventTarget } from '../MappingResolver';
 import crypto from 'crypto';
 
 export class ScenarioTrack extends SimulationTrack {
+  private static readonly DEFAULT_REPEAT_INTERVAL_SECONDS = 30;
   public type: 'background' | 'scenario' = 'scenario';
   private timers: NodeJS.Timeout[] = [];
   private onEventSent?: (payload: {
@@ -100,15 +101,33 @@ export class ScenarioTrack extends SimulationTrack {
 
   private scheduleItems(items: any[]) {
     let cumulativeMs = 0;
+    let maxScheduledMs = 0;
     items.forEach((item, idx) => {
       const delaySec = Math.max(0, Number(item.delaySeconds || item.offsetSeconds || 0));
       cumulativeMs += delaySec * 1000;
-      const timer = setTimeout(() => {
-        this.fireItem(item, idx).catch((err) => {
-          this.addLog(`Scenario event failed: ${err.message}`, 'error');
-        });
-      }, cumulativeMs);
-      this.timers.push(timer);
+      const baseScheduledMs = cumulativeMs;
+
+      // repeatCount is treated as total sends for backward compatibility.
+      // repeatCount=1 -> one send (no repeats), repeatCount=3 -> one initial + two repeats.
+      const totalSends = Math.max(1, Math.round(Number(item.repeatCount ?? 1)));
+      const repeatIntervalSec = Math.max(
+        1,
+        Math.round(
+          Number(item.repeatIntervalSeconds ?? item.repeatEverySeconds ?? ScenarioTrack.DEFAULT_REPEAT_INTERVAL_SECONDS)
+        )
+      );
+
+      for (let emissionIndex = 0; emissionIndex < totalSends; emissionIndex++) {
+        const scheduledMs = baseScheduledMs + emissionIndex * repeatIntervalSec * 1000;
+        maxScheduledMs = Math.max(maxScheduledMs, scheduledMs);
+        const timer = setTimeout(() => {
+          if (this.status !== 'running') return;
+          this.fireItem(item, idx, emissionIndex, totalSends).catch((err) => {
+            this.addLog(`Scenario event failed: ${err.message}`, 'error');
+          });
+        }, scheduledMs);
+        this.timers.push(timer);
+      }
     });
     this.addLog(`Scheduled ${items.length} scenario items.`, 'info');
     if (items.length > 0 && this.onComplete) {
@@ -118,12 +137,14 @@ export class ScenarioTrack extends SimulationTrack {
         this.clearTimers();
         this.addLog('Scenario track completed', 'info');
         this.onComplete?.();
-      }, cumulativeMs + 250);
+      }, maxScheduledMs + 250);
       this.timers.push(finalTimer);
     }
   }
 
-  private async fireItem(item: any, index: number) {
+  private async fireItem(item: any, index: number, emissionIndex: number = 0, totalSends: number = 1) {
+    if (this.status !== 'running') return;
+
     const normalizeServiceName = (name?: string) => {
       if (!name) return undefined;
       const trimmed = String(name).trim();
@@ -179,6 +200,25 @@ export class ScenarioTrack extends SimulationTrack {
     payload.custom_details.service_name =
       resolvedTarget.effectiveServiceName || payload.custom_details.service_name || logicalServiceName;
 
+    // For repeated sends, slightly fluctuate plain numeric custom details to mimic live drift.
+    if (emissionIndex > 0 && payload.custom_details && typeof payload.custom_details === 'object') {
+      const adjusted = { ...payload.custom_details };
+      Object.entries(adjusted).forEach(([key, rawValue]) => {
+        if (key === 'service_name') return;
+        if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
+          const factor = 0.92 + Math.random() * 0.16; // +/-8%
+          adjusted[key] = Math.max(0, Math.round(rawValue * factor));
+          return;
+        }
+        if (typeof rawValue === 'string' && /^-?\d+(\.\d+)?$/.test(rawValue.trim())) {
+          const parsed = Number(rawValue.trim());
+          const factor = 0.92 + Math.random() * 0.16;
+          adjusted[key] = String(Math.max(0, Math.round(parsed * factor)));
+        }
+      });
+      payload.custom_details = adjusted;
+    }
+
     if (type === 'change') {
       const routingKey =
         item.changeRoutingKey ||
@@ -206,7 +246,8 @@ export class ScenarioTrack extends SimulationTrack {
       };
       
       await this.pdClient.triggerChangeEvent(body);
-      this.addLog(`Scenario change sent for ${logicalServiceName}`, 'info');
+      const repeatSuffix = totalSends > 1 ? ` [${emissionIndex + 1}/${totalSends}]` : '';
+      this.addLog(`Scenario change sent for ${logicalServiceName}${repeatSuffix}`, 'info');
       return;
     }
 
@@ -266,7 +307,8 @@ export class ScenarioTrack extends SimulationTrack {
 
     const response = await this.pdClient.triggerEvent(body);
     const dedup = response?.dedup_key || dedupKey || 'unknown';
-    this.addLog(`Scenario event sent (${type}) ${logicalServiceName} dedup=${dedup}`, 'info');
+    const repeatSuffix = totalSends > 1 ? ` [${emissionIndex + 1}/${totalSends}]` : '';
+    this.addLog(`Scenario event sent (${type}) ${logicalServiceName}${repeatSuffix} dedup=${dedup}`, 'info');
     this.onEventSent?.({
       trackRunId: this.trackRunId,
       eventId,

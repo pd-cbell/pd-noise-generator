@@ -1,0 +1,266 @@
+{
+  "startedAt": "2026-02-27T15:02:44.126Z",
+  "completedAt": "2026-02-27T15:04:18.564Z",
+  "provider": "google",
+  "case": {
+    "id": "security-routing",
+    "prompt": "Suspicious authentication spikes trigger security workflow confusion across identity services and SOC dashboards. Show context-rich triage.",
+    "industry": "Tech & Telco",
+    "useCase": "Security Incident Management",
+    "eventCount": 9,
+    "changeCount": 1
+  },
+  "proposal": "Here is the structured planning summary for the failure narrative.\n\n### TL;DR of the Story\n\nA routine library update on the **Payment Gateway** service introduces a subtle authentication retry bug, creating a low-severity alert that is ignored. Hours later, during a traffic spike, this bug escalates into a major incident, masquerading as a credential stuffing attack that sends the SOC team down the wrong path. PagerDuty provides the crucial operational context—correlating the change event and the earlier minor alert—to bypass the security confusion, identify the true root cause, and enable a rapid, automated resolution.\n\n---\n\n### Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:00 AM, a developer on the Payment Gateway team deploys a routine, low-risk change to update an authentication library, adding support for a new MFA provider. The change is pushed through their standard CI/CD pipeline and marked as successful.\n\n    At 10:05 AM, a P4 (Low Severity) incident is triggered for the **Payment Gateway** service. The alert from their monitoring tool reads: `High Rate of Authentication Retries`. The on-call engineer for the service investigates, sees that overall payment success rates are still well within SLO, and concludes the retries are likely transient network jitter or a client-side issue. They acknowledge the incident, add a note saying \"Monitoring, seems benign,\" and the alert auto-resolves after 15 minutes.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This minor alert is classic operational noise in a high-volume tech environment. Crucially, it's seen as an \"ops\" problem, not a \"security\" problem. The Security Operations Center (SOC) has no visibility into this P4 ticket; their dashboards are green because there are no *failed* logins, just *retries*. This silo between operational health and security posture is the critical blind spot where the major incident begins to grow.\n\n---\n\n### Stage 2: Business Impact — Escalation Driven by Lagging Indicators\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:30 AM, a marketing campaign goes live, driving a significant surge in traffic to the company's platform. The increased load on the **Payment Gateway** amplifies the hidden bug in the new authentication library. The retry mechanism becomes overwhelmed, leading to cascading timeouts.\n\n    At 10:32 AM, a P2 Major Incident is declared as alerts fire from multiple, disconnected systems:\n    1.  **SOC SIEM:** `Anomalous Spike in Authentication Events from Diverse IPs`. This pattern perfectly matches the signature for a credential stuffing attack, immediately triggering the SOC's security playbook.\n    2.  **Business Monitoring:** `Payment Success Rate Dropped by 15%`.\n    3.  **Customer Support:** A flood of tickets and calls from customers reporting they can't complete purchases.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    The SOC team is now fully engaged, treating this as a hostile attack. They are wasting critical time analyzing IP reputations and user-agent strings. Meanwhile, the SRE and **Payment Gateway** teams are in a separate war room, treating it as a performance degradation. The teams are working on the same problem but from completely different perspectives, with no shared context. This confusion is extending the Mean Time to Resolution (MTTR) with every passing minute.\n\n---\n\n### Stage 3: Triage & Context — Connecting Signals, Changes, and Services\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander opens the PagerDuty Major Incident dashboard. Instead of just a list of alerts, PagerDuty’s AIOps has already assembled the critical context needed to bypass the confusion:\n    *   **Related Incidents:** The P4 `High Rate of Authentication Retries` incident from 10:05 AM is automatically surfaced as a \"Past Related Incident,\" showing the problem started much earlier. The on-call engineer's note, \"Monitoring, seems benign,\" is now a crucial clue.\n    *   **Change Correlation:** A change event from the CI/CD tool, `Deploy: auth-library-v2.1.4`, is displayed directly on the incident timeline, pinpointing the exact deployment that occurred just before the first retry alerts.\n    *   **Noise Reduction:** The SIEM alert, the business monitor alert, and APM alerts are all intelligently grouped into a single, unified incident, preventing duplicate response efforts.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This context immediately shifts the investigation. The Incident Commander sees the deployment, the retry alert, and the current failure, and instantly realizes this is a self-inflicted wound, not an external attack. They use PagerDuty to engage the specific developer who committed the change, bringing them directly into the response. The SOC is informed to stand down from their attack investigation, saving valuable time and resources.\n\n---\n\n### Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:40 AM, armed with the full context from PagerDuty, the developer confirms the bug in their library update. They trigger a pre-built PagerDuty Automation Actions runbook that connects to their feature flagging system. With a single click, they disable the new MFA provider logic, instantly reverting the **Payment Gateway** to its last known good configuration.\n\n    By 10:42 AM, monitoring systems confirm that payment success rates have returned to normal. The incident is resolved.\n\n*   **Post-Incident Review (PIR) Framing (Security Incident Management):**\n    The PIR focuses on bridging the gap between the SOC and engineering teams.\n    1.  **Root Cause Analysis:** The review documents how a seemingly operational issue (retries) was the leading indicator of a major service failure that mimicked a security attack.\n    2.  **Process Improvement:** The key takeaway is that the SOC lacked operational context. To fix this, they decide to implement two changes in PagerDuty:\n        *   **New Event Orchestration Rule:** If a SIEM alert for `Anomalous Spike in Authentication Events` fires on the **Payment Gateway**, the orchestration will automatically enrich the incident with recent change events from that service. This gives the SOC immediate context to differentiate between a deployment and an attack.\n        *   **Refined Routing:** High-urgency security alerts targeting the **Payment Gateway** will now be configured to mobilize both the SOC and the service's on-call engineer simultaneously, ensuring shared context from the very first second.\n\n---\n\n### PagerDuty Value Highlights\n\n*   **AIOps & Service Graph:** PagerDuty uniquely connected the \"weak signal\" (the P4 retry alert) to the \"loud failure\" (the P2 outage). It understood that the CI/CD change, the retry alert, and the SIEM alert were all related to the **Payment Gateway** service.\n*   **Change Events:** This was the \"smoking gun\" that provided the ground truth, allowing the team to pivot away from a false security investigation and focus on the real operational cause.\n*   **Automation:** Using Automation Actions for the feature flag rollback provided a fast, safe, and auditable resolution, reducing MTTR from hours to minutes.\n*   **Post-Incident Review & Learning:** The PIR wasn't about blame; it was about creating a durable, automated solution. The new Event Orchestration and routing rules ensure that this specific type of confusing, cross-domain incident will be diagnosed and resolved much faster next time, turning a painful failure into a permanent improvement in resilience.",
+  "goldenDemo": {
+    "id": "b3ac4fe7-0807-4410-979f-1111155f1e46",
+    "name": "Security vs. Ops: The Phantom Attack",
+    "vertical": "Tech & Telco",
+    "maturityLevel": "Deprecated",
+    "industry": "Tech & Telco",
+    "useCase": "Security Incident Management",
+    "narrative": "Here is the structured planning summary for the failure narrative.",
+    "configJson": {
+      "name": "Security vs. Ops: The Phantom Attack",
+      "beats": [
+        {
+          "id": "1",
+          "title": "A Routine Change and a Weak Signal",
+          "whatToSay": "Our story begins with a routine deployment to the Payment Gateway. A few minutes later, a low-severity P4 alert fires for 'High Authentication Retries'. The on-call engineer sees no impact to the SLO, assumes it's transient noise, and acknowledges it. This is the 'weak signal' that often gets lost, a critical clue hiding in plain sight.",
+          "description": "A developer deploys a library update, which causes a low-severity, seemingly benign alert about authentication retries. The on-call engineer acknowledges it, but it's the first clue.",
+          "approxTimingSec": 45,
+          "whatToShowInPagerDuty": "The incident list, showing the P4 alert and the change event on the Payment Gateway service."
+        },
+        {
+          "id": "2",
+          "title": "Escalation and Misdirection",
+          "whatToSay": "Now, a traffic spike hits. The system buckles, and alerts explode. Crucially, the SOC's SIEM fires an alert for a 'Credential Stuffing Attack'. At the same time, business monitors scream about a drop in payment success. We have two teams—Security and SRE—in separate war rooms, chasing what they think are two different problems. This is where confusion costs money.",
+          "description": "A marketing campaign drives a traffic spike, amplifying the bug. A major incident is declared as alerts fire from the SOC, business monitors, and customer support, creating chaos and confusion.",
+          "approxTimingSec": 180,
+          "whatToShowInPagerDuty": "The PagerDuty Major Incident dashboard. Show the newly created P2 incident with multiple alerts from different sources (SIEM, BI, APM) being merged together."
+        },
+        {
+          "id": "3",
+          "title": "Connecting the Dots with AIOps",
+          "whatToSay": "But the Incident Commander has a secret weapon. In the PagerDuty incident view, our AIOps has already done the hard work. Notice this: it automatically surfaced the 'Past Related Incident'—our P4 from earlier—and right next to it, the 'smoking gun': the exact change event that started it all. The 'attack' is a ghost. This is a self-inflicted wound.",
+          "description": "The Incident Commander uses the PagerDuty Major Incident view. AIOps has already connected the dots: the recent change event, the earlier 'benign' P4 alert, and the current storm of alerts are all correlated.",
+          "approxTimingSec": 240,
+          "whatToShowInPagerDuty": "The 'Related Incidents' and 'Change Correlation' tabs within the Major Incident. Point directly to the 'Deploy: auth-library-v2.1.4' change event and the past P4 incident."
+        },
+        {
+          "id": "4",
+          "title": "Fast, Automated Recovery",
+          "whatToSay": "With this clarity, the path to resolution is fast. We're no longer chasing phantom attackers. The IC engages the developer, who uses a pre-built PagerDuty Automation Action to disable the faulty logic via a feature flag. In minutes, not hours, the service is stable, and payments are flowing again. We've gone from cross-team chaos to precise, automated resolution.",
+          "description": "Armed with the correct context, the team bypasses the security investigation. They engage the developer who made the change and use a PagerDuty Automation Action to trigger a feature flag rollback, resolving the incident in minutes.",
+          "approxTimingSec": 300,
+          "whatToShowInPagerDuty": "The Automation Actions tab/log within the incident, showing a successful run of a 'Rollback Feature Flag' runbook."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "CI/CD Pipeline",
+            "summary": "Deploy: auth-library-v2.1.4 by user: {{faker.internet.userName}}",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "build_url": "https://ci-cd.example.com/builds/{{faker.datatype.number}}",
+              "change_notes": "Update authentication library to add support for new MFA provider.",
+              "service_name": "Payment Gateway",
+              "git_commit_sha": "{{faker.git.commitSha}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "stepName": "Deploy Auth Library",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🚀 Change Detected on Payment Gateway: `Deploy: auth-library-v2.1.4`"
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "APM-Monitoring",
+            "summary": "[P4] High Rate of Authentication Retries Detected",
+            "custom_details": {
+              "threshold": "2%",
+              "retry_rate": "5%",
+              "on_call_note": "Monitoring, seems benign. Overall success rate is still within SLO.",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Initial Weak Signal",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🟡 [P4] Low-severity alert on Payment Gateway: High Rate of Authentication Retries."
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "SIEM-Security",
+            "summary": "[SOC] Anomalous Spike in Authentication Events from Diverse IPs",
+            "custom_details": {
+              "source_ips": "{{faker.internet.ip}}, {{faker.internet.ip}}, {{faker.internet.ip}}",
+              "user_agents": "Mozilla/5.0, Python/3.8, Go-http-client/1.1",
+              "service_name": "Payment Gateway",
+              "recommendation": "Initiate credential stuffing playbook immediately. Block source IPs.",
+              "attack_signature": "Credential Stuffing TTP-451"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "SOC Detects 'Attack'",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 120,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🚨 [P2] MAJOR INCIDENT: SOC has detected a potential credential stuffing attack against the Payment Gateway!"
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "Business-Analytics",
+            "summary": "[BI] Payment Success Rate Dropped by 15% - SLO Breach",
+            "custom_details": {
+              "impact": "High - Revenue at risk.",
+              "service_name": "Payment Gateway",
+              "slo_threshold": "99.9%",
+              "current_success_rate": "84.9%"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Business Impact Detected",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 15,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "💸 [P2] Business Impact Alert: Payment Success Rate has dropped by 15% on the Payment Gateway."
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "Customer-Support-Portal",
+            "summary": "Customer Ticket #{{faker.datatype.number}}: Unable to complete purchase",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "complaint": "I keep trying to pay but it just times out. Is your site down?",
+              "customer_id": "user-{{faker.datatype.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Customer Support Flood",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🗣️ New customer ticket for Payment Gateway: Unable to complete purchase."
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "APM-Monitoring",
+            "summary": "p99 Latency > 2000ms on /api/v2/payment/auth",
+            "custom_details": {
+              "endpoint": "/api/v2/payment/auth",
+              "threshold": "500ms",
+              "service_name": "Payment Gateway",
+              "current_latency": "2150ms"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Cascading Failure: Latency",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 20,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "⏱️ High Latency Alert on Payment Gateway auth endpoint."
+        },
+        {
+          "id": "step-7",
+          "payload": {
+            "source": "Kubernetes-Infra",
+            "summary": "High CPU Utilization (>95%) on k8s pod: payment-gateway-{{faker.random.alphaNumeric(8)}}",
+            "custom_details": {
+              "pod_name": "payment-gateway-{{faker.random.alphaNumeric(8)}}",
+              "cpu_usage": "97%",
+              "namespace": "prod-payments",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Cascading Failure: CPU",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🔥 High CPU Alert on Payment Gateway pods."
+        },
+        {
+          "id": "step-8",
+          "payload": {
+            "source": "Database-Monitoring",
+            "summary": "High DB Connection Pool Saturation for auth_user_db",
+            "custom_details": {
+              "service_name": "Payment Gateway",
+              "database_host": "pg-auth-prod.c12345.us-east-1.rds.amazonaws.com",
+              "active_queries": "512",
+              "connection_pool_usage": "100%"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Cascading Failure: Database",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 15,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "💾 Critical DB Alert: Connection pool saturated for Payment Gateway's auth database."
+        }
+      ],
+      "narrative": {
+        "full": "Here is the structured planning summary for the failure narrative.\n\n### TL;DR of the Story\n\nA routine library update on the **Payment Gateway** service introduces a subtle authentication retry bug, creating a low-severity alert that is ignored. Hours later, during a traffic spike, this bug escalates into a major incident, masquerading as a credential stuffing attack that sends the SOC team down the wrong path. PagerDuty provides the crucial operational context—correlating the change event and the earlier minor alert—to bypass the security confusion, identify the true root cause, and enable a rapid, automated resolution.\n\n---\n\n### Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:00 AM, a developer on the Payment Gateway team deploys a routine, low-risk change to update an authentication library, adding support for a new MFA provider. The change is pushed through their standard CI/CD pipeline and marked as successful.\n\n    At 10:05 AM, a P4 (Low Severity) incident is triggered for the **Payment Gateway** service. The alert from their monitoring tool reads: `High Rate of Authentication Retries`. The on-call engineer for the service investigates, sees that overall payment success rates are still well within SLO, and concludes the retries are likely transient network jitter or a client-side issue. They acknowledge the incident, add a note saying \"Monitoring, seems benign,\" and the alert auto-resolves after 15 minutes.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This minor alert is classic operational noise in a high-volume tech environment. Crucially, it's seen as an \"ops\" problem, not a \"security\" problem. The Security Operations Center (SOC) has no visibility into this P4 ticket; their dashboards are green because there are no *failed* logins, just *retries*. This silo between operational health and security posture is the critical blind spot where the major incident begins to grow.\n\n---\n\n### Stage 2: Business Impact — Escalation Driven by Lagging Indicators\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:30 AM, a marketing campaign goes live, driving a significant surge in traffic to the company's platform. The increased load on the **Payment Gateway** amplifies the hidden bug in the new authentication library. The retry mechanism becomes overwhelmed, leading to cascading timeouts.\n\n    At 10:32 AM, a P2 Major Incident is declared as alerts fire from multiple, disconnected systems:\n    1.  **SOC SIEM:** `Anomalous Spike in Authentication Events from Diverse IPs`. This pattern perfectly matches the signature for a credential stuffing attack, immediately triggering the SOC's security playbook.\n    2.  **Business Monitoring:** `Payment Success Rate Dropped by 15%`.\n    3.  **Customer Support:** A flood of tickets and calls from customers reporting they can't complete purchases.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    The SOC team is now fully engaged, treating this as a hostile attack. They are wasting critical time analyzing IP reputations and user-agent strings. Meanwhile, the SRE and **Payment Gateway** teams are in a separate war room, treating it as a performance degradation. The teams are working on the same problem but from completely different perspectives, with no shared context. This confusion is extending the Mean Time to Resolution (MTTR) with every passing minute.\n\n---\n\n### Stage 3: Triage & Context — Connecting Signals, Changes, and Services\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander opens the PagerDuty Major Incident dashboard. Instead of just a list of alerts, PagerDuty’s AIOps has already assembled the critical context needed to bypass the confusion:\n    *   **Related Incidents:** The P4 `High Rate of Authentication Retries` incident from 10:05 AM is automatically surfaced as a \"Past Related Incident,\" showing the problem started much earlier. The on-call engineer's note, \"Monitoring, seems benign,\" is now a crucial clue.\n    *   **Change Correlation:** A change event from the CI/CD tool, `Deploy: auth-library-v2.1.4`, is displayed directly on the incident timeline, pinpointing the exact deployment that occurred just before the first retry alerts.\n    *   **Noise Reduction:** The SIEM alert, the business monitor alert, and APM alerts are all intelligently grouped into a single, unified incident, preventing duplicate response efforts.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This context immediately shifts the investigation. The Incident Commander sees the deployment, the retry alert, and the current failure, and instantly realizes this is a self-inflicted wound, not an external attack. They use PagerDuty to engage the specific developer who committed the change, bringing them directly into the response. The SOC is informed to stand down from their attack investigation, saving valuable time and resources.\n\n---\n\n### Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity\n\n*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:40 AM, armed with the full context from PagerDuty, the developer confirms the bug in their library update. They trigger a pre-built PagerDuty Automation Actions runbook that connects to their feature flagging system. With a single click, they disable the new MFA provider logic, instantly reverting the **Payment Gateway** to its last known good configuration.\n\n    By 10:42 AM, monitoring systems confirm that payment success rates have returned to normal. The incident is resolved.\n\n*   **Post-Incident Review (PIR) Framing (Security Incident Management):**\n    The PIR focuses on bridging the gap between the SOC and engineering teams.\n    1.  **Root Cause Analysis:** The review documents how a seemingly operational issue (retries) was the leading indicator of a major service failure that mimicked a security attack.\n    2.  **Process Improvement:** The key takeaway is that the SOC lacked operational context. To fix this, they decide to implement two changes in PagerDuty:\n        *   **New Event Orchestration Rule:** If a SIEM alert for `Anomalous Spike in Authentication Events` fires on the **Payment Gateway**, the orchestration will automatically enrich the incident with recent change events from that service. This gives the SOC immediate context to differentiate between a deployment and an attack.\n        *   **Refined Routing:** High-urgency security alerts targeting the **Payment Gateway** will now be configured to mobilize both the SOC and the service's on-call engineer simultaneously, ensuring shared context from the very first second.\n\n---\n\n### PagerDuty Value Highlights\n\n*   **AIOps & Service Graph:** PagerDuty uniquely connected the \"weak signal\" (the P4 retry alert) to the \"loud failure\" (the P2 outage). It understood that the CI/CD change, the retry alert, and the SIEM alert were all related to the **Payment Gateway** service.\n*   **Change Events:** This was the \"smoking gun\" that provided the ground truth, allowing the team to pivot away from a false security investigation and focus on the real operational cause.\n*   **Automation:** Using Automation Actions for the feature flag rollback provided a fast, safe, and auditable resolution, reducing MTTR from hours to minutes.\n*   **Post-Incident Review & Learning:** The PIR wasn't about blame; it was about creating a durable, automated solution. The new Event Orchestration and routing rules ensure that this specific type of confusing, cross-domain incident will be diagnosed and resolved much faster next time, turning a painful failure into a permanent improvement in resilience.",
+        "stages": {
+          "resolution_pir": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:40 AM, armed with the full context from PagerDuty, the developer confirms the bug in their library update. They trigger a pre-built PagerDuty Automation Actions runbook that connects to their feature flagging system. With a single click, they disable the new MFA provider logic, instantly reverting the **Payment Gateway** to its last known good configuration.\n\n    By 10:42 AM, monitoring systems confirm that payment success rates have returned to normal. The incident is resolved.\n\n*   **Post-Incident Review (PIR) Framing (Security Incident Management):**\n    The PIR focuses on bridging the gap between the SOC and engineering teams.\n    1.  **Root Cause Analysis:** The review documents how a seemingly operational issue (retries) was the leading indicator of a major service failure that mimicked a security attack.\n    2.  **Process Improvement:** The key takeaway is that the SOC lacked operational context. To fix this, they decide to implement two changes in PagerDuty:\n        *   **New Event Orchestration Rule:** If a SIEM alert for `Anomalous Spike in Authentication Events` fires on the **Payment Gateway**, the orchestration will automatically enrich the incident with recent change events from that service. This gives the SOC immediate context to differentiate between a deployment and an attack.\n        *   **Refined Routing:** High-urgency security alerts targeting the **Payment Gateway** will now be configured to mobilize both the SOC and the service's on-call engineer simultaneously, ensuring shared context from the very first second.\n\n---\n\n### PagerDuty Value Highlights\n\n*   **AIOps & Service Graph:** PagerDuty uniquely connected the \"weak signal\" (the P4 retry alert) to the \"loud failure\" (the P2 outage). It understood that the CI/CD change, the retry alert, and the SIEM alert were all related to the **Payment Gateway** service.\n*   **Change Events:** This was the \"smoking gun\" that provided the ground truth, allowing the team to pivot away from a false security investigation and focus on the real operational cause.\n*   **Automation:** Using Automation Actions for the feature flag rollback provided a fast, safe, and auditable resolution, reducing MTTR from hours to minutes.\n*   **Post-Incident Review & Learning:** The PIR wasn't about blame; it was about creating a durable, automated solution. The new Event Orchestration and routing rules ensure that this specific type of confusing, cross-domain incident will be diagnosed and resolved much faster next time, turning a painful failure into a permanent improvement in resilience."
+          },
+          "triage_context": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    The Incident Commander opens the PagerDuty Major Incident dashboard. Instead of just a list of alerts, PagerDuty’s AIOps has already assembled the critical context needed to bypass the confusion:\n    *   **Related Incidents:** The P4 `High Rate of Authentication Retries` incident from 10:05 AM is automatically surfaced as a \"Past Related Incident,\" showing the problem started much earlier. The on-call engineer's note, \"Monitoring, seems benign,\" is now a crucial clue.\n    *   **Change Correlation:** A change event from the CI/CD tool, `Deploy: auth-library-v2.1.4`, is displayed directly on the incident timeline, pinpointing the exact deployment that occurred just before the first retry alerts.\n    *   **Noise Reduction:** The SIEM alert, the business monitor alert, and APM alerts are all intelligently grouped into a single, unified incident, preventing duplicate response efforts.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This context immediately shifts the investigation. The Incident Commander sees the deployment, the retry alert, and the current failure, and instantly realizes this is a self-inflicted wound, not an external attack. They use PagerDuty to engage the specific developer who committed the change, bringing them directly into the response. The SOC is informed to stand down from their attack investigation, saving valuable time and resources.\n\n---"
+          },
+          "business_impact": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:30 AM, a marketing campaign goes live, driving a significant surge in traffic to the company's platform. The increased load on the **Payment Gateway** amplifies the hidden bug in the new authentication library. The retry mechanism becomes overwhelmed, leading to cascading timeouts.\n\n    At 10:32 AM, a P2 Major Incident is declared as alerts fire from multiple, disconnected systems:\n    1.  **SOC SIEM:** `Anomalous Spike in Authentication Events from Diverse IPs`. This pattern perfectly matches the signature for a credential stuffing attack, immediately triggering the SOC's security playbook.\n    2.  **Business Monitoring:** `Payment Success Rate Dropped by 15%`.\n    3.  **Customer Support:** A flood of tickets and calls from customers reporting they can't complete purchases.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    The SOC team is now fully engaged, treating this as a hostile attack. They are wasting critical time analyzing IP reputations and user-agent strings. Meanwhile, the SRE and **Payment Gateway** teams are in a separate war room, treating it as a performance degradation. The teams are working on the same problem but from completely different perspectives, with no shared context. This confusion is extending the Mean Time to Resolution (MTTR) with every passing minute.\n\n---"
+          },
+          "routine_change_minor": {
+            "text": "*   **Selected Service(s):** `Payment Gateway`\n*   **Narrative:**\n    At 10:00 AM, a developer on the Payment Gateway team deploys a routine, low-risk change to update an authentication library, adding support for a new MFA provider. The change is pushed through their standard CI/CD pipeline and marked as successful.\n\n    At 10:05 AM, a P4 (Low Severity) incident is triggered for the **Payment Gateway** service. The alert from their monitoring tool reads: `High Rate of Authentication Retries`. The on-call engineer for the service investigates, sees that overall payment success rates are still well within SLO, and concludes the retries are likely transient network jitter or a client-side issue. They acknowledge the incident, add a note saying \"Monitoring, seems benign,\" and the alert auto-resolves after 15 minutes.\n\n*   **Industry & Use Case Framing (Tech & Telco / Security Incident Management):**\n    This minor alert is classic operational noise in a high-volume tech environment. Crucially, it's seen as an \"ops\" problem, not a \"security\" problem. The Security Operations Center (SOC) has no visibility into this P4 ticket; their dashboards are green because there are no *failed* logins, just *retries*. This silo between operational health and security posture is the critical blind spot where the major incident begins to grow.\n\n---"
+          }
+        }
+      },
+      "description": "Demonstrates how a minor operational bug can be misidentified as a major security attack, and how PagerDuty AIOps provides the context to differentiate and resolve quickly."
+    },
+    "personaNotes": "As the presenter, your role is to highlight the dangerous blind spot between Security Operations (SOC) and Engineering/SRE teams. The key takeaway is how a seemingly minor operational issue (retries) can manifest as a major security scare (credential stuffing attack). Emphasize how PagerDuty's AIOps, by correlating change events and past incidents, provides the ground truth that prevents teams from wasting critical time chasing the wrong problem. The resolution via Automation Actions showcases a modern, fast, and safe way to recover.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T15:04:18.555Z",
+    "updatedAt": "2026-02-27T15:04:18.555Z"
+  },
+  "summary": {
+    "eventCount": 8,
+    "changeCount": 1,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

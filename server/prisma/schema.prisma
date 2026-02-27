@@ -93,6 +93,8 @@ model GoldenDemo {
   name            String
   vertical        String
   maturityLevel   String
+  industry        String?
+  useCase         String?
   narrative       String
   configJson      Json      // Stores the full simulation configuration, including beats
   personaNotes    String?

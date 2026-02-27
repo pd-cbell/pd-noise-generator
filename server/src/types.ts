@@ -206,6 +206,17 @@ export interface GoldenDemoConfig {
   description: string;
   items: any[]; // CampaignItem[] - Loosely typed for now, can be more specific
   beats?: Beat[]; // Array of narrative beats
+  generationDiagnostics?: {
+    provider?: 'openai' | 'google' | string;
+    model?: string;
+    promptVersion?: string;
+    generatedAt?: string;
+    eventCount?: number;
+    changeCount?: number;
+    beatsCount?: number;
+    missingServiceNameCount?: number;
+    sparseCustomDetailsCount?: number;
+  };
   narrative?: {
     full?: string;
     stages?: Record<string, { text?: string }>;
@@ -220,8 +231,10 @@ export interface GoldenDemoConfig {
 export interface GoldenDemo {
   id: string;
   name: string;
-  vertical: string;
-  maturityLevel: string;
+  vertical?: string;
+  maturityLevel?: string;
+  industry?: string | null;
+  useCase?: string | null;
   narrative: string;
   configJson: GoldenDemoConfig; // Use the specific config structure
   personaNotes?: string;

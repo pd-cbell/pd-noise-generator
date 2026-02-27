@@ -1,0 +1,323 @@
+{
+  "startedAt": "2026-02-27T14:58:10.574Z",
+  "completedAt": "2026-02-27T14:59:32.648Z",
+  "provider": "openai",
+  "case": {
+    "id": "cx-qa-latency",
+    "prompt": "API response delays in Profile API degrade CX QA agent response quality during peak support hours. Include a routine deploy and escalation.",
+    "industry": "Financial Services",
+    "useCase": "Agent Ops",
+    "eventCount": 10,
+    "changeCount": 2
+  },
+  "proposal": "**TL;DR:** A routine change to the Payment Gateway service introduces a minor delay in API responses, which is initially ignored. This delay escalates into a major incident during peak support hours, degrading customer experience and agent productivity. PagerDuty's tools help quickly identify the root cause, leading to a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness.\n\n---\n\n**Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine, low-risk update is applied to the Payment Gateway service, introducing a subtle delay in API response times. This manifests as a minor incident (P4) during non-peak hours, where API response times slightly exceed the expected threshold. In the financial services industry, where precision and speed are critical, this delay is a potential red flag for customer experience and agent operations. However, due to its low severity, the issue is not prioritized for immediate resolution.\n- **Industry-Specific Framing:** In financial services, even minor delays can impact customer trust and compliance. \n- **Use-Case-Specific Goals:** Ensure high-quality agent responses and maintain customer satisfaction by promptly addressing potential issues.\n\n**Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As peak support hours begin, the unresolved API delay combines with increased traffic, causing significant response lags. This results in a major incident where customer experience is visibly degraded, and agent productivity drops as they struggle to access critical customer profile data. The incident is traced back to the initial routine change and the ignored minor incident.\n- **Industry-Specific Framing:** The financial services sector demands rapid and reliable service delivery; any disruption can lead to customer dissatisfaction and potential financial loss.\n- **Use-Case-Specific Goals:** Maintain seamless agent operations and ensure customer queries are handled efficiently, especially during high-demand periods.\n\n**Stage 3: Triage & Context — Connecting Signals, Changes, Dependencies, and Services**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty's AIOps and Service Graph quickly correlate the major incident with the earlier minor issue and the routine change. Change events and dependency mapping provide actionable insights, enabling teams to understand the impact and mobilize the right resources. This context significantly reduces Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).\n- **Industry-Specific Framing:** Rapid identification and resolution of issues are crucial to maintaining service quality and compliance in financial services.\n- **Use-Case-Specific Goals:** Enhance agent efficiency by minimizing downtime and ensuring quick access to necessary data.\n\n**Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The issue is resolved by rolling back the problematic change and implementing a configuration override to stabilize API response times. A Post-Incident Review (PIR) is conducted, documenting the timeline and root cause. The PIR identifies how the minor incident could have been escalated faster and proposes new automation and guardrails to prevent recurrence. This review is tailored to the financial services industry, emphasizing the importance of swift incident detection and resolution to protect customer trust.\n- **Industry-Specific Framing:** Continuous improvement is vital to maintaining the high standards expected in financial services.\n- **Use-Case-Specific Goals:** Strengthen operational processes and ensure agents have the tools needed to deliver exceptional customer service.\n\n---\n\n**PagerDuty Value Highlight:**\n\nPagerDuty’s AIOps and Automation provide unparalleled value by quickly connecting disparate signals and changes, offering a comprehensive view of the incident landscape. Change Events and Service Graphs offer critical insights that accelerate incident resolution. The Post-Incident Review fosters a culture of learning and prevention, ensuring that similar issues are detected and addressed more swiftly in the future, thereby enhancing overall reliability and operational readiness.",
+  "goldenDemo": {
+    "id": "5a29c750-5153-4979-88ff-b7cb8154544f",
+    "name": "Profile API Latency Impacts CX QA During Peak Support",
+    "vertical": "Financial Services",
+    "maturityLevel": "Deprecated",
+    "industry": "Financial Services",
+    "useCase": "Agent Ops",
+    "narrative": "A routine change to the Payment Gateway service introduces a minor delay in API responses, which is initially ignored. This delay escalates into a major incident during peak support hours, degrading customer experience and agent productivity. PagerDuty's tools help quickly identify the root cause, leading to a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness.",
+    "configJson": {
+      "name": "Profile API Latency from Payment Gateway Change",
+      "beats": [
+        {
+          "id": "beat-1-signal-minor",
+          "title": "Off-peak minor latency signal on Payment Gateway",
+          "whatToSay": "We start during a quiet period. A routine, low-risk configuration change is deployed to the Payment Gateway. Shortly after, PagerDuty detects a small but measurable increase in response times. You can see this low-severity latency incident on the Payment Gateway service timeline, right after the change event. In financial services, even small delays can matter, but because this is off-peak and classified as a P4, it’s easy for teams to treat it as background noise rather than an early warning.",
+          "description": "A routine Payment Gateway change is deployed off-peak. Shortly after, low-severity latency alerts begin to fire as response times creep above SLO, but impact to agents and customers is not yet obvious.",
+          "approxTimingSec": 60,
+          "whatToShowInPagerDuty": "Show the Payment Gateway service detail page with the first low-severity incident on the timeline and the associated change event."
+        },
+        {
+          "id": "beat-2-escalation-peak",
+          "title": "Peak-hour escalation and CX impact",
+          "whatToSay": "Fast-forward into peak support hours. Traffic ramps up, and the unresolved latency on the Payment Gateway now becomes a real problem. PagerDuty starts surfacing higher-severity incidents as response times spike and timeouts appear. For CX QA and support agents, this shows up as slow or failing Profile API lookups in their tools. They’re stuck waiting on customer payment and profile data, handle times increase, and queues begin to back up. What looked like a minor technical issue has now become a major business incident.",
+          "description": "As peak support hours begin, Payment Gateway latency worsens under load, causing Profile API calls to stall. CX QA and support agents experience slow or failing profile lookups, degrading customer experience.",
+          "approxTimingSec": 75,
+          "whatToShowInPagerDuty": "Show the incident list and the major incident on Payment Gateway with multiple correlated alerts and rising severity."
+        },
+        {
+          "id": "beat-3-triage-context",
+          "title": "Correlating change, latency, and dependencies",
+          "whatToSay": "During triage, responders use PagerDuty’s AIOps and Service Graph to connect the dots. On the Payment Gateway service, we can see the original low-severity latency alert, the routine change event, and now the major incident, all aligned on the same timeline. Service context shows that Profile API calls depend on this gateway for payment verification metadata, which explains why agents are experiencing slow profile loads. Instead of chasing symptoms in the Profile API or agent desktop, teams immediately focus on the Payment Gateway configuration as the likely root cause, cutting down MTTA and MTTR.",
+          "description": "PagerDuty AIOps correlates the major incident with the earlier minor latency alerts and the Payment Gateway change event, showing clear dependency impact on downstream Profile API usage.",
+          "approxTimingSec": 90,
+          "whatToShowInPagerDuty": "Open the Payment Gateway service, show Service Graph and the timeline with both change events and incidents correlated."
+        },
+        {
+          "id": "beat-4-resolution-pir",
+          "title": "Rollback, stabilization, and learning",
+          "whatToSay": "To resolve the incident, the team rolls back the Payment Gateway configuration and applies a temporary timeout and rate-limit override. Latency quickly returns to normal, and Profile API calls recover, so CX QA and support agents can get back to normal workflows. In the Post-Incident Review, the team documents how the initial P4 latency alert during off-peak hours was an early signal that didn’t get enough attention. They add new automation to auto-escalate repeated latency anomalies on critical financial services like the Payment Gateway, especially near forecasted peak support windows, and tighten change validation with canary checks that mimic real agent Profile API usage. The result is stronger operational readiness and better protection for customer trust.",
+          "description": "Teams roll back the Payment Gateway change, apply configuration overrides to stabilize latency, and conduct a Post-Incident Review to add guardrails and automation for future changes.",
+          "approxTimingSec": 90,
+          "whatToShowInPagerDuty": "Show the resolved incident, associated change events, and open the Post-Incident Review for the major incident."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "ci-cd.pipeline.prod",
+            "summary": "Routine configuration update deployed to Payment Gateway during off-peak window",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": null,
+          "stepName": "Change deployed to Payment Gateway - config tweak",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Change] Payment Gateway: Routine config update deployed in off-peak window. Monitoring for latency or error regressions."
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "apm.monitor.payment-gateway",
+            "summary": "Payment Gateway p95 latency slightly above SLO after routine change",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Initial minor latency alert - off-peak",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P4 Warning] Slight increase in Payment Gateway p95 latency detected post-change. Current p95: 420ms vs 350ms SLO. Source IP: {{faker.internet.ip}}."
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "synthetic.probes.profile-api",
+            "summary": "Ongoing minor latency anomalies on Payment Gateway during low-traffic period",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Repeated latency anomalies - ignored early signal",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 60,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P4 Warning] Synthetic Profile API journeys show intermittent slow responses waiting on Payment Gateway. Timestamp: {{faker.date.recent}}."
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "apm.monitor.payment-gateway",
+            "summary": "Payment Gateway latency spike as traffic ramps toward peak support hours",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Pre-peak latency spike under rising load",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 90,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P3 Error] Payment Gateway experiencing elevated latency under increasing load. CX and QA tools may see slower Profile API lookups. Source IP: {{faker.internet.ip}}."
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "agent-desktop.telemetry",
+            "summary": "Payment Gateway timeouts causing downstream Profile API call failures for agents",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Timeouts begin impacting agent Profile API calls",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 110,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P2 Degraded] Agent desktop telemetry shows Profile API calls timing out while waiting on Payment Gateway. QA reviewers and support agents are reporting slow or failed profile loads."
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "incident.auto-detection",
+            "summary": "Critical incident: Payment Gateway latency degrading CX and agent productivity during peak",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Major incident declared during peak support",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 130,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P1 Critical] Payment Gateway latency and timeouts impacting CX QA and frontline agents during peak. Customers experiencing delays; handle times increasing. Incident bridge opened."
+        },
+        {
+          "id": "step-7",
+          "payload": {
+            "source": "pd.ai.correlation",
+            "summary": "AIOps correlation: Current major incident linked to earlier off-peak latency alerts and recent change",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "AIOps correlation - linking to earlier minor incident",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 150,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Context] PagerDuty AIOps correlated this major Payment Gateway incident with earlier P4 latency alerts and the recent config change. Strong indication of regression from that change."
+        },
+        {
+          "id": "step-8",
+          "payload": {
+            "source": "ci-cd.pipeline.prod",
+            "summary": "Rollback initiated for recent Payment Gateway configuration due to latency regression",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": null,
+          "stepName": "Change event - rollback initiated on Payment Gateway",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 150,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Change] Rollback started for latest Payment Gateway config to mitigate latency and timeout impact on Profile API and agents."
+        },
+        {
+          "id": "step-9",
+          "payload": {
+            "source": "apm.monitor.payment-gateway",
+            "summary": "Post-rollback verification: Payment Gateway latency trending back within SLO",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Post-rollback verification - latency improving",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 150,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Update] After rollback, Payment Gateway p95 latency is improving and approaching SLO. Agent Profile API calls are recovering. Source IP: {{faker.internet.ip}}."
+        },
+        {
+          "id": "step-10",
+          "payload": {
+            "source": "incident.commander.update",
+            "summary": "Incident resolved: Payment Gateway latency stabilized; CX QA and agent workflows back to normal",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Final stabilization - incident resolved",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 150,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Resolved] Payment Gateway latency stabilized post-rollback. Profile API performance normal; CX QA and support agents report normal response times. PIR to follow with new guardrails and automation."
+        }
+      ],
+      "narrative": {
+        "full": "**TL;DR:** A routine change to the Payment Gateway service introduces a minor delay in API responses, which is initially ignored. This delay escalates into a major incident during peak support hours, degrading customer experience and agent productivity. PagerDuty's tools help quickly identify the root cause, leading to a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness.\n\n---\n\n**Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine, low-risk update is applied to the Payment Gateway service, introducing a subtle delay in API response times. This manifests as a minor incident (P4) during non-peak hours, where API response times slightly exceed the expected threshold. In the financial services industry, where precision and speed are critical, this delay is a potential red flag for customer experience and agent operations. However, due to its low severity, the issue is not prioritized for immediate resolution.\n- **Industry-Specific Framing:** In financial services, even minor delays can impact customer trust and compliance. \n- **Use-Case-Specific Goals:** Ensure high-quality agent responses and maintain customer satisfaction by promptly addressing potential issues.\n\n**Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As peak support hours begin, the unresolved API delay combines with increased traffic, causing significant response lags. This results in a major incident where customer experience is visibly degraded, and agent productivity drops as they struggle to access critical customer profile data. The incident is traced back to the initial routine change and the ignored minor incident.\n- **Industry-Specific Framing:** The financial services sector demands rapid and reliable service delivery; any disruption can lead to customer dissatisfaction and potential financial loss.\n- **Use-Case-Specific Goals:** Maintain seamless agent operations and ensure customer queries are handled efficiently, especially during high-demand periods.\n\n**Stage 3: Triage & Context — Connecting Signals, Changes, Dependencies, and Services**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty's AIOps and Service Graph quickly correlate the major incident with the earlier minor issue and the routine change. Change events and dependency mapping provide actionable insights, enabling teams to understand the impact and mobilize the right resources. This context significantly reduces Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).\n- **Industry-Specific Framing:** Rapid identification and resolution of issues are crucial to maintaining service quality and compliance in financial services.\n- **Use-Case-Specific Goals:** Enhance agent efficiency by minimizing downtime and ensuring quick access to necessary data.\n\n**Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The issue is resolved by rolling back the problematic change and implementing a configuration override to stabilize API response times. A Post-Incident Review (PIR) is conducted, documenting the timeline and root cause. The PIR identifies how the minor incident could have been escalated faster and proposes new automation and guardrails to prevent recurrence. This review is tailored to the financial services industry, emphasizing the importance of swift incident detection and resolution to protect customer trust.\n- **Industry-Specific Framing:** Continuous improvement is vital to maintaining the high standards expected in financial services.\n- **Use-Case-Specific Goals:** Strengthen operational processes and ensure agents have the tools needed to deliver exceptional customer service.\n\n---\n\n**PagerDuty Value Highlight:**\n\nPagerDuty’s AIOps and Automation provide unparalleled value by quickly connecting disparate signals and changes, offering a comprehensive view of the incident landscape. Change Events and Service Graphs offer critical insights that accelerate incident resolution. The Post-Incident Review fosters a culture of learning and prevention, ensuring that similar issues are detected and addressed more swiftly in the future, thereby enhancing overall reliability and operational readiness.",
+        "stages": {
+          "resolution_pir": {
+            "text": "---"
+          },
+          "triage_context": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty's AIOps and Service Graph quickly correlate the major incident with the earlier minor issue and the routine change. Change events and dependency mapping provide actionable insights, enabling teams to understand the impact and mobilize the right resources. This context significantly reduces Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR).\n- **Industry-Specific Framing:** Rapid identification and resolution of issues are crucial to maintaining service quality and compliance in financial services.\n- **Use-Case-Specific Goals:** Enhance agent efficiency by minimizing downtime and ensuring quick access to necessary data."
+          },
+          "business_impact": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** As peak support hours begin, the unresolved API delay combines with increased traffic, causing significant response lags. This results in a major incident where customer experience is visibly degraded, and agent productivity drops as they struggle to access critical customer profile data. The incident is traced back to the initial routine change and the ignored minor incident.\n- **Industry-Specific Framing:** The financial services sector demands rapid and reliable service delivery; any disruption can lead to customer dissatisfaction and potential financial loss.\n- **Use-Case-Specific Goals:** Maintain seamless agent operations and ensure customer queries are handled efficiently, especially during high-demand periods."
+          },
+          "routine_change_minor": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** A routine, low-risk update is applied to the Payment Gateway service, introducing a subtle delay in API response times. This manifests as a minor incident (P4) during non-peak hours, where API response times slightly exceed the expected threshold. In the financial services industry, where precision and speed are critical, this delay is a potential red flag for customer experience and agent operations. However, due to its low severity, the issue is not prioritized for immediate resolution.\n- **Industry-Specific Framing:** In financial services, even minor delays can impact customer trust and compliance. \n- **Use-Case-Specific Goals:** Ensure high-quality agent responses and maintain customer satisfaction by promptly addressing potential issues."
+          }
+        }
+      },
+      "description": "Routine Payment Gateway change introduces latency that degrades Profile API performance and CX QA agent effectiveness during peak support hours, escalated and resolved via PagerDuty."
+    },
+    "personaNotes": "Persona focus: Financial services CX / support operations and QA leaders who care about agent productivity, handle time, and customer trust. Emphasize how small technical latency issues in the Payment Gateway can cascade into degraded Profile API performance and poor agent experience during peak hours.\n\nKey talking points:\n- Tie every technical symptom (latency, timeouts) back to CX QA and frontline agent workflows: slower Profile API = slower answers, more customer frustration, and missed SLAs.\n- Highlight how the initial P4 latency alert was an ignored early signal; use this to show why proactive operations and better automation matter.\n- Use Change Events and Service Graph to visually connect the Payment Gateway change to the downstream impact on agent tools.\n- Show how AIOps reduces noise and correlates the minor off‑peak incident with the major peak‑hour incident.\n- In the PIR, stress continuous improvement: new guardrails, better change validation, and auto‑escalation for latency anomalies on critical financial services.\n\nDemo framing tips:\n- Speak in terms of \"agents waiting on customer profile data\" and \"CX QA unable to complete reviews on time\" rather than just API metrics.\n- When showing alerts, translate p95 latency and error rates into business language: increased average handle time, longer queues, and potential regulatory or compliance risk if customer issues aren’t handled promptly.\n- Underscore that this is a routine change gone wrong, not a catastrophic outage, which makes it highly relatable and common in financial services operations.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T14:59:32.637Z",
+    "updatedAt": "2026-02-27T14:59:32.637Z"
+  },
+  "summary": {
+    "eventCount": 10,
+    "changeCount": 2,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

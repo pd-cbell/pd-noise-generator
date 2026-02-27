@@ -1,0 +1,325 @@
+{
+  "startedAt": "2026-02-27T14:59:32.657Z",
+  "completedAt": "2026-02-27T15:01:06.540Z",
+  "provider": "google",
+  "case": {
+    "id": "cx-qa-latency",
+    "prompt": "API response delays in Profile API degrade CX QA agent response quality during peak support hours. Include a routine deploy and escalation.",
+    "industry": "Financial Services",
+    "useCase": "Agent Ops",
+    "eventCount": 10,
+    "changeCount": 2
+  },
+  "proposal": "Here is the structured planning summary for the failure narrative.\n\n### **TL;DR**\n\nA routine, low-risk deployment to the `Payment Gateway` service introduces a subtle API latency issue, generating a low-priority alert that is initially ignored. During peak support hours, this minor latency cascades into a major incident, paralyzing customer support agents and putting customer trust at risk. PagerDuty AIOps connects the business impact to the initial technical alert and change event, enabling a rapid rollback and a post-incident review that hardens the system against future failures.\n\n---\n\n### **Stage 1: Routine Change and Minor Incidents**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:00 PM, the `Payment Gateway` team deploys a routine update to enhance its fraud detection logic. The change seems innocuous and passes all automated tests. However, it introduces a slightly inefficient database query for fetching customer transaction histories.\n    At 1:05 PM, a PagerDuty P4 technical alert is generated: `High Latency on Profile Lookup Endpoint`. The latency has only increased by 80ms—barely over the threshold and not yet impacting any external customers. The on-call engineer acknowledges the low-urgency notification, notes \"Monitoring, likely noise from deploy,\" and moves on to other tasks, assuming it's a transient blip.\n*   **Industry Framing (Financial Services):** In a fast-paced financial services environment, minor performance degradations that don't immediately affect transactions are often deprioritized. The focus is on core payment processing uptime, making subtle API performance issues easy to overlook.\n*   **Use Case Framing (Agent Ops):** This \"Profile Lookup Endpoint\" is the API that the company's internal Customer Experience (CX) agent dashboard uses to pull customer data. The blind spot here is that the engineering team views this as an internal, non-critical endpoint, underestimating its direct impact on agent productivity and the customer experience.\n\n---\n\n### **Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:20 PM, peak support hours begin. Hundreds of CX agents are now simultaneously using their dashboards to handle customer calls. The cumulative effect of each agent's tool hitting the degraded `Payment Gateway` endpoint turns the minor 80ms latency into a multi-second delay for loading customer profiles. Agents are stuck waiting, unable to verify identities or discuss recent transactions.\n    At 1:25 PM, a business service alert from the CX team's monitoring tool triggers a PagerDuty P1 Major Incident: `Critical: Agent Dashboard Unresponsive - High Call Queue Times`. This is a lagging business indicator. The Head of Support is now involved, as agent productivity has plummeted and customer frustration is mounting. The incident traces directly back to the slow API responses from the `Payment Gateway` service, which was impacted by the earlier, ignored routine change.\n*   **Industry Framing (Financial Services):** Customer trust is paramount. When agents can't access account information quickly, it appears unprofessional and insecure, leading to customer churn and reputational damage. Every second of delay increases operational costs and risks negative social media exposure.\n*   **Use Case Framing (Agent Ops):** The primary goal is to minimize customer wait time and maximize first-call resolution. The system is now failing on both counts. The incident is no longer a technical problem; it's a business crisis impacting the company's ability to serve its customers effectively.\n\n---\n\n### **Stage 3: Triage & Context — Connecting Signals, Changes, and Services**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    The Major Incident Commander (MIC) is paged and immediately opens the P1 incident in PagerDuty. They are initially focused on the \"Agent Dashboard,\" but PagerDuty provides immediate, critical context that redirects their attention.\n    On the incident details screen, they see:\n    1.  **AIOps Related Incidents:** PagerDuty has automatically correlated the P1 business incident with the P4 technical alert (`High Latency on Profile Lookup Endpoint`) from 20 minutes prior on the `Payment Gateway` service.\n    2.  **Recent Change Events:** Directly below, a change event from the CI/CD pipeline is displayed: `Deploy #7891 to Payment Gateway`.\n    This instantly connects the business pain (slow agents) to the technical symptom (API latency) and the probable root cause (the recent deployment). The MIC doesn't need to waste time asking \"what changed?\"—the answer is right there. They immediately add the `Payment Gateway` on-call engineer to the incident, who receives all of this context on their phone.\n*   **Industry Framing (Financial Services):** In a highly regulated environment, having a clear, auditable trail of events is critical. PagerDuty provides a single pane of glass that connects disparate signals, proving invaluable for both rapid response and future compliance audits.\n*   **Use Case Framing (Agent Ops):** The goal is to restore agent tooling as fast as possible. PagerDuty's context bypasses the typical \"war room\" chaos of trying to find the right team and the right information, directly accelerating Mean Time to Acknowledge (MTTA) and Mean Time to Resolution (MTTR).\n\n---\n\n### **Stage 4: Resolution & Post-Incident Review**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:30 PM, armed with the context from PagerDuty, the `Payment Gateway` engineer confirms the faulty query and initiates a rollback of the deployment. The rollback is triggered via a PagerDuty Automation Action, which simultaneously runs the pipeline job and posts status updates back to the incident timeline.\n    At 1:35 PM, the rollback completes. API latency returns to normal, agent dashboards become responsive, and call queues begin to clear. The incident is resolved.\n    The next day, the team conducts a **Post-Incident Review (PIR)** using PagerDuty's auto-generated timeline.\n    *   **Root Cause:** The new fraud logic was inefficient and not caught by pre-production performance tests. The early P4 warning signal was ignored.\n    *   **Action Items:**\n        1.  **Improve Detection:** An Automation Action is configured. The next time the `High Latency on Profile Lookup Endpoint` alert fires, a runbook will automatically run a diagnostic script against the database and attach the results to the incident, giving the on-call engineer immediate data to assess the impact.\n        2.  **Improve Escalation:** A new event rule is created. If that specific P4 alert fires within 30 minutes of a `Payment Gateway` deployment, it will be automatically promoted to a P2 and escalate immediately, ensuring it is never ignored during a change window again.\n*   **Industry Framing (Financial Services):** The PIR process is a critical component of operational resilience and regulatory compliance. The documented learnings and automated improvements demonstrate a commitment to protecting the customer experience and maintaining service stability.\n*   **Use Case Framing (Agent Ops):** The PIR creates a direct feedback loop. The CX organization's pain is translated into concrete engineering improvements. The new automations act as guardrails, ensuring that a change intended to improve one part of the business (fraud detection) doesn't inadvertently cripple another (agent operations).\n\n---\n\n### **PagerDuty Value Highlights**\n\n*   **AIOps, Change Events, and Service Graph:** PagerDuty uniquely connected the lagging business indicator (`High Call Queue Times`) to the leading technical signals (the P4 latency alert and the CI/CD change event). This correlation is the key to cutting through the noise and finding the root cause in minutes, not hours.\n*   **Automation:** PagerDuty Automation Actions were used for both resolution (triggering the rollback) and prevention (creating a diagnostic runbook for the future). This shifts the team from a reactive to a proactive posture.\n*   **Post-Incident Review (Learning Loop):** The PIR wasn't just a report; it was an actionable process that resulted in durable improvements to the response workflow. By creating new rules and automations based on this incident, the team ensures this specific failure mode cannot repeat itself, creating a cycle of continuous learning and prevention.",
+  "goldenDemo": {
+    "id": "b63f6a2d-d81d-4c0a-97d3-dfdd23b1d42c",
+    "name": "Financial Services - Agent Ops Latency Cascade",
+    "vertical": "Financial Services",
+    "maturityLevel": "Deprecated",
+    "industry": "Financial Services",
+    "useCase": "Agent Ops",
+    "narrative": "Here is the structured planning summary for the failure narrative.",
+    "configJson": {
+      "name": "Financial Services - Agent Ops Latency Cascade",
+      "beats": [
+        {
+          "id": "1",
+          "title": "A Routine Change & A Minor Alert",
+          "whatToSay": "At 1 PM, a routine deployment was made to the Payment Gateway. A few minutes later, we see a P4 alert for a minor latency increase. The on-call engineer acknowledges it, notes it's probably noise from the deploy, and moves on. This seems harmless, but it's the start of our problem.",
+          "description": "A routine deployment to the Payment Gateway service introduces a subtle latency issue, triggering a low-priority P4 alert that is acknowledged but ignored.",
+          "approxTimingSec": 30,
+          "whatToShowInPagerDuty": "The PagerDuty web UI, focusing on the new P4 incident on the `Payment Gateway` service. Show the change event right next to it in the service activity view."
+        },
+        {
+          "id": "2",
+          "title": "Business Impact Escalation",
+          "whatToSay": "Twenty minutes later, everything changes. A P1 Major Incident is declared. This isn't a technical alert; it's a business alert from the CX team's monitoring. Agent dashboards are unresponsive, and customer call queues are exploding. The business is now feeling the pain.",
+          "description": "During peak hours, the minor latency cascades, paralyzing the CX agent dashboard and triggering a P1 Major Incident based on business metrics like call queue times.",
+          "approxTimingSec": 120,
+          "whatToShowInPagerDuty": "The PagerDuty mobile app or web UI showing the new P1 incident from the `CX Agent Dashboard`. The screen is red, and the business impact is clear."
+        },
+        {
+          "id": "3",
+          "title": "AIOps: Connecting Business Impact to Root Cause",
+          "whatToSay": "The Incident Commander opens the P1. Instead of a chaotic war room call asking 'what changed?', the context is right here. PagerDuty AIOps has automatically linked this business crisis to that 'harmless' P4 alert and the exact deployment that caused it. We've gone from business impact to probable root cause in seconds.",
+          "description": "The Major Incident Commander opens the P1 incident and PagerDuty AIOps has already correlated it with the earlier P4 latency alert and the recent deployment on the Payment Gateway service.",
+          "approxTimingSec": 180,
+          "whatToShowInPagerDuty": "The P1 incident details screen. Point directly to the 'Related Incidents' and 'Recent Changes' sections, showing the automatic correlation."
+        },
+        {
+          "id": "4",
+          "title": "Automated Resolution & The Learning Loop",
+          "whatToSay": "With clear context, the team triggers a rollback directly from PagerDuty using an Automation Action. Service is restored quickly. But more importantly, in the post-mortem, they use this incident's data to harden the system. They create a new rule to automatically escalate this specific alert if it happens near a deployment, ensuring this blind spot is eliminated for good. This is how you turn an incident into a durable improvement.",
+          "description": "The team uses a PagerDuty Automation Action to trigger a rollback. In the post-incident review, they create new rules and automations to prevent this failure pattern from recurring.",
+          "approxTimingSec": 240,
+          "whatToShowInPagerDuty": "Show the incident timeline with the Automation Action log for the rollback. Then, describe how a new Event Rule would be created ('If P4 latency alert occurs within 30 mins of a deploy, promote to P2')."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "Jenkins",
+            "summary": "Deploy #7891 to Payment Gateway: Enhanced Fraud Detection Logic",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "git_commit": "{{faker.git.commitSha}}",
+              "build_state": "SUCCESS",
+              "deployed_by": "payment-gateway-cicd-pipeline",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "stepName": "Stage 1: Routine Deploy",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🚀 Change Event: `Payment Gateway` deploy #7891 (Enhanced Fraud Detection) completed."
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "Datadog",
+            "summary": "(P4) High Latency on Profile Lookup Endpoint",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "notes": "Monitoring, likely noise from deploy.",
+              "endpoint": "/v2/customer/profile",
+              "trace_id": "{{faker.string.uuid}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": 75,
+              "current_latency_ms": 82
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Stage 1: Minor Latency Alert (P4)",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 20,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "ℹ️ (P4) Alert on `Payment Gateway`: High Latency on Profile Lookup Endpoint. Acknowledged."
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "Splunk",
+            "summary": "Agent Profile Load Timeout",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "error": "API call to payment-gateway:/v2/customer/profile timed out after 5000ms",
+              "impact": "Agent unable to load customer data.",
+              "agent_id": "cx-agent-{{faker.number.int}}",
+              "customer_id": "{{faker.string.uuid}}",
+              "service_name": "CX Agent Dashboard"
+            }
+          },
+          "service": "CX Agent Dashboard",
+          "severity": "warning",
+          "stepName": "Stage 2: Peak Hours Begin - Agent Tooling Slows",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 70,
+          "logicalServiceName": "CX Agent Dashboard",
+          "slackMessageTemplate": "⚠️ Warning on `CX Agent Dashboard`: Agent Profile Load Timeout detected."
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "Salesforce Omni-Channel",
+            "summary": "(P1) Critical: Agent Dashboard Unresponsive - High Call Queue Times",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "service_name": "CX Agent Dashboard",
+              "dashboard_url": "https://salesforce.my.salesforce.com/dashboards/CX-Ops",
+              "business_impact": "High",
+              "avg_wait_time_sec": 310,
+              "call_queue_length": 152,
+              "customer_frustration_index": "9.8/10"
+            }
+          },
+          "service": "CX Agent Dashboard",
+          "severity": "critical",
+          "stepName": "Stage 2: Business Impact Escalates (P1)",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 25,
+          "logicalServiceName": "CX Agent Dashboard",
+          "slackMessageTemplate": "🔥 (P1) MAJOR INCIDENT on `CX Agent Dashboard`: Agent Dashboard Unresponsive - High Call Queue Times. MIC paged."
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "Datadog",
+            "summary": "(P2) Profile Lookup Endpoint Error Rate > 5%",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "impact": "Latency is now causing requests to fail completely.",
+              "endpoint": "/v2/customer/profile",
+              "error_type": "504 Gateway Timeout",
+              "service_name": "Payment Gateway",
+              "current_error_rate": "5.3%",
+              "threshold_error_rate": "5.0%"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Stage 2: Technical Impact Worsens",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "🚨 (P2) Alert on `Payment Gateway`: Profile Lookup Endpoint Error Rate > 5%."
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "PagerDuty",
+            "summary": "Rollback Triggered for Deploy #7891 via PagerDuty Automation Action",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "status": "IN_PROGRESS",
+              "incident_id": "P1-12345",
+              "service_name": "Payment Gateway",
+              "triggered_by": "MIC-JaneDoe",
+              "automation_action": "run-pipeline-rollback-payment-gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "stepName": "Stage 4: Rollback Initiated",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "⏪ Change Event: Rollback of `Payment Gateway` deploy #7891 has been initiated."
+        },
+        {
+          "id": "step-7",
+          "payload": {
+            "source": "Datadog",
+            "summary": "[RESOLVED] (P4) High Latency on Profile Lookup Endpoint",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "status": "OK",
+              "endpoint": "/v2/customer/profile",
+              "service_name": "Payment Gateway",
+              "threshold_ms": 75,
+              "current_latency_ms": 45
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Stage 4: Latency Recovers",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 35,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "✅ [RESOLVED] `Payment Gateway`: High Latency on Profile Lookup Endpoint."
+        },
+        {
+          "id": "step-8",
+          "payload": {
+            "source": "Datadog",
+            "summary": "[RESOLVED] (P2) Profile Lookup Endpoint Error Rate > 5%",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "status": "OK",
+              "endpoint": "/v2/customer/profile",
+              "service_name": "Payment Gateway",
+              "current_error_rate": "0.1%"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Stage 4: Error Rate Recovers",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "✅ [RESOLVED] `Payment Gateway`: Profile Lookup Endpoint Error Rate."
+        },
+        {
+          "id": "step-9",
+          "payload": {
+            "source": "Splunk",
+            "summary": "[RESOLVED] Agent Profile Load Timeout",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "notes": "API calls to payment-gateway are now succeeding.",
+              "status": "OK",
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "CX Agent Dashboard",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "CX Agent Dashboard",
+          "severity": "info",
+          "stepName": "Stage 4: Agent Tooling Recovers",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "CX Agent Dashboard",
+          "slackMessageTemplate": "✅ [RESOLVED] `CX Agent Dashboard`: Agent Profile Load Timeout."
+        },
+        {
+          "id": "step-10",
+          "payload": {
+            "source": "Salesforce Omni-Channel",
+            "summary": "[RESOLVED] (P1) Critical: Agent Dashboard Unresponsive - High Call Queue Times",
+            "timestamp": "{{faker.date.recent}}",
+            "custom_details": {
+              "status": "OK",
+              "service_name": "CX Agent Dashboard",
+              "business_impact": "None",
+              "avg_wait_time_sec": 45,
+              "call_queue_length": 12
+            }
+          },
+          "service": "CX Agent Dashboard",
+          "severity": "info",
+          "stepName": "Stage 4: Business Service Recovers",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "CX Agent Dashboard",
+          "slackMessageTemplate": "✅ [RESOLVED] `CX Agent Dashboard`: P1 Major Incident has been resolved. Call queues returning to normal."
+        }
+      ],
+      "narrative": {
+        "full": "Here is the structured planning summary for the failure narrative.\n\n### **TL;DR**\n\nA routine, low-risk deployment to the `Payment Gateway` service introduces a subtle API latency issue, generating a low-priority alert that is initially ignored. During peak support hours, this minor latency cascades into a major incident, paralyzing customer support agents and putting customer trust at risk. PagerDuty AIOps connects the business impact to the initial technical alert and change event, enabling a rapid rollback and a post-incident review that hardens the system against future failures.\n\n---\n\n### **Stage 1: Routine Change and Minor Incidents**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:00 PM, the `Payment Gateway` team deploys a routine update to enhance its fraud detection logic. The change seems innocuous and passes all automated tests. However, it introduces a slightly inefficient database query for fetching customer transaction histories.\n    At 1:05 PM, a PagerDuty P4 technical alert is generated: `High Latency on Profile Lookup Endpoint`. The latency has only increased by 80ms—barely over the threshold and not yet impacting any external customers. The on-call engineer acknowledges the low-urgency notification, notes \"Monitoring, likely noise from deploy,\" and moves on to other tasks, assuming it's a transient blip.\n*   **Industry Framing (Financial Services):** In a fast-paced financial services environment, minor performance degradations that don't immediately affect transactions are often deprioritized. The focus is on core payment processing uptime, making subtle API performance issues easy to overlook.\n*   **Use Case Framing (Agent Ops):** This \"Profile Lookup Endpoint\" is the API that the company's internal Customer Experience (CX) agent dashboard uses to pull customer data. The blind spot here is that the engineering team views this as an internal, non-critical endpoint, underestimating its direct impact on agent productivity and the customer experience.\n\n---\n\n### **Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:20 PM, peak support hours begin. Hundreds of CX agents are now simultaneously using their dashboards to handle customer calls. The cumulative effect of each agent's tool hitting the degraded `Payment Gateway` endpoint turns the minor 80ms latency into a multi-second delay for loading customer profiles. Agents are stuck waiting, unable to verify identities or discuss recent transactions.\n    At 1:25 PM, a business service alert from the CX team's monitoring tool triggers a PagerDuty P1 Major Incident: `Critical: Agent Dashboard Unresponsive - High Call Queue Times`. This is a lagging business indicator. The Head of Support is now involved, as agent productivity has plummeted and customer frustration is mounting. The incident traces directly back to the slow API responses from the `Payment Gateway` service, which was impacted by the earlier, ignored routine change.\n*   **Industry Framing (Financial Services):** Customer trust is paramount. When agents can't access account information quickly, it appears unprofessional and insecure, leading to customer churn and reputational damage. Every second of delay increases operational costs and risks negative social media exposure.\n*   **Use Case Framing (Agent Ops):** The primary goal is to minimize customer wait time and maximize first-call resolution. The system is now failing on both counts. The incident is no longer a technical problem; it's a business crisis impacting the company's ability to serve its customers effectively.\n\n---\n\n### **Stage 3: Triage & Context — Connecting Signals, Changes, and Services**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    The Major Incident Commander (MIC) is paged and immediately opens the P1 incident in PagerDuty. They are initially focused on the \"Agent Dashboard,\" but PagerDuty provides immediate, critical context that redirects their attention.\n    On the incident details screen, they see:\n    1.  **AIOps Related Incidents:** PagerDuty has automatically correlated the P1 business incident with the P4 technical alert (`High Latency on Profile Lookup Endpoint`) from 20 minutes prior on the `Payment Gateway` service.\n    2.  **Recent Change Events:** Directly below, a change event from the CI/CD pipeline is displayed: `Deploy #7891 to Payment Gateway`.\n    This instantly connects the business pain (slow agents) to the technical symptom (API latency) and the probable root cause (the recent deployment). The MIC doesn't need to waste time asking \"what changed?\"—the answer is right there. They immediately add the `Payment Gateway` on-call engineer to the incident, who receives all of this context on their phone.\n*   **Industry Framing (Financial Services):** In a highly regulated environment, having a clear, auditable trail of events is critical. PagerDuty provides a single pane of glass that connects disparate signals, proving invaluable for both rapid response and future compliance audits.\n*   **Use Case Framing (Agent Ops):** The goal is to restore agent tooling as fast as possible. PagerDuty's context bypasses the typical \"war room\" chaos of trying to find the right team and the right information, directly accelerating Mean Time to Acknowledge (MTTA) and Mean Time to Resolution (MTTR).\n\n---\n\n### **Stage 4: Resolution & Post-Incident Review**\n\n*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:30 PM, armed with the context from PagerDuty, the `Payment Gateway` engineer confirms the faulty query and initiates a rollback of the deployment. The rollback is triggered via a PagerDuty Automation Action, which simultaneously runs the pipeline job and posts status updates back to the incident timeline.\n    At 1:35 PM, the rollback completes. API latency returns to normal, agent dashboards become responsive, and call queues begin to clear. The incident is resolved.\n    The next day, the team conducts a **Post-Incident Review (PIR)** using PagerDuty's auto-generated timeline.\n    *   **Root Cause:** The new fraud logic was inefficient and not caught by pre-production performance tests. The early P4 warning signal was ignored.\n    *   **Action Items:**\n        1.  **Improve Detection:** An Automation Action is configured. The next time the `High Latency on Profile Lookup Endpoint` alert fires, a runbook will automatically run a diagnostic script against the database and attach the results to the incident, giving the on-call engineer immediate data to assess the impact.\n        2.  **Improve Escalation:** A new event rule is created. If that specific P4 alert fires within 30 minutes of a `Payment Gateway` deployment, it will be automatically promoted to a P2 and escalate immediately, ensuring it is never ignored during a change window again.\n*   **Industry Framing (Financial Services):** The PIR process is a critical component of operational resilience and regulatory compliance. The documented learnings and automated improvements demonstrate a commitment to protecting the customer experience and maintaining service stability.\n*   **Use Case Framing (Agent Ops):** The PIR creates a direct feedback loop. The CX organization's pain is translated into concrete engineering improvements. The new automations act as guardrails, ensuring that a change intended to improve one part of the business (fraud detection) doesn't inadvertently cripple another (agent operations).\n\n---\n\n### **PagerDuty Value Highlights**\n\n*   **AIOps, Change Events, and Service Graph:** PagerDuty uniquely connected the lagging business indicator (`High Call Queue Times`) to the leading technical signals (the P4 latency alert and the CI/CD change event). This correlation is the key to cutting through the noise and finding the root cause in minutes, not hours.\n*   **Automation:** PagerDuty Automation Actions were used for both resolution (triggering the rollback) and prevention (creating a diagnostic runbook for the future). This shifts the team from a reactive to a proactive posture.\n*   **Post-Incident Review (Learning Loop):** The PIR wasn't just a report; it was an actionable process that resulted in durable improvements to the response workflow. By creating new rules and automations based on this incident, the team ensures this specific failure mode cannot repeat itself, creating a cycle of continuous learning and prevention.",
+        "stages": {
+          "resolution_pir": {
+            "text": "*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:30 PM, armed with the context from PagerDuty, the `Payment Gateway` engineer confirms the faulty query and initiates a rollback of the deployment. The rollback is triggered via a PagerDuty Automation Action, which simultaneously runs the pipeline job and posts status updates back to the incident timeline.\n    At 1:35 PM, the rollback completes. API latency returns to normal, agent dashboards become responsive, and call queues begin to clear. The incident is resolved.\n    The next day, the team conducts a **Post-Incident Review (PIR)** using PagerDuty's auto-generated timeline.\n    *   **Root Cause:** The new fraud logic was inefficient and not caught by pre-production performance tests. The early P4 warning signal was ignored.\n    *   **Action Items:**\n        1.  **Improve Detection:** An Automation Action is configured. The next time the `High Latency on Profile Lookup Endpoint` alert fires, a runbook will automatically run a diagnostic script against the database and attach the results to the incident, giving the on-call engineer immediate data to assess the impact.\n        2.  **Improve Escalation:** A new event rule is created. If that specific P4 alert fires within 30 minutes of a `Payment Gateway` deployment, it will be automatically promoted to a P2 and escalate immediately, ensuring it is never ignored during a change window again.\n*   **Industry Framing (Financial Services):** The PIR process is a critical component of operational resilience and regulatory compliance. The documented learnings and automated improvements demonstrate a commitment to protecting the customer experience and maintaining service stability.\n*   **Use Case Framing (Agent Ops):** The PIR creates a direct feedback loop. The CX organization's pain is translated into concrete engineering improvements. The new automations act as guardrails, ensuring that a change intended to improve one part of the business (fraud detection) doesn't inadvertently cripple another (agent operations).\n\n---\n\n### **PagerDuty Value Highlights**\n\n*   **AIOps, Change Events, and Service Graph:** PagerDuty uniquely connected the lagging business indicator (`High Call Queue Times`) to the leading technical signals (the P4 latency alert and the CI/CD change event). This correlation is the key to cutting through the noise and finding the root cause in minutes, not hours.\n*   **Automation:** PagerDuty Automation Actions were used for both resolution (triggering the rollback) and prevention (creating a diagnostic runbook for the future). This shifts the team from a reactive to a proactive posture.\n*   **Post-Incident Review (Learning Loop):** The PIR wasn't just a report; it was an actionable process that resulted in durable improvements to the response workflow. By creating new rules and automations based on this incident, the team ensures this specific failure mode cannot repeat itself, creating a cycle of continuous learning and prevention."
+          },
+          "triage_context": {
+            "text": "*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    The Major Incident Commander (MIC) is paged and immediately opens the P1 incident in PagerDuty. They are initially focused on the \"Agent Dashboard,\" but PagerDuty provides immediate, critical context that redirects their attention.\n    On the incident details screen, they see:\n    1.  **AIOps Related Incidents:** PagerDuty has automatically correlated the P1 business incident with the P4 technical alert (`High Latency on Profile Lookup Endpoint`) from 20 minutes prior on the `Payment Gateway` service.\n    2.  **Recent Change Events:** Directly below, a change event from the CI/CD pipeline is displayed: `Deploy #7891 to Payment Gateway`.\n    This instantly connects the business pain (slow agents) to the technical symptom (API latency) and the probable root cause (the recent deployment). The MIC doesn't need to waste time asking \"what changed?\"—the answer is right there. They immediately add the `Payment Gateway` on-call engineer to the incident, who receives all of this context on their phone.\n*   **Industry Framing (Financial Services):** In a highly regulated environment, having a clear, auditable trail of events is critical. PagerDuty provides a single pane of glass that connects disparate signals, proving invaluable for both rapid response and future compliance audits.\n*   **Use Case Framing (Agent Ops):** The goal is to restore agent tooling as fast as possible. PagerDuty's context bypasses the typical \"war room\" chaos of trying to find the right team and the right information, directly accelerating Mean Time to Acknowledge (MTTA) and Mean Time to Resolution (MTTR).\n\n---"
+          },
+          "business_impact": {
+            "text": "---"
+          },
+          "routine_change_minor": {
+            "text": "*   **Selected Service:** `Payment Gateway`\n*   **Narrative:**\n    At 1:00 PM, the `Payment Gateway` team deploys a routine update to enhance its fraud detection logic. The change seems innocuous and passes all automated tests. However, it introduces a slightly inefficient database query for fetching customer transaction histories.\n    At 1:05 PM, a PagerDuty P4 technical alert is generated: `High Latency on Profile Lookup Endpoint`. The latency has only increased by 80ms—barely over the threshold and not yet impacting any external customers. The on-call engineer acknowledges the low-urgency notification, notes \"Monitoring, likely noise from deploy,\" and moves on to other tasks, assuming it's a transient blip.\n*   **Industry Framing (Financial Services):** In a fast-paced financial services environment, minor performance degradations that don't immediately affect transactions are often deprioritized. The focus is on core payment processing uptime, making subtle API performance issues easy to overlook.\n*   **Use Case Framing (Agent Ops):** This \"Profile Lookup Endpoint\" is the API that the company's internal Customer Experience (CX) agent dashboard uses to pull customer data. The blind spot here is that the engineering team views this as an internal, non-critical endpoint, underestimating its direct impact on agent productivity and the customer experience.\n\n---"
+          }
+        }
+      },
+      "description": "Demonstrates how a minor API latency issue after a routine deploy cascades into a major business incident affecting customer support agents, and how PagerDuty AIOps connects the signals for rapid resolution."
+    },
+    "personaNotes": "The presenter is a Chaos Engineering Architect demonstrating to a Financial Services company how PagerDuty can protect the customer experience by connecting subtle technical failures to major business impacts. The focus is on speed to resolution, protecting customer trust, and creating a learning loop to build operational resilience. Emphasize the cost of agent downtime and the risk of reputational damage.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T15:01:06.531Z",
+    "updatedAt": "2026-02-27T15:01:06.531Z"
+  },
+  "summary": {
+    "eventCount": 10,
+    "changeCount": 2,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

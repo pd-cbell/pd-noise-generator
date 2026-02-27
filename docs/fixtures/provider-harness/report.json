@@ -1,0 +1,78 @@
+{
+  "generatedAt": "2026-02-27T15:08:13.341Z",
+  "serviceCountUsed": 1,
+  "results": [
+    {
+      "caseId": "cx-qa-latency",
+      "provider": "openai",
+      "ok": true,
+      "proposalLength": 4465,
+      "eventCount": 10,
+      "changeCount": 2,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/cx-qa-latency.openai.json"
+    },
+    {
+      "caseId": "cx-qa-latency",
+      "provider": "google",
+      "ok": true,
+      "proposalLength": 8498,
+      "eventCount": 10,
+      "changeCount": 2,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/cx-qa-latency.google.json"
+    },
+    {
+      "caseId": "security-routing",
+      "provider": "openai",
+      "ok": true,
+      "proposalLength": 4124,
+      "eventCount": 10,
+      "changeCount": 1,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/security-routing.openai.json"
+    },
+    {
+      "caseId": "security-routing",
+      "provider": "google",
+      "ok": true,
+      "proposalLength": 7880,
+      "eventCount": 8,
+      "changeCount": 1,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/security-routing.google.json"
+    },
+    {
+      "caseId": "dora-regression",
+      "provider": "openai",
+      "ok": true,
+      "proposalLength": 3720,
+      "eventCount": 10,
+      "changeCount": 2,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/dora-regression.openai.json"
+    },
+    {
+      "caseId": "dora-regression",
+      "provider": "google",
+      "ok": true,
+      "proposalLength": 8118,
+      "eventCount": 6,
+      "changeCount": 2,
+      "beatsCount": 4,
+      "missingServiceNameCount": 0,
+      "sparseCustomDetailsCount": 0,
+      "outputFile": "/Users/cbell/Desktop/Noise Generator/docs/fixtures/provider-harness/dora-regression.google.json"
+    }
+  ]
+}

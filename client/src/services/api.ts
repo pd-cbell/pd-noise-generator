@@ -28,8 +28,8 @@ export interface AgentBuildParams {
     changeCount?: number;
     // GoldenDemo Metadata
     goldenDemoName: string;
-    vertical: string;
-    maturityLevel: string;
+    industry: string;
+    useCase: string;
     narrative: string;
     personaNotes?: string;
     createdByUserId: string;
@@ -229,18 +229,18 @@ export const api = {
       prompt: string; 
       provider?: string; 
       services?: any[]; 
-      vertical?: string; 
-      maturityLevel?: string; 
+      industry?: string; 
+      useCase?: string; 
   }) => 
     fetchFromProxy('/api/agent/proposal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
           prompt: data.prompt, 
-          provider: data.provider || 'google',
+          provider: data.provider || 'openai',
           services: data.services,
-          vertical: data.vertical,
-          maturityLevel: data.maturityLevel
+          industry: data.industry,
+          useCase: data.useCase
       }),
     }),
 
@@ -252,15 +252,15 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             prompt: params.prompt, 
-            provider: params.provider || 'google', 
+            provider: params.provider || 'openai', 
             approvedPlan: params.approvedPlan,
             services: params.services || [],
             eventCount: params.eventCount,
             changeCount: params.changeCount,
             // GoldenDemo Metadata
             goldenDemoName: params.goldenDemoName,
-            vertical: params.vertical,
-            maturityLevel: params.maturityLevel,
+            industry: params.industry,
+            useCase: params.useCase,
             narrative: params.narrative,
             personaNotes: params.personaNotes,
             createdByUserId: params.createdByUserId,
@@ -275,8 +275,10 @@ export const api = {
 
   createGoldenDemo: (goldenDemo: {
     name: string;
-    vertical: string;
-    maturityLevel: string;
+    vertical?: string;
+    maturityLevel?: string;
+    industry?: string | null;
+    useCase?: string | null;
     narrative: string;
     configJson: any; // Using any for now, will refine with types.ts GoldenDemoConfig
     personaNotes?: string;
@@ -293,6 +295,8 @@ export const api = {
     name?: string;
     vertical?: string;
     maturityLevel?: string;
+    industry?: string | null;
+    useCase?: string | null;
     narrative?: string;
     configJson?: any;
     personaNotes?: string;

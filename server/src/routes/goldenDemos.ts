@@ -8,6 +8,7 @@ import { simulationManager } from '../index';
 import { serverConfig } from '../config';
 import prisma from '../prisma';
 import { decrypt } from '../utils/crypto';
+import { GOLDEN_DEMO_INDUSTRY_OPTIONS, GOLDEN_DEMO_USE_CASE_OPTIONS } from '../constants/goldenDemoTaxonomy';
 
 const router = Router();
 const goldenDemoService = new GoldenDemoService();
@@ -15,11 +16,13 @@ const goldenDemoService = new GoldenDemoService();
 // Zod schema for GoldenDemo creation validation
 const createGoldenDemoSchema = z.object({
   name: z.string().min(1, 'Name cannot be empty').max(255),
-  vertical: z.string().min(1, 'Vertical cannot be empty').max(255),
-  maturityLevel: z.string().min(1, 'Maturity Level cannot be empty').max(255),
+  vertical: z.string().min(1, 'Vertical cannot be empty').max(255).optional(),
+  maturityLevel: z.string().min(1, 'Maturity Level cannot be empty').max(255).optional(),
+  industry: z.enum(GOLDEN_DEMO_INDUSTRY_OPTIONS).optional(),
+  useCase: z.enum(GOLDEN_DEMO_USE_CASE_OPTIONS).optional(),
   narrative: z.string().min(1, 'Narrative cannot be empty'),
   configJson: z.any(), // Loosely typed for now, can be more specific later
-  personaNotes: z.string().max(1000).optional(),
+  personaNotes: z.string().max(5000).optional(),
   isShared: z.boolean().optional(),
   isStarred: z.boolean().optional(),
 });
@@ -29,9 +32,11 @@ const updateGoldenDemoSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   vertical: z.string().min(1).max(255).optional(),
   maturityLevel: z.string().min(1).max(255).optional(),
+  industry: z.enum(GOLDEN_DEMO_INDUSTRY_OPTIONS).nullable().optional(),
+  useCase: z.enum(GOLDEN_DEMO_USE_CASE_OPTIONS).nullable().optional(),
   narrative: z.string().min(1).optional(),
   configJson: z.any().optional(),
-  personaNotes: z.string().max(1000).optional(),
+  personaNotes: z.string().max(5000).optional(),
   isShared: z.boolean().optional(),
   isStarred: z.boolean().optional(),
 });
@@ -190,6 +195,9 @@ router.post('/', checkRole([Role.VIEWER, Role.EDITOR, Role.ADMIN]), async (req, 
 
     const newGoldenDemo = await goldenDemoService.createGoldenDemo({
       ...validation.data,
+      vertical: validation.data.vertical || validation.data.industry || 'Legacy',
+      // Keep DB compatibility while maturityLevel is deprecated in UI/workflows.
+      maturityLevel: validation.data.maturityLevel || 'Deprecated',
       createdByUserId: userId,
     }, role);
     res.status(201).json(newGoldenDemo);

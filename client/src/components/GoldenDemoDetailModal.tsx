@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { GoldenDemo, MappingProfile, useStore } from '../store/useStore';
+import { hasGoldenDemoTaxonomy } from '../constants/goldenDemoTaxonomy';
 import { resolveServicePreview, EventType, SimulatorConfig } from '../utils/mappingLogic';
 import { Play, CheckCircle, XCircle, Info, Zap, Layers, AlertTriangle, Edit2, Save, X, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -111,6 +112,7 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
     pdChangeEventsRoutingKey: useStore.getState().globalRoutingKey,
   };
   const fullNarrative = demo.configJson?.narrative?.full || '';
+  const generationDiagnostics = demo.configJson?.generationDiagnostics;
   const showFullNarrative =
     Boolean(fullNarrative && fullNarrative.trim()) &&
     fullNarrative.trim() !== demo.narrative.trim();
@@ -126,8 +128,14 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{demo.name}</h2>
               <p className="text-sm text-gray-600">
-                <span className="font-medium">{demo.vertical}</span> &middot;{' '}
-                <span className="font-medium">{demo.maturityLevel}</span>
+                {demo.industry && demo.useCase ? (
+                  <>
+                    <span className="font-medium">{demo.industry}</span> &middot;{' '}
+                    <span className="font-medium">{demo.useCase}</span>
+                  </>
+                ) : (
+                  <span className="font-medium text-amber-700">Needs taxonomy update</span>
+                )}
               </p>
             </div>
           </div>
@@ -139,6 +147,11 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Narrative */}
+          {!hasGoldenDemoTaxonomy(demo) && (
+            <div className="border border-amber-200 bg-amber-50 text-amber-800 rounded-lg p-3 text-sm">
+              This demo is using legacy taxonomy. Edit it to set approved Industry + Use Case values before reusing broadly.
+            </div>
+          )}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Narrative</h3>
             <div className="prose prose-sm max-w-none text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-100">
@@ -160,6 +173,22 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
                   <ReactMarkdown>{fullNarrative}</ReactMarkdown>
                 </div>
               )}
+            </div>
+          )}
+
+          {generationDiagnostics && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-2">Generation Diagnostics</h3>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-700">
+                <div><span className="text-gray-500">Provider:</span> {generationDiagnostics.provider || 'unknown'}</div>
+                <div><span className="text-gray-500">Model:</span> {generationDiagnostics.model || 'unknown'}</div>
+                <div><span className="text-gray-500">Prompt Version:</span> {generationDiagnostics.promptVersion || 'n/a'}</div>
+                <div><span className="text-gray-500">Generated:</span> {generationDiagnostics.generatedAt ? new Date(generationDiagnostics.generatedAt).toLocaleString() : 'n/a'}</div>
+                <div><span className="text-gray-500">Events:</span> {generationDiagnostics.eventCount ?? 0}</div>
+                <div><span className="text-gray-500">Changes:</span> {generationDiagnostics.changeCount ?? 0}</div>
+                <div><span className="text-gray-500">Beats:</span> {generationDiagnostics.beatsCount ?? 0}</div>
+                <div><span className="text-gray-500">Sparse Details:</span> {generationDiagnostics.sparseCustomDetailsCount ?? 0}</div>
+              </div>
             </div>
           )}
 

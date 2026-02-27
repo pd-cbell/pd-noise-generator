@@ -31,10 +31,10 @@ export class GoldenDemoService {
       throw new Error('Golden Demo name cannot be empty.');
     }
     if (!data.vertical || data.vertical.trim() === '') {
-      throw new Error('Golden Demo vertical cannot be empty.');
+      data.vertical = (typeof data.industry === 'string' && data.industry.trim()) ? data.industry : 'Legacy';
     }
     if (!data.maturityLevel || data.maturityLevel.trim() === '') {
-      throw new Error('Golden Demo maturity level cannot be empty.');
+      data.maturityLevel = 'Deprecated';
     }
     if (!data.narrative || data.narrative.trim() === '') {
       throw new Error('Golden Demo narrative cannot be empty.');
@@ -74,6 +74,12 @@ export class GoldenDemoService {
     }
     if (data.maturityLevel && typeof data.maturityLevel === 'string' && data.maturityLevel.trim() === '') {
       throw new Error('Golden Demo maturity level cannot be empty.');
+    }
+    if (data.industry && typeof data.industry === 'string' && data.industry.trim() === '') {
+      throw new Error('Golden Demo industry cannot be empty.');
+    }
+    if (data.useCase && typeof data.useCase === 'string' && data.useCase.trim() === '') {
+      throw new Error('Golden Demo use case cannot be empty.');
     }
     if (data.narrative && typeof data.narrative === 'string' && data.narrative.trim() === '') {
       throw new Error('Golden Demo narrative cannot be empty.');
