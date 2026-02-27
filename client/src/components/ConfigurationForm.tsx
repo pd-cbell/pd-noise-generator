@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Loader2, Save, Search, Eye, EyeOff, FolderInput } from 'lucide-react'; 
+import { Loader2, Save, Search, Eye, EyeOff, FolderInput, CheckCircle, XCircle } from 'lucide-react';
 import { SeverityTabs } from './SeverityTabs'; 
 import { useAuth } from '../contexts/AuthContext';
 import { AddToProfileModal } from './AddToProfileModal';
@@ -23,7 +23,8 @@ export const ConfigurationForm: React.FC = () => {
   const [teamFilterText, setTeamFilterText] = useState('');
   const [serviceFilterText, setServiceFilterText] = useState('');
   const [showDemoSlices, setShowDemoSlices] = useState(false);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false); // Modal state
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
   // Computed visible teams
   const visibleTeams = useMemo(() => {
@@ -72,14 +73,18 @@ export const ConfigurationForm: React.FC = () => {
 
   const handleSaveToProfile = async () => {
       if (!apiToken && !globalRoutingKey && !fromEmail) {
-          addLog("No credentials to save.", "warn");
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), 3000);
           return;
       }
+      setSaveStatus('saving');
       try {
           await updateCredentials({ apiToken, globalRoutingKey, fromEmail });
-          addLog("Credentials saved to your user profile.", "info");
+          setSaveStatus('success');
+          setTimeout(() => setSaveStatus('idle'), 3000);
       } catch (e) {
-          addLog("Failed to save credentials to profile.", "error");
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), 3000);
       }
   };
 
@@ -175,10 +180,21 @@ export const ConfigurationForm: React.FC = () => {
           <div className="pt-2 flex gap-2">
             <button
               onClick={handleSaveToProfile}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-300 transition-colors"
+              disabled={saveStatus === 'saving'}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-semibold transition-colors border
+                ${saveStatus === 'success' ? 'bg-green-50 text-green-700 border-green-300' :
+                  saveStatus === 'error' ? 'bg-red-50 text-red-700 border-red-300' :
+                  saveStatus === 'saving' ? 'bg-gray-100 text-gray-400 border-gray-300 cursor-not-allowed' :
+                  'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'}`}
             >
-              <Save className="w-4 h-4" />
-              Save to Profile
+              {saveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
+              {saveStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+              {saveStatus === 'error' && <XCircle className="w-4 h-4" />}
+              {saveStatus === 'idle' && <Save className="w-4 h-4" />}
+              {saveStatus === 'saving' ? 'Saving...' :
+               saveStatus === 'success' ? 'Saved!' :
+               saveStatus === 'error' ? 'Save Failed' :
+               'Save to Profile'}
             </button>
             <button
               onClick={handleLoadTeams}

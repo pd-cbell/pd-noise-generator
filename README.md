@@ -1,22 +1,22 @@
-# PagerDuty Golden Demo Platform v2.4.2
+# PagerDuty Golden Demo Platform v2.4.3
 
 ![Golden Demo Platform](customer_sim.png)
 
 A persistent **Golden Demo Platform** for designing, managing, and delivering consistent, high-impact PagerDuty demonstrations.
 
-![Version](https://img.shields.io/badge/version-2.4.2-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
+![Version](https://img.shields.io/badge/version-2.4.3-blue) ![Docker](https://img.shields.io/badge/docker-ready-green) ![AI](https://img.shields.io/badge/AI-Gemini%20%2B%20GPT-orange)
 
-Status: v2.4 complete. v2.4.2 in progress (cleanup, UX polish, and bug fixes).
+Status: v2.4.3 complete. Focus: OpenAI hardening, Golden Demo taxonomy cleanup, and timeline repeat-burst behavior.
 
-## 🚀 New in v2.4 (baseline for v2.4.2)
+## 🚀 New in v2.4.3
 
-v2.4 focuses on presenter-ready run monitoring, narrative guidance, and editor domain configuration. v2.4.2 is a patch release that hardens those workflows with cleanup, UX polish, and bug fixes.
+v2.4.3 is a patch release that hardens agent generation and improves Golden Demo authoring/launch quality.
 
--   **Track Run Monitor:** Track run lifecycle panel with incident timelines and status.
--   **Presenter Guide:** Narrative stage prompts plus beat-by-beat script cues.
--   **Editor Domain Config:** Editors can load domain config for services, mapping profiles, and agent context.
--   **Golden Demo Export/Import:** Export demos to JSON and re-import them.
--   **Admin Impersonation:** Admins can impersonate users for debugging and setup.
+-   **Default OpenAI Provider:** OpenAI is now the default provider for agent proposal/build flows (Gemini remains supported).
+-   **Golden Demo Taxonomy:** New `Industry` + `Use Case` taxonomy with dropdown controls and legacy compatibility.
+-   **Generation Diagnostics + Quality Signals:** Provider/prompt metadata and readiness-quality indicators are surfaced in demo workflows.
+-   **Repeat-Burst Scheduling:** Event `Repeat Count` now runs concurrently with timeline progression for realistic burst behavior.
+-   **Provider Harness Fixtures:** Repeatable cross-provider validation harness and fixtures added for regression checks.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
@@ -62,7 +62,7 @@ Includes CloudFormation template (`deploy/aws-cfn.yaml`) for EC2 deployment.
 
 ## 📚 Legacy Docs
 Historical docs are kept in `docs/ARCHIVE`.
-Recent changelog: `docs/CHANGELOG_v2.4.2.md`.
+Recent changelog: `docs/CHANGELOG_v2.4.3.md`.
 
 ## 📜 License
 Provided as-is for demonstration purposes.

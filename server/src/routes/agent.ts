@@ -12,7 +12,7 @@ export default (agentService: AgentService) => {
   router.use(requireAgentEnabled);
 
   router.post('/proposal', checkRole([Role.EDITOR, Role.ADMIN]), async (req, res) => {
-    const { prompt, provider, services, vertical, maturityLevel } = req.body;
+    const { prompt, provider, services, industry, useCase } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     try {
@@ -20,8 +20,8 @@ export default (agentService: AgentService) => {
           prompt, 
           provider,
           services,
-          vertical,
-          maturityLevel
+          industry,
+          useCase
       });
       res.json({ summary });
     } catch (error: any) {
@@ -39,8 +39,8 @@ export default (agentService: AgentService) => {
         eventCount, 
         changeCount,
         goldenDemoName,
-        vertical,
-        maturityLevel,
+        industry,
+        useCase,
         narrative,
         personaNotes,
         // createdByUserId // This will come from req.user
@@ -58,8 +58,8 @@ export default (agentService: AgentService) => {
           eventCount,
           changeCount,
           goldenDemoName,
-          vertical,
-          maturityLevel,
+          industry,
+          useCase,
           narrative,
           personaNotes,
           createdByUserId: userId, // Use userId from req.user

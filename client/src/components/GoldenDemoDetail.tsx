@@ -4,6 +4,7 @@ import { Play, History, Download, Star } from 'lucide-react';
 import { SessionHistory } from './SessionHistory';
 import { useStore } from '../store/useStore';
 import { useAuth, UserRole } from '../contexts/AuthContext';
+import { hasGoldenDemoTaxonomy } from '../constants/goldenDemoTaxonomy';
 
 interface GoldenDemoDetailProps {
   demo: GoldenDemo;
@@ -14,6 +15,7 @@ interface GoldenDemoDetailProps {
 const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onEdit }) => {
   const { user } = useAuth();
   const { updateGoldenDemo, addLog } = useStore();
+  const generationDiagnostics = demo.configJson?.generationDiagnostics;
   const fullNarrative = demo.configJson?.narrative?.full || '';
   const showFullNarrative =
     Boolean(fullNarrative && fullNarrative.trim()) &&
@@ -63,6 +65,11 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
               Shared
             </span>
           )}
+          {!hasGoldenDemoTaxonomy(demo) && (
+            <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded">
+              Needs taxonomy update
+            </span>
+          )}
         </div>
         <div className="flex space-x-2">
           {onEdit && (
@@ -105,14 +112,19 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div>
-          <p className="text-sm font-medium text-gray-500">Vertical</p>
-          <p className="text-lg text-gray-900">{demo.vertical}</p>
+          <p className="text-sm font-medium text-gray-500">Industry</p>
+          <p className="text-lg text-gray-900">{demo.industry || <span className="text-amber-700 text-base">Needs taxonomy update</span>}</p>
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-500">Maturity Level</p>
-          <p className="text-lg text-gray-900">{demo.maturityLevel}</p>
+          <p className="text-sm font-medium text-gray-500">Use Case</p>
+          <p className="text-lg text-gray-900">{demo.useCase || <span className="text-amber-700 text-base">Needs taxonomy update</span>}</p>
         </div>
       </div>
+      {!!demo.vertical && !demo.industry && (
+        <div className="mb-6 p-3 border border-amber-200 bg-amber-50 rounded text-sm text-amber-800">
+          Legacy Vertical: <span className="font-medium">{demo.vertical}</span>. Edit this demo to assign approved Industry + Use Case categories.
+        </div>
+      )}
 
       <div className="mb-6">
         <h3 className="text-xl font-semibold text-gray-800 mb-2">Narrative</h3>
@@ -143,6 +155,22 @@ const GoldenDemoDetail: React.FC<GoldenDemoDetailProps> = ({ demo, onLaunch, onE
         <div className="mb-6">
           <h3 className="text-xl font-semibold text-gray-800 mb-2">Persona Notes</h3>
           <p className="text-gray-700 whitespace-pre-wrap">{demo.personaNotes}</p>
+        </div>
+      )}
+
+      {generationDiagnostics && (
+        <div className="mb-6 border border-gray-200 bg-gray-50 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">Generation Diagnostics</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-gray-700">
+            <div><span className="text-gray-500">Provider:</span> {generationDiagnostics.provider || 'unknown'}</div>
+            <div><span className="text-gray-500">Model:</span> {generationDiagnostics.model || 'unknown'}</div>
+            <div><span className="text-gray-500">Prompt Version:</span> {generationDiagnostics.promptVersion || 'n/a'}</div>
+            <div><span className="text-gray-500">Generated:</span> {generationDiagnostics.generatedAt ? new Date(generationDiagnostics.generatedAt).toLocaleString() : 'n/a'}</div>
+            <div><span className="text-gray-500">Events:</span> {generationDiagnostics.eventCount ?? 0}</div>
+            <div><span className="text-gray-500">Changes:</span> {generationDiagnostics.changeCount ?? 0}</div>
+            <div><span className="text-gray-500">Beats:</span> {generationDiagnostics.beatsCount ?? 0}</div>
+            <div><span className="text-gray-500">Sparse Details:</span> {generationDiagnostics.sparseCustomDetailsCount ?? 0}</div>
+          </div>
         </div>
       )}
 

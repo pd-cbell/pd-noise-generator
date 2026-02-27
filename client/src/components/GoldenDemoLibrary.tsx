@@ -4,6 +4,7 @@ import { Loader2, Plus, Edit, Trash2, Upload, Star } from 'lucide-react';
 import GoldenDemoDetail from './GoldenDemoDetail';
 import { GoldenDemoEditorV2 } from './GoldenDemoEditorV2';
 import { useAuth, UserRole } from '../contexts/AuthContext';
+import { getGoldenDemoQualityVerdict, hasGoldenDemoTaxonomy } from '../constants/goldenDemoTaxonomy';
 
 const GoldenDemoLibrary: React.FC = () => {
   const { 
@@ -109,13 +110,15 @@ const GoldenDemoLibrary: React.FC = () => {
     if (!payload || typeof payload !== 'object') {
       throw new Error('Invalid import format: expected Golden Demo JSON.');
     }
-    if (!payload.name || !payload.vertical || !payload.maturityLevel || !payload.narrative || !payload.configJson) {
-      throw new Error('Missing required Golden Demo fields (name, vertical, maturityLevel, narrative, configJson).');
+    if (!payload.name || !payload.narrative || !payload.configJson) {
+      throw new Error('Missing required Golden Demo fields (name, narrative, configJson).');
     }
     return {
       name: String(payload.name),
-      vertical: String(payload.vertical),
-      maturityLevel: String(payload.maturityLevel),
+      vertical: payload.vertical ? String(payload.vertical) : undefined,
+      maturityLevel: payload.maturityLevel ? String(payload.maturityLevel) : undefined,
+      industry: payload.industry ? String(payload.industry) : undefined,
+      useCase: payload.useCase ? String(payload.useCase) : undefined,
       narrative: String(payload.narrative),
       configJson: payload.configJson,
       personaNotes: payload.personaNotes || '',
@@ -178,6 +181,8 @@ const GoldenDemoLibrary: React.FC = () => {
                     name: '',
                     vertical: '',
                     maturityLevel: '',
+                    industry: '',
+                    useCase: '',
                     narrative: '',
                     configJson: { name: '', description: '', items: [], narrative: { stages: {}, full: '' } } as any,
                     personaNotes: '',
@@ -209,7 +214,17 @@ const GoldenDemoLibrary: React.FC = () => {
             <p className="p-4 text-gray-500">No Golden Demos found. {canCreate ? 'Create one!' : ''}</p>
           ) : (
             <ul>
-              {goldenDemos.map((demo) => (
+              {goldenDemos.map((demo) => {
+                const quality = getGoldenDemoQualityVerdict(demo);
+                const qualityLabel =
+                  quality.status === 'pass' ? 'PASS' : quality.status === 'warn' ? 'WARN' : 'Unscored';
+                const qualityClass =
+                  quality.status === 'pass'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : quality.status === 'warn'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-gray-100 text-gray-700';
+                return (
                 <li 
                   key={demo.id} 
                   className={`flex items-center justify-between p-4 cursor-pointer hover:bg-gray-100 ${selectedDemoId === demo.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''}`}
@@ -220,7 +235,18 @@ const GoldenDemoLibrary: React.FC = () => {
                       {demo.name}
                       {demo.isStarred && <Star size={12} className="text-amber-500 fill-amber-400" />}
                     </p>
-                    <p className="text-sm text-gray-500">{demo.vertical} - {demo.maturityLevel}</p>
+                    <p className="text-sm text-gray-500">
+                      {demo.industry && demo.useCase ? `${demo.industry} - ${demo.useCase}` : (demo.vertical || 'Legacy demo taxonomy')}
+                    </p>
+                    <p
+                      className={`mt-1 inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full ${qualityClass}`}
+                      title={quality.issues.join(' • ')}
+                    >
+                      Quality {qualityLabel}
+                    </p>
+                    {!hasGoldenDemoTaxonomy(demo) && (
+                      <p className="text-xs text-amber-700 mt-1">Needs taxonomy update</p>
+                    )}
                   </div>
                   <div className="flex space-x-2">
                     {(canEditAll || demo.createdByUserId === user?.id) && (
@@ -252,7 +278,8 @@ const GoldenDemoLibrary: React.FC = () => {
                     )}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

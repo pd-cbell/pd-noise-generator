@@ -1,0 +1,323 @@
+{
+  "startedAt": "2026-02-27T15:04:18.569Z",
+  "completedAt": "2026-02-27T15:06:45.763Z",
+  "provider": "openai",
+  "case": {
+    "id": "dora-regression",
+    "prompt": "A deployment automation regression increases incident volume and slows recovery. Emphasize remediation and measurable operational learning.",
+    "industry": "Public Sector",
+    "useCase": "DORA Compliance",
+    "eventCount": 8,
+    "changeCount": 2
+  },
+  "proposal": "### TL;DR\n\nA routine deployment change in the \"Payment Gateway\" service introduces a minor incident that is initially ignored. This oversight leads to a major outage affecting compliance and service availability in the Public Sector. PagerDuty's tools help quickly identify the root cause, enabling a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness and DORA compliance.\n\n---\n\n### Stage 1: Routine Change and Minor Incidents\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine deployment automation update is applied to the \"Payment Gateway\" service. This change inadvertently introduces a subtle degradation in transaction processing speed, manifesting as a minor, low-severity incident (P5/P4). In the Public Sector, where compliance and reliability are paramount, this early signal is crucial. If caught early, it could have prevented larger issues.\n- **Industry-Specific Framing:** Public Sector demands high reliability and compliance with regulations. Ignoring early warnings can lead to significant compliance risks.\n- **Use-Case-Specific Goals:** Achieving DORA Compliance by maintaining low change failure rates and improving deployment frequency.\n\n### Stage 2: Business Impact\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As time progresses, additional routine changes and increased traffic exacerbate the unresolved minor issue, escalating into a major incident. The \"Payment Gateway\" service becomes unavailable, impacting critical public sector transactions and exposing the organization to compliance risks.\n- **Industry-Specific Framing:** The outage disrupts essential services, potentially leading to public dissatisfaction and regulatory scrutiny.\n- **Use-Case-Specific Goals:** Ensure compliance with DORA metrics by minimizing downtime and maintaining service reliability.\n\n### Stage 3: Triage & Context\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph connect the dots between the lagging business symptom, the earlier minor incident, and the routine change. Actionable context is provided through change events, dependency mapping, and automation logs, accelerating MTTA/MTTR and mobilizing the right teams.\n- **Industry-Specific Framing:** Rapid response is critical in the Public Sector to mitigate compliance risks and service disruptions.\n- **Use-Case-Specific Goals:** Enhance operational efficiency and compliance by improving incident response times.\n\n### Stage 4: Resolution & Post-Incident Review\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The incident is resolved by rolling back the problematic deployment. A Post-Incident Review (PIR) is conducted, documenting the timeline and root cause. It identifies how the minor incident could be detected and escalated faster, proposes new workflow automations, and implements guardrails to prevent future occurrences.\n- **Industry-Specific Framing:** A compliance-driven PIR ensures lessons are learned and applied to enhance future operational readiness.\n- **Use-Case-Specific Goals:** Strengthen DORA Compliance by refining processes and reducing change failure rates.\n\n---\n\n### Highlighting PagerDuty’s Value\n\n- **PagerDuty’s AIOps, Automation, Change Events, and Service Graph**: These tools provide unique value by quickly correlating incidents with changes and dependencies, offering actionable insights that reduce MTTA/MTTR.\n- **Post-Incident Review**: Creates a learning and prevention cycle by documenting incidents, identifying improvement areas, and implementing changes that enhance reliability and operational readiness, crucial for DORA compliance in the Public Sector.",
+  "goldenDemo": {
+    "id": "de1499c1-9db2-40b7-a87f-aaf5432e0bc9",
+    "name": "Deployment Regression & DORA Learning Loop (Public Sector)",
+    "vertical": "Public Sector",
+    "maturityLevel": "Deprecated",
+    "industry": "Public Sector",
+    "useCase": "DORA Compliance",
+    "narrative": "A routine deployment change in the \"Payment Gateway\" service introduces a minor incident that is initially ignored. This oversight leads to a major outage affecting compliance and service availability in the Public Sector. PagerDuty's tools help quickly identify the root cause, enabling a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness and DORA compliance.",
+    "configJson": {
+      "name": "Deployment Regression & DORA Learning Loop (Public Sector)",
+      "beats": [
+        {
+          "id": "beat-1-signal",
+          "title": "Routine Deployment Automation Change & Early Signals",
+          "whatToSay": "We start in a typical public sector change window. The Payment Gateway service, which underpins critical payments and filings, receives a routine deployment automation update. Initially, everything looks normal. But within minutes, PagerDuty begins to surface low-severity alerts about increased latency and a small rise in timeouts.\n\nBecause these alerts are minor and appear transient, they’re easy to dismiss as background noise. However, in a regulated public sector environment, these are early indicators that something in the new deployment automation may not be behaving as expected. If we pay attention here, we can prevent a much larger incident later—and protect our DORA metrics like change failure rate and MTTR.",
+          "description": "A routine deployment automation update is applied to the Payment Gateway service. Shortly after, low-severity latency and timeout alerts begin to appear but are initially treated as noise.",
+          "approxTimingSec": 90,
+          "whatToShowInPagerDuty": "Show the Payment Gateway service in the Service Directory, then open the first low-severity incident details to highlight latency metrics and recent change context."
+        },
+        {
+          "id": "beat-2-impact",
+          "title": "Escalation to Major Outage & Compliance Risk",
+          "whatToSay": "As traffic ramps up—think end-of-month payments and filings—the unresolved regression in the deployment automation starts to bite. Retries increase load, queues back up, and the Payment Gateway tips from a minor degradation into a major outage.\n\nNow we’re seeing a P1-style incident: citizens can’t complete payments, benefit disbursements are delayed, and statutory processing timelines are at risk. This is where public dissatisfaction and regulatory scrutiny come into play. From a DORA perspective, our change failure rate has just increased, and our MTTR clock is ticking.\n\nThis is the cost of ignoring those early, low-severity signals.",
+          "description": "Unaddressed minor issues compound under higher load, leading to a major Payment Gateway outage that disrupts public sector transactions and threatens regulatory SLAs.",
+          "approxTimingSec": 80,
+          "whatToShowInPagerDuty": "Show the major incident on Payment Gateway, including impact on business services and any related incidents to illustrate the escalation."
+        },
+        {
+          "id": "beat-3-triage",
+          "title": "Correlation of Incidents with Change via AIOps & Service Graph",
+          "whatToSay": "During triage, PagerDuty’s AIOps and Service Graph do the heavy lifting. In the incident view, we can immediately see the recent deployment automation change on Payment Gateway, along with the sequence of earlier latency alerts that followed it.\n\nInstead of manually piecing together logs and emails, responders have a single, correlated view: here’s the change, here’s when the minor symptoms started, and here’s how it escalated into a major outage. That context lets the on-call engineer, the application owner, and the public sector compliance officer align quickly on next steps.\n\nThis is exactly what DORA is about: shortening MTTA and MTTR by giving teams fast, accurate insight into how changes affect reliability.",
+          "description": "PagerDuty AIOps and Service Graph correlate the major incident with earlier minor alerts and the original deployment automation change, giving responders clear, actionable context.",
+          "approxTimingSec": 90,
+          "whatToShowInPagerDuty": "Open the major incident details, then show the Change Events tab and any related incidents/service dependencies in Service Graph."
+        },
+        {
+          "id": "beat-4-resolution-learning",
+          "title": "Rollback, Guardrails, and Post-Incident Review for DORA Learning",
+          "whatToSay": "To resolve the incident, the team rolls back the deployment automation change for Payment Gateway. PagerDuty tracks the rollback as a change event, and service health quickly returns to normal.\n\nThe real value comes next: a structured Post-Incident Review in PagerDuty. Here we document the full timeline—from the first minor alert to the major outage and rollback—identify the deployment automation regression as the root cause, and quantify the impact on DORA metrics like change failure rate and MTTR.\n\nFrom this review, we implement concrete improvements: new automated guardrails on deployment automation, stricter escalation for post-deployment latency increases, and richer change instrumentation. These changes close the learning loop, reduce future change failures, and strengthen both operational readiness and DORA compliance in this public sector environment.",
+          "description": "The team rolls back the problematic deployment, restores service, and conducts a structured Post-Incident Review that results in new automation guardrails and improved DORA metrics.",
+          "approxTimingSec": 100,
+          "whatToShowInPagerDuty": "Show the resolved incident, then open the Post-Incident Review and highlight follow-up actions and any subsequent change event representing new guardrails."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "ci-cd-pipeline-01",
+            "summary": "Deployment automation update applied to Payment Gateway service",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": null,
+          "stepName": "Initial deployment automation change applied",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Change] Deployment automation update applied to Payment Gateway for monthly release window. Monitor for latency or error rate changes affecting public sector payment SLAs. Source IP: {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "apm-monitor-payment-latency",
+            "summary": "Slight increase in Payment Gateway transaction latency post-deployment",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Early minor latency alert after deployment",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 40,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Alert][Warning] Payment Gateway latency slightly elevated following recent deployment automation change. Monitoring for potential impact to citizen payment processing. Source: {{faker.internet.ip}} Time: {{faker.date.recent}}."
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "api-gateway-timeout-check",
+            "summary": "Intermittent timeouts detected on Payment Gateway transactions",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Timeouts begin for subset of transactions",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 60,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Alert][Error] Intermittent timeouts on Payment Gateway API affecting a subset of public sector payment requests. Investigate relation to recent deployment automation change. Source: {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "error-rate-monitor",
+            "summary": "Payment Gateway error rate spiking during peak public sector traffic",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Error rate spike under increased load",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 80,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Alert][Error] Payment Gateway error rate spike detected during peak citizen traffic window. Potential impact to statutory payment and filing SLAs. Source: {{faker.internet.ip}} Time: {{faker.date.recent}}."
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "synthetic-transaction-monitor",
+            "summary": "Critical outage: Payment Gateway unavailable for public sector transactions",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Major outage declared for Payment Gateway",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 100,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[INCIDENT][P1] Critical outage: Payment Gateway is unavailable. Citizens may be unable to complete payments or filings, risking regulatory non-compliance. Immediate response required. Detected from {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "pd-aiops-correlation-engine",
+            "summary": "Correlated incident storm on Payment Gateway linked to recent deployment",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Incident storm / correlated alerts",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Correlated Alert] Multiple related incidents on Payment Gateway have been grouped. Likely tied to recent deployment automation update. Use PagerDuty incident view for full context. Correlation node: {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-7",
+          "payload": {
+            "source": "runbook-automation-engine",
+            "summary": "Automated diagnostics indicate performance regression after deployment",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Automated diagnostics highlight regression",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 45,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Automation] Runbook diagnostics show clear performance regression in Payment Gateway following last deployment automation run. Recommended action: initiate rollback. Job host: {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-8",
+          "payload": {
+            "source": "ci-cd-pipeline-rollback",
+            "summary": "Rollback executed for Payment Gateway deployment automation change",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": null,
+          "stepName": "Rollback change event for Payment Gateway",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 70,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Change][Rollback] Deployment automation change for Payment Gateway has been rolled back to last known good version to restore public sector payment reliability. Triggered from {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-9",
+          "payload": {
+            "source": "apm-health-check",
+            "summary": "Payment Gateway latency and error rates returned to normal post-rollback",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Post-rollback stability confirmation alert",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 40,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Info] Payment Gateway performance metrics have returned to normal following rollback. Prepare for Post-Incident Review to capture DORA and compliance learnings. Monitor source: {{faker.internet.ip}} at {{faker.date.recent}}."
+        },
+        {
+          "id": "step-10",
+          "payload": {
+            "source": "policy-engine-guardrails",
+            "summary": "New deployment guardrails active: heightened alerting for post-deployment latency",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Post-Incident Review follow-up guardrail alert",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 60,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Info][PIR Action] New deployment guardrails for Payment Gateway are now active. Any post-deployment latency or error increase will auto-escalate to protect DORA metrics and public sector SLAs. Policy engine: {{faker.internet.ip}} at {{faker.date.recent}}."
+        }
+      ],
+      "narrative": {
+        "full": "### TL;DR\n\nA routine deployment change in the \"Payment Gateway\" service introduces a minor incident that is initially ignored. This oversight leads to a major outage affecting compliance and service availability in the Public Sector. PagerDuty's tools help quickly identify the root cause, enabling a swift resolution and a comprehensive Post-Incident Review that enhances future operational readiness and DORA compliance.\n\n---\n\n### Stage 1: Routine Change and Minor Incidents\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine deployment automation update is applied to the \"Payment Gateway\" service. This change inadvertently introduces a subtle degradation in transaction processing speed, manifesting as a minor, low-severity incident (P5/P4). In the Public Sector, where compliance and reliability are paramount, this early signal is crucial. If caught early, it could have prevented larger issues.\n- **Industry-Specific Framing:** Public Sector demands high reliability and compliance with regulations. Ignoring early warnings can lead to significant compliance risks.\n- **Use-Case-Specific Goals:** Achieving DORA Compliance by maintaining low change failure rates and improving deployment frequency.\n\n### Stage 2: Business Impact\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As time progresses, additional routine changes and increased traffic exacerbate the unresolved minor issue, escalating into a major incident. The \"Payment Gateway\" service becomes unavailable, impacting critical public sector transactions and exposing the organization to compliance risks.\n- **Industry-Specific Framing:** The outage disrupts essential services, potentially leading to public dissatisfaction and regulatory scrutiny.\n- **Use-Case-Specific Goals:** Ensure compliance with DORA metrics by minimizing downtime and maintaining service reliability.\n\n### Stage 3: Triage & Context\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph connect the dots between the lagging business symptom, the earlier minor incident, and the routine change. Actionable context is provided through change events, dependency mapping, and automation logs, accelerating MTTA/MTTR and mobilizing the right teams.\n- **Industry-Specific Framing:** Rapid response is critical in the Public Sector to mitigate compliance risks and service disruptions.\n- **Use-Case-Specific Goals:** Enhance operational efficiency and compliance by improving incident response times.\n\n### Stage 4: Resolution & Post-Incident Review\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The incident is resolved by rolling back the problematic deployment. A Post-Incident Review (PIR) is conducted, documenting the timeline and root cause. It identifies how the minor incident could be detected and escalated faster, proposes new workflow automations, and implements guardrails to prevent future occurrences.\n- **Industry-Specific Framing:** A compliance-driven PIR ensures lessons are learned and applied to enhance future operational readiness.\n- **Use-Case-Specific Goals:** Strengthen DORA Compliance by refining processes and reducing change failure rates.\n\n---\n\n### Highlighting PagerDuty’s Value\n\n- **PagerDuty’s AIOps, Automation, Change Events, and Service Graph**: These tools provide unique value by quickly correlating incidents with changes and dependencies, offering actionable insights that reduce MTTA/MTTR.\n- **Post-Incident Review**: Creates a learning and prevention cycle by documenting incidents, identifying improvement areas, and implementing changes that enhance reliability and operational readiness, crucial for DORA compliance in the Public Sector.",
+        "stages": {
+          "resolution_pir": {
+            "text": "---"
+          },
+          "triage_context": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph connect the dots between the lagging business symptom, the earlier minor incident, and the routine change. Actionable context is provided through change events, dependency mapping, and automation logs, accelerating MTTA/MTTR and mobilizing the right teams.\n- **Industry-Specific Framing:** Rapid response is critical in the Public Sector to mitigate compliance risks and service disruptions.\n- **Use-Case-Specific Goals:** Enhance operational efficiency and compliance by improving incident response times."
+          },
+          "business_impact": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** As time progresses, additional routine changes and increased traffic exacerbate the unresolved minor issue, escalating into a major incident. The \"Payment Gateway\" service becomes unavailable, impacting critical public sector transactions and exposing the organization to compliance risks.\n- **Industry-Specific Framing:** The outage disrupts essential services, potentially leading to public dissatisfaction and regulatory scrutiny.\n- **Use-Case-Specific Goals:** Ensure compliance with DORA metrics by minimizing downtime and maintaining service reliability."
+          },
+          "routine_change_minor": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** A routine deployment automation update is applied to the \"Payment Gateway\" service. This change inadvertently introduces a subtle degradation in transaction processing speed, manifesting as a minor, low-severity incident (P5/P4). In the Public Sector, where compliance and reliability are paramount, this early signal is crucial. If caught early, it could have prevented larger issues.\n- **Industry-Specific Framing:** Public Sector demands high reliability and compliance with regulations. Ignoring early warnings can lead to significant compliance risks.\n- **Use-Case-Specific Goals:** Achieving DORA Compliance by maintaining low change failure rates and improving deployment frequency."
+          }
+        }
+      },
+      "description": "A deployment automation regression on the Payment Gateway increases incident volume and slows recovery. PagerDuty correlates change and incident data, accelerates remediation, and drives measurable DORA-aligned operational learning via a Post-Incident Review."
+    },
+    "personaNotes": "Persona focus: Public Sector IT Operations / SRE lead, Change & Release Manager, and Compliance/Risk Officer.\n\nKey talking points:\n- Emphasize how a small deployment automation regression, if ignored, can snowball into a compliance and citizen‑impacting outage.\n- Show how PagerDuty’s AIOps, Service Graph, and Change Events correlate minor early warnings with the specific deployment automation change.\n- Highlight measurable DORA metrics (change failure rate, MTTR, availability) before and after remediation.\n- Stress the value of a structured, compliance‑friendly Post‑Incident Review that drives concrete process and automation changes.\n- Frame everything in terms of public sector obligations: statutory SLAs, auditability, and citizen trust.\n\nNote: The event stream is designed to show an initial change, minor alerts, escalation to a major incident, correlation back to the change, rollback, and then a PIR/guardrail change event that encodes the learning loop.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T15:06:45.754Z",
+    "updatedAt": "2026-02-27T15:06:45.754Z"
+  },
+  "summary": {
+    "eventCount": 10,
+    "changeCount": 2,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

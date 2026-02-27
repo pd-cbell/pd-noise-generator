@@ -97,7 +97,7 @@ export const PresenterDashboard: React.FC = () => {
                 <span>{activeDemo.name}</span>
             </div>
             <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium">
-                {activeDemo.maturityLevel}
+                {activeDemo.useCase || activeDemo.industry || 'Legacy Demo'}
             </span>
         </div>
         

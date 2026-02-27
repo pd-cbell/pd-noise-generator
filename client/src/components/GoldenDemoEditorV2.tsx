@@ -3,6 +3,7 @@ import { GoldenDemo } from '../../../server/src/types';
 import { useStore } from '../store/useStore';
 import { X, Save, Plus, Trash2, Copy, Upload, GripVertical } from 'lucide-react';
 import { convertCampaignFailureToGoldenDemoItems, convertCruxEventGroupToGoldenDemoItems, detectImportFormat, ImportedGoldenDemoEvent } from '../utils/importers';
+import { GOLDEN_DEMO_INDUSTRY_OPTIONS, GOLDEN_DEMO_USE_CASE_OPTIONS } from '../constants/goldenDemoTaxonomy';
 
 type StageKey = 'routine_change_minor' | 'business_impact' | 'triage_context' | 'resolution_pir';
 
@@ -37,8 +38,6 @@ const safeStringify = (obj: any) => {
     return '{}';
   }
 };
-
-const maturityOptions = ['Reactive', 'Proactive', 'Preventative'];
 
 const normalizeEvents = (items: any[] | undefined): EditableEvent[] => {
   if (!items || !Array.isArray(items)) return [];
@@ -172,11 +171,12 @@ const convertImportText = (text: string): ImportedGoldenDemoEvent[] => {
 
 export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onClose, isNew }) => {
   const { updateGoldenDemo, createGoldenDemo, addLog } = useStore();
+  const generationDiagnostics = demo.configJson?.generationDiagnostics;
 
   const [meta, setMeta] = useState({
     name: demo.name,
-    vertical: demo.vertical || '',
-    maturityLevel: demo.maturityLevel || '',
+    industry: demo.industry || '',
+    useCase: demo.useCase || '',
     narrative: demo.narrative,
     fullNarrative: demo.configJson?.narrative?.full || demo.narrative || '',
     personaNotes: demo.personaNotes || '',
@@ -339,12 +339,12 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       setError('Name is required.');
       return;
     }
-    if (!meta.vertical.trim()) {
-      setError('Vertical is required.');
+    if (!meta.industry.trim()) {
+      setError('Industry is required.');
       return;
     }
-    if (!meta.maturityLevel.trim()) {
-      setError('Maturity is required.');
+    if (!meta.useCase.trim()) {
+      setError('Use Case is required.');
       return;
     }
     for (let i = 0; i < events.length; i++) {
@@ -376,8 +376,8 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       if (isNew || demo.id === 'new') {
         const created = await createGoldenDemo({
           name: meta.name.trim(),
-          vertical: meta.vertical,
-          maturityLevel: meta.maturityLevel,
+          industry: meta.industry,
+          useCase: meta.useCase,
           narrative: meta.narrative,
           personaNotes: meta.personaNotes,
           isShared: meta.isShared,
@@ -387,8 +387,8 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
       } else {
         await updateGoldenDemo(demo.id, {
           name: meta.name.trim(),
-          vertical: meta.vertical,
-          maturityLevel: meta.maturityLevel,
+          industry: meta.industry,
+          useCase: meta.useCase,
           narrative: meta.narrative,
           personaNotes: meta.personaNotes,
           isShared: meta.isShared,
@@ -451,26 +451,29 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Vertical</label>
-                <input
-                  type="text"
-                  className={`w-full border rounded-md px-3 py-2 text-sm ${!meta.vertical.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
-                  value={meta.vertical}
-                  onChange={(e) => setMeta({ ...meta, vertical: e.target.value })}
-                  required
-                  placeholder="Retail, FSI, Tech..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Maturity</label>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Industry</label>
                 <select
-                  className={`w-full border rounded-md px-3 py-2 text-sm bg-white ${!meta.maturityLevel.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
-                  value={meta.maturityLevel}
-                  onChange={(e) => setMeta({ ...meta, maturityLevel: e.target.value })}
+                  className={`w-full border rounded-md px-3 py-2 text-sm bg-white ${!meta.industry.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
+                  value={meta.industry}
+                  onChange={(e) => setMeta({ ...meta, industry: e.target.value })}
                   required
                 >
-                  <option value="">Select maturity</option>
-                  {maturityOptions.map((opt) => (
+                  <option value="">Select industry</option>
+                  {GOLDEN_DEMO_INDUSTRY_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Use Case</label>
+                <select
+                  className={`w-full border rounded-md px-3 py-2 text-sm bg-white ${!meta.useCase.trim() && error ? 'border-red-300 bg-red-50/40' : 'border-gray-300'}`}
+                  value={meta.useCase}
+                  onChange={(e) => setMeta({ ...meta, useCase: e.target.value })}
+                  required
+                >
+                  <option value="">Select use case</option>
+                  {GOLDEN_DEMO_USE_CASE_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                   ))}
                 </select>
@@ -497,6 +500,17 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                   Shared (visible to all users)
                 </label>
               </div>
+              {!!demo.vertical && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Legacy Vertical (read-only)</label>
+                  <div className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm bg-gray-50 text-gray-600">
+                    {demo.vertical}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Legacy freeform vertical is preserved for compatibility. New categorization uses Industry + Use Case.
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider">Narrative (overall)</label>
@@ -528,6 +542,21 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                 </>
               )}
             </div>
+            {generationDiagnostics && (
+              <div className="border border-gray-200 bg-gray-50 rounded-lg p-3">
+                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Generation Diagnostics</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-700">
+                  <div><span className="text-gray-500">Provider:</span> {generationDiagnostics.provider || 'unknown'}</div>
+                  <div><span className="text-gray-500">Model:</span> {generationDiagnostics.model || 'unknown'}</div>
+                  <div><span className="text-gray-500">Prompt Version:</span> {generationDiagnostics.promptVersion || 'n/a'}</div>
+                  <div><span className="text-gray-500">Generated:</span> {generationDiagnostics.generatedAt ? new Date(generationDiagnostics.generatedAt).toLocaleString() : 'n/a'}</div>
+                  <div><span className="text-gray-500">Events:</span> {generationDiagnostics.eventCount ?? 0}</div>
+                  <div><span className="text-gray-500">Changes:</span> {generationDiagnostics.changeCount ?? 0}</div>
+                  <div><span className="text-gray-500">Beats:</span> {generationDiagnostics.beatsCount ?? 0}</div>
+                  <div><span className="text-gray-500">Sparse Details:</span> {generationDiagnostics.sparseCustomDetailsCount ?? 0}</div>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="space-y-3">
@@ -608,7 +637,7 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                       </div>
                       <div className="text-xs text-gray-500 truncate flex items-center gap-2">
                         <span>{evt.logicalServiceName}</span>
-                        <span>• Offset (s, relative)</span>
+                        <span>• Delay (s)</span>
                         <input
                           type="number"
                           className="w-20 border border-gray-300 rounded px-2 py-1 text-xs"
@@ -618,6 +647,19 @@ export const GoldenDemoEditorV2: React.FC<GoldenDemoEditorProps> = ({ demo, onCl
                             const val = Math.max(0, Number(e.target.value));
                             setEvents((prev) =>
                               prev.map((item, i) => (i === idx ? { ...item, offsetSeconds: val } : item))
+                            );
+                          }}
+                        />
+                        <span>• Repeat Count</span>
+                        <input
+                          type="number"
+                          className="w-16 border border-gray-300 rounded px-2 py-1 text-xs"
+                          value={evt.repeatCount || 1}
+                          min={1}
+                          onChange={(e) => {
+                            const val = Math.max(1, Math.round(Number(e.target.value) || 1));
+                            setEvents((prev) =>
+                              prev.map((item, i) => (i === idx ? { ...item, repeatCount: val } : item))
                             );
                           }}
                         />

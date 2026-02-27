@@ -1,0 +1,323 @@
+{
+  "startedAt": "2026-02-27T15:01:06.545Z",
+  "completedAt": "2026-02-27T15:02:44.119Z",
+  "provider": "openai",
+  "case": {
+    "id": "security-routing",
+    "prompt": "Suspicious authentication spikes trigger security workflow confusion across identity services and SOC dashboards. Show context-rich triage.",
+    "industry": "Tech & Telco",
+    "useCase": "Security Incident Management",
+    "eventCount": 9,
+    "changeCount": 1
+  },
+  "proposal": "**TL;DR:** A routine change to the \"Payment Gateway\" service introduces a minor authentication issue that goes unnoticed. Over time, this minor issue escalates into a major security incident, causing widespread confusion across identity services and SOC dashboards. PagerDuty's Operations Cloud quickly connects the dots between the initial change and the major incident, streamlining triage and resolution while providing valuable insights for future prevention.\n\n---\n\n**Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine update to the Payment Gateway service introduces a subtle authentication delay. Initially, this presents as a minor increase in authentication retries, flagged as a low-severity incident (P5). In the tech and telco industry, such minor authentication spikes can be easily overlooked, especially during routine security checks.\n- **Industry-Specific Framing:** In tech & telco, maintaining seamless authentication processes is crucial. Even minor authentication issues can hint at potential security vulnerabilities.\n- **Use-Case-Specific Goals:** Security Incident Management prioritizes rapid detection and response to potential threats. The blind spot here is the failure to recognize the early warning signs of a security breach.\n\n**Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As time passes, additional updates and increased traffic interact with the unresolved authentication issue, leading to a major incident. Customers experience authentication failures, causing significant disruptions and potential security breaches.\n- **Industry-Specific Framing:** In the tech & telco sector, customer trust is paramount. Authentication failures can lead to data breaches, impacting customer confidence and compliance.\n- **Use-Case-Specific Goals:** The focus is on minimizing customer impact and ensuring compliance with security standards. The escalation highlights the need for proactive incident management.\n\n**Stage 3: Triage & Context — Connecting Signals, Changes, Dependencies, and Services**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph quickly correlate the major incident with the earlier minor authentication issue and the initial routine change. It provides actionable context through change events, dependency mapping, and automation logs, allowing for rapid mobilization of the right teams.\n- **Industry-Specific Framing:** Efficient triage is critical in tech & telco to maintain service reliability and customer trust.\n- **Use-Case-Specific Goals:** The priority is reducing Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR) by providing comprehensive context and accelerating decision-making.\n\n**Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The incident is resolved by rolling back the problematic change. The Post-Incident Review (PIR) documents the timeline and root cause, identifying opportunities for faster detection and escalation of similar issues in the future. New workflow automations and guardrails are proposed to enhance security incident management.\n- **Industry-Specific Framing:** The PIR emphasizes the importance of continuous improvement and compliance in tech & telco.\n- **Use-Case-Specific Goals:** The PIR aims to refine security incident management processes, ensuring rapid response and minimizing future risks.\n\n---\n\n**PagerDuty’s Unique Value:**\n\n- **AIOps and Automation:** Accelerate incident detection and resolution by correlating disparate data points and automating routine tasks.\n- **Change Events and Service Graph:** Provide a holistic view of changes and dependencies, enabling precise root cause analysis.\n- **Post-Incident Review:** Fosters a culture of learning and prevention, improving operational readiness and reliability through documented insights and actionable improvements.",
+  "goldenDemo": {
+    "id": "e981f16a-fc64-49ec-97d4-d965b0fca348",
+    "name": "Suspicious Auth Spikes Across Identity & SOC",
+    "vertical": "Tech & Telco",
+    "maturityLevel": "Deprecated",
+    "industry": "Tech & Telco",
+    "useCase": "Security Incident Management",
+    "narrative": "A routine change to the \"Payment Gateway\" service introduces a minor authentication issue that goes unnoticed. Over time, this minor issue escalates into a major security incident, causing widespread confusion across identity services and SOC dashboards. PagerDuty's Operations Cloud quickly connects the dots between the initial change and the major incident, streamlining triage and resolution while providing valuable insights for future prevention.",
+    "configJson": {
+      "name": "Suspicious Auth Spikes – Security Triage for Payment Gateway",
+      "beats": [
+        {
+          "id": "beat-1-signal",
+          "title": "Subtle Auth Noise After Routine Change",
+          "whatToSay": "We start with a routine configuration update to the Payment Gateway service—tightening fraud controls and adjusting token validation. Within minutes, PagerDuty begins receiving low-severity alerts: slightly elevated 401 errors, a bump in auth retries, and a small latency increase. In a Tech & Telco SOC, this looks like normal background auth noise. The key is that PagerDuty is already timestamping and tracking these as discrete incidents tied to Payment Gateway, even though no one is panicking yet.",
+          "description": "A routine Payment Gateway auth configuration update is deployed. Shortly after, low‑severity auth anomalies appear: small increases in 401s, retries, and latency that look like background noise to the SOC.",
+          "approxTimingSec": 60,
+          "whatToShowInPagerDuty": "Show the Payment Gateway service details and the first low-severity incident in the Incidents list."
+        },
+        {
+          "id": "beat-2-escalation",
+          "title": "Suspicious Auth Spikes Hit Customers and SOC Dashboards",
+          "whatToSay": "As traffic grows, those subtle issues compound. Now we see a major incident on Payment Gateway: hard auth failures, repeated MFA prompts, and timeouts. The SOC sees spikes in failed logins from multiple regions and can’t immediately tell if this is a misconfig, a credential-stuffing attack, or an outage. PagerDuty correlates multiple higher-severity alerts into a single major incident, giving us one place to understand what’s happening.",
+          "description": "Traffic ramps up and the subtle auth issue becomes a major incident: customers see login failures and SOC dashboards show spikes in suspicious authentication activity.",
+          "approxTimingSec": 70,
+          "whatToShowInPagerDuty": "Show the major incident on Payment Gateway with multiple correlated alerts in the incident details view."
+        },
+        {
+          "id": "beat-3-context",
+          "title": "Context-Rich Triage: Change + Auth Anomalies",
+          "whatToSay": "Here’s where context matters. In the incident view, PagerDuty has already linked a recent Payment Gateway configuration change to this major incident. We can see earlier low-severity auth anomalies, the exact deployment window, and related alerts like geo-anomalous login failures and rate-limit spikes. Instead of debating ‘attack or outage,’ responders immediately see that everything started right after this change. That clarity lets the SOC and SRE teams align on a change-driven root cause and move straight to mitigation.",
+          "description": "PagerDuty AIOps and Service Graph correlate the major incident with the earlier minor auth anomalies and the recent Payment Gateway change event, providing clear triage context.",
+          "approxTimingSec": 80,
+          "whatToShowInPagerDuty": "Open the major incident details, show Related Incidents, Change Events, and Service Graph/Dependencies tabs."
+        },
+        {
+          "id": "beat-4-resolution-pir",
+          "title": "Rollback, Stabilize, and Learn",
+          "whatToSay": "With the change clearly identified, the team executes a targeted rollback of the Payment Gateway auth configuration. Authentication success rates recover, SOC dashboards calm down, and the incident is resolved. In the Post-Incident Review, we capture how low-severity auth noise was ignored, how it escalated, and how the change event provided the missing context. From here, we can define guardrails—like automatically elevating auth anomalies that follow a change and standardizing playbooks for suspicious auth spikes—so the next time this happens, triage is even faster and more confident.",
+          "description": "Teams roll back the Payment Gateway auth configuration, resolve the incident, and capture learnings in a Post-Incident Review to improve security incident management guardrails.",
+          "approxTimingSec": 70,
+          "whatToShowInPagerDuty": "Show the resolved incident timeline and then open a sample Post-Incident Review for the incident."
+        }
+      ],
+      "items": [
+        {
+          "id": "step-1",
+          "payload": {
+            "source": "ci-cd.pipeline.payment-gateway",
+            "summary": "Config change deployed to Payment Gateway authentication policies (token validation & rate limits)",
+            "custom_details": {
+              "git_sha": "{{faker.string.alphanumeric(length=8)}}",
+              "version": "v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}",
+              "deployer": "{{faker.person.fullName}}",
+              "change_id": "CHG-{{faker.number.int(min=10000,max=99999)}}",
+              "environment": "production",
+              "service_name": "Payment Gateway"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": null,
+          "stepName": "Payment Gateway Auth Config Change Deployed",
+          "eventType": "change",
+          "repeatCount": 1,
+          "delaySeconds": 10,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Change] Payment Gateway auth configuration updated (token validation, rate limits). Monitor for auth anomalies."
+        },
+        {
+          "id": "step-2",
+          "payload": {
+            "source": "auth-metrics.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Minor increase in Payment Gateway authentication retries post-deploy",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Low-Severity Auth Retry Increase Detected",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 30,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P5][Payment Gateway] Slight increase in auth retries observed after recent config change. Monitoring for escalation."
+        },
+        {
+          "id": "step-3",
+          "payload": {
+            "source": "apm.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Payment Gateway auth latency slightly elevated vs baseline",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Auth Latency Slightly Elevated",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 40,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P5][Payment Gateway] Auth latency above normal but within thresholds. Correlating with recent auth policy update."
+        },
+        {
+          "id": "step-4",
+          "payload": {
+            "source": "waf.logs.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Spike in HTTP 401/403 responses on Payment Gateway auth endpoints",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Spike in 401/403 Responses from Payment Gateway",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 50,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P3][Payment Gateway] Elevated 401/403 responses on auth endpoints. Investigating potential misconfig vs suspicious activity."
+        },
+        {
+          "id": "step-5",
+          "payload": {
+            "source": "api-gateway.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Increased 429 rate-limit errors on Payment Gateway token refresh",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Rate-Limit Errors on Token Refresh",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 60,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P3][Payment Gateway] Token refresh hitting rate limits. Possible side-effect of new auth policy. Reviewing configs."
+        },
+        {
+          "id": "step-6",
+          "payload": {
+            "source": "soc.identity-analytics.{{faker.internet.ip}}",
+            "summary": "Geo-distributed login failures detected across multiple regions for Payment Gateway",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Suspicious Geo-Distributed Login Failures",
+          "eventType": "incident",
+          "repeatCount": 3,
+          "delaySeconds": 70,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P2][Security][Payment Gateway] Geo-distributed login failures detected. Distinguishing attack traffic from auth misconfiguration."
+        },
+        {
+          "id": "step-7",
+          "payload": {
+            "source": "incident-aggregator.payment-gateway.{{faker.date.recent}}",
+            "summary": "Major incident: Payment Gateway authentication failures impacting customer transactions",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "critical",
+          "stepName": "Major Incident: Payment Gateway Auth Degradation",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 90,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[P1][Payment Gateway] Widespread auth failures impacting payments. SOC and Payment Gateway SREs engaged for joint triage."
+        },
+        {
+          "id": "step-8",
+          "payload": {
+            "source": "runbook-automation.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Automated diagnostics runbook executed for Payment Gateway auth policy issues",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "warning",
+          "stepName": "Automated Runbook: Auth Policy Diagnostics",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 100,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Automation][Payment Gateway] Auth diagnostics runbook executed. Collecting config, error rates, and recent change context."
+        },
+        {
+          "id": "step-9",
+          "payload": {
+            "source": "pd-aiops.correlation.{{faker.date.recent}}",
+            "summary": "PagerDuty correlated Payment Gateway auth failures with recent auth configuration change",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "error",
+          "stepName": "Correlated Alert: Change Linked to Auth Incident",
+          "eventType": "incident",
+          "repeatCount": 1,
+          "delaySeconds": 110,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Context][Payment Gateway] AIOps correlation: current auth failures align with recent auth config change. Prioritizing rollback option."
+        },
+        {
+          "id": "step-10",
+          "payload": {
+            "source": "auth-metrics.payment-gateway.{{faker.internet.ip}}",
+            "summary": "Authentication success rates recovering on Payment Gateway after rollback",
+            "custom_details": {
+              "endpoint": "/api/v1/{{faker.string.uuid}}",
+              "trace_id": "{{faker.string.uuid}}",
+              "observed_ms": "{{faker.number.int(min=900,max=2600)}}",
+              "service_name": "Payment Gateway",
+              "threshold_ms": "1000",
+              "active_connections": "{{faker.number.int(min=120,max=950)}}"
+            }
+          },
+          "service": "Payment Gateway",
+          "severity": "info",
+          "stepName": "Post-Rollback Auth Recovery Signal",
+          "eventType": "incident",
+          "repeatCount": 2,
+          "delaySeconds": 120,
+          "logicalServiceName": "Payment Gateway",
+          "slackMessageTemplate": "[Resolved][Payment Gateway] Auth success rates returning to normal following rollback. Proceeding to Post-Incident Review."
+        }
+      ],
+      "narrative": {
+        "full": "**TL;DR:** A routine change to the \"Payment Gateway\" service introduces a minor authentication issue that goes unnoticed. Over time, this minor issue escalates into a major security incident, causing widespread confusion across identity services and SOC dashboards. PagerDuty's Operations Cloud quickly connects the dots between the initial change and the major incident, streamlining triage and resolution while providing valuable insights for future prevention.\n\n---\n\n**Stage 1: Routine Change and Minor Incidents — Where Major Incidents Start**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** A routine update to the Payment Gateway service introduces a subtle authentication delay. Initially, this presents as a minor increase in authentication retries, flagged as a low-severity incident (P5). In the tech and telco industry, such minor authentication spikes can be easily overlooked, especially during routine security checks.\n- **Industry-Specific Framing:** In tech & telco, maintaining seamless authentication processes is crucial. Even minor authentication issues can hint at potential security vulnerabilities.\n- **Use-Case-Specific Goals:** Security Incident Management prioritizes rapid detection and response to potential threats. The blind spot here is the failure to recognize the early warning signs of a security breach.\n\n**Stage 2: Business Impact — Escalation Driven by Lagging Indicators**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** As time passes, additional updates and increased traffic interact with the unresolved authentication issue, leading to a major incident. Customers experience authentication failures, causing significant disruptions and potential security breaches.\n- **Industry-Specific Framing:** In the tech & telco sector, customer trust is paramount. Authentication failures can lead to data breaches, impacting customer confidence and compliance.\n- **Use-Case-Specific Goals:** The focus is on minimizing customer impact and ensuring compliance with security standards. The escalation highlights the need for proactive incident management.\n\n**Stage 3: Triage & Context — Connecting Signals, Changes, Dependencies, and Services**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph quickly correlate the major incident with the earlier minor authentication issue and the initial routine change. It provides actionable context through change events, dependency mapping, and automation logs, allowing for rapid mobilization of the right teams.\n- **Industry-Specific Framing:** Efficient triage is critical in tech & telco to maintain service reliability and customer trust.\n- **Use-Case-Specific Goals:** The priority is reducing Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR) by providing comprehensive context and accelerating decision-making.\n\n**Stage 4: Resolution & Post-Incident Review — Every Incident Becomes a Learning Opportunity**\n\n- **Selected Service(s):** Payment Gateway\n- **Description:** The incident is resolved by rolling back the problematic change. The Post-Incident Review (PIR) documents the timeline and root cause, identifying opportunities for faster detection and escalation of similar issues in the future. New workflow automations and guardrails are proposed to enhance security incident management.\n- **Industry-Specific Framing:** The PIR emphasizes the importance of continuous improvement and compliance in tech & telco.\n- **Use-Case-Specific Goals:** The PIR aims to refine security incident management processes, ensuring rapid response and minimizing future risks.\n\n---\n\n**PagerDuty’s Unique Value:**\n\n- **AIOps and Automation:** Accelerate incident detection and resolution by correlating disparate data points and automating routine tasks.\n- **Change Events and Service Graph:** Provide a holistic view of changes and dependencies, enabling precise root cause analysis.\n- **Post-Incident Review:** Fosters a culture of learning and prevention, improving operational readiness and reliability through documented insights and actionable improvements.",
+        "stages": {
+          "resolution_pir": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** The incident is resolved by rolling back the problematic change. The Post-Incident Review (PIR) documents the timeline and root cause, identifying opportunities for faster detection and escalation of similar issues in the future. New workflow automations and guardrails are proposed to enhance security incident management.\n- **Industry-Specific Framing:** The PIR emphasizes the importance of continuous improvement and compliance in tech & telco.\n- **Use-Case-Specific Goals:** The PIR aims to refine security incident management processes, ensuring rapid response and minimizing future risks.\n\n---\n\n**PagerDuty’s Unique Value:**\n\n- **AIOps and Automation:** Accelerate incident detection and resolution by correlating disparate data points and automating routine tasks.\n- **Change Events and Service Graph:** Provide a holistic view of changes and dependencies, enabling precise root cause analysis.\n- **Post-Incident Review:** Fosters a culture of learning and prevention, improving operational readiness and reliability through documented insights and actionable improvements."
+          },
+          "triage_context": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** PagerDuty’s AIOps and Service Graph quickly correlate the major incident with the earlier minor authentication issue and the initial routine change. It provides actionable context through change events, dependency mapping, and automation logs, allowing for rapid mobilization of the right teams.\n- **Industry-Specific Framing:** Efficient triage is critical in tech & telco to maintain service reliability and customer trust.\n- **Use-Case-Specific Goals:** The priority is reducing Mean Time to Acknowledge (MTTA) and Mean Time to Resolve (MTTR) by providing comprehensive context and accelerating decision-making."
+          },
+          "business_impact": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** As time passes, additional updates and increased traffic interact with the unresolved authentication issue, leading to a major incident. Customers experience authentication failures, causing significant disruptions and potential security breaches.\n- **Industry-Specific Framing:** In the tech & telco sector, customer trust is paramount. Authentication failures can lead to data breaches, impacting customer confidence and compliance.\n- **Use-Case-Specific Goals:** The focus is on minimizing customer impact and ensuring compliance with security standards. The escalation highlights the need for proactive incident management."
+          },
+          "routine_change_minor": {
+            "text": "- **Selected Service(s):** Payment Gateway\n- **Description:** A routine update to the Payment Gateway service introduces a subtle authentication delay. Initially, this presents as a minor increase in authentication retries, flagged as a low-severity incident (P5). In the tech and telco industry, such minor authentication spikes can be easily overlooked, especially during routine security checks.\n- **Industry-Specific Framing:** In tech & telco, maintaining seamless authentication processes is crucial. Even minor authentication issues can hint at potential security vulnerabilities.\n- **Use-Case-Specific Goals:** Security Incident Management prioritizes rapid detection and response to potential threats. The blind spot here is the failure to recognize the early warning signs of a security breach."
+          }
+        }
+      },
+      "description": "Routine Payment Gateway change causes subtle auth issues that escalate into a suspicious authentication spike, confusing SOC dashboards until PagerDuty correlates change, alerts, and context for rapid triage."
+    },
+    "personaNotes": "Personas: \n- Primary: Security Operations (SOC lead, security engineer), Platform/SRE for Payment Gateway.\n- Secondary: Incident Commander, Compliance/Risk.\n\nKey talk track:\n- Emphasize how low‑severity auth anomalies are often ignored until they explode into a security incident.\n- Show how PagerDuty correlates suspicious auth spikes, geo anomalies, and rate‑limit errors back to a specific Payment Gateway change.\n- Highlight context‑rich triage: responders see change events, related incidents, and automation logs in one place.\n- Underscore Tech & Telco stakes: customer trust, regulatory exposure, and noisy SOC dashboards.\n- Close with PIR and new guardrails: automatic correlation of auth anomalies post‑change, better enrichment, and standardized security playbooks.\n\nNote: Although the constraint text mentions multi‑service, the provided service list only includes a single service (`Payment Gateway`). The narrative and events therefore focus deeply on that service while still showing cross‑tool/SOC confusion and context‑rich triage within that boundary.",
+    "isShared": false,
+    "isStarred": false,
+    "createdByUserId": "cmiv967mw0000srwuqs9zdjfo",
+    "createdAt": "2026-02-27T15:02:44.108Z",
+    "updatedAt": "2026-02-27T15:02:44.108Z"
+  },
+  "summary": {
+    "eventCount": 10,
+    "changeCount": 1,
+    "beatsCount": 4,
+    "missingServiceNameCount": 0,
+    "sparseCustomDetailsCount": 0
+  }
+}

@@ -1,11 +1,12 @@
 {
   "name": "server",
-  "version": "2.4.2",
+  "version": "2.4.3",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "harness:providers": "ts-node src/scripts/providerHarness.ts"
   },
   "keywords": [],
   "author": "",

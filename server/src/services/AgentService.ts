@@ -21,8 +21,8 @@ const AgentStateAnnotation = Annotation.Root({
   
   // GoldenDemo Metadata
   goldenDemoName: Annotation<string | undefined>,
-  goldenDemoVertical: Annotation<string | undefined>,
-  goldenDemoMaturityLevel: Annotation<string | undefined>,
+  goldenDemoIndustry: Annotation<string | undefined>,
+  goldenDemoUseCase: Annotation<string | undefined>,
   goldenDemoNarrative: Annotation<string | undefined>,
   goldenDemoPersonaNotes: Annotation<string | undefined>,
   createdByUserId: Annotation<string | undefined>,
@@ -66,7 +66,7 @@ export class AgentService {
   // --- Nodes ---
 
   private async plannerNode(state: AgentStateType, config?: RunnableConfig): Promise<Partial<AgentStateType>> {
-    const provider = state.provider || 'google';
+    const provider = state.provider || 'openai';
     const model = this.getModel(provider, 'smart');
 
     const prompt = `
@@ -74,8 +74,8 @@ You are a Principal Solution Consultant at PagerDuty. Your job is to design a co
 
 The user has already provided their scenario input:
 - User Request: "${state.userRequest}"
-- Vertical: "${state.goldenDemoVertical || 'General'}"      // e.g., FinTech, Retail, HealthTech, Media, SaaS, Manufacturing
-- Maturity Level: "${state.goldenDemoMaturityLevel || 'Proactive'}" // e.g., Starter, Intermediate, Advanced
+- Industry: "${state.goldenDemoIndustry || 'General'}"      // e.g., Financial Services, Retail, Public Sector
+- Use Case: "${state.goldenDemoUseCase || 'Crisis Ops'}"    // e.g., Agent Ops, DORA Compliance, Security Incident Management
 
 You are also given a list of candidate *technical services* from the user’s PagerDuty account:
 ${state.availableServices ? JSON.stringify(state.availableServices.map(s => s.name)) : 'Any (Assume standard e-commerce stack)'}
@@ -90,14 +90,14 @@ CORE STORY ARC — MUST FOLLOW THESE 4 STAGES
    - A routine, low-risk change is applied to one of the selected technical services.
    - This introduces a subtle degradation that surfaces as a **minor, low-severity technical incident**.
    - The minor issue appears harmless or ignorable (P5/P4 style) but is the key early signal.
-   - Describe the early symptoms in a way that fits the user's **vertical** and **maturity level**.
+   - Describe the early symptoms in a way that fits the user's **industry** and **use case**.
    - Make the narrative clear: *If this had been caught and resolved early, the major incident could have been prevented.*
 
 2) Business Impact — Escalation Driven by Lagging Indicators
    - Time passes. One or more additional routine changes, traffic patterns, or environmental conditions interact with the unresolved minor issue.
    - A major, customer-visible incident emerges.
-   - The incident affects a service selected from the technical list, framed as business-critical within the given vertical (e.g., "Checkout" for retail, "Claims Processing" for insurance, "Telehealth Scheduling" for health, etc.).
-   - Symptoms should match the vertical (e.g., 500 errors in checkout, queue backlog in streaming, delayed appointment confirmations in health).
+   - The incident affects a service selected from the technical list, framed as business-critical within the given industry.
+   - Symptoms should match the industry and use case framing (e.g., customer impact, compliance exposure, analyst throughput, agent productivity).
    - The escalation must clearly trace back to:
        a) the root routine change, and
        b) the ignored minor incident.
@@ -120,8 +120,8 @@ CORE STORY ARC — MUST FOLLOW THESE 4 STAGES
        - documents the timeline and root cause,
        - identifies how the minor incident could be detected, escalated, or remediated faster next time,
        - proposes new workflow automations, guardrails, runbook changes, or routing improvements,
-       - reflects the user’s **vertical** (e.g., compliance-driven PIR for HealthTech; cost-driven PIR for FinTech; throughput-focused PIR for Media).
-   - PIR should feel like a true learning loop that improves reliability and operational maturity.
+       - reflects the user’s **industry** and **use case** (e.g., compliance-driven PIR for Public Sector + DORA Compliance; response-process PIR for Security Incident Management).
+   - PIR should feel like a true learning loop that improves reliability and operational readiness.
 
 ---------------------------------------------------------
 SERVICE SELECTION RULES
@@ -131,7 +131,7 @@ From the provided list of technical services:
 
 - Choose at least **one primary technical service** to anchor Stage 1 and the originating change.
 - Optionally choose a **second service** to act as the downstream “business-impact” surface.
-- Select the services that best match the *vertical* and the user’s *scenario request*.
+- Select the services that best match the *industry/use case* framing and the user’s *scenario request*.
 - Refer to all selected services EXACTLY as they appear in the list (no renaming, no altering, no inventing new ones).
 
 These EXACT names will later populate \`event.custom_details.service_name\`.
@@ -155,8 +155,8 @@ Return a structured planning summary (NOT JSON). Include:
    - Stage title,
    - Selected service(s),
    - A clear description of what happens and why,
-   - Vertical-specific framing,
-   - How maturity level influences behavior, blind spots, or reaction time.
+   - Industry-specific framing,
+   - Use-case-specific goals, blind spots, or operational priorities.
 - A short section highlighting:
    - Where PagerDuty’s AIOps, Automation, Change Events, and Service Graph add unique value.
    - How the Post-Incident Review creates a learning and prevention cycle.
@@ -175,7 +175,7 @@ Do NOT output JSON in this step. This is narrative planning only.
   }
 
   private async builderNode(state: AgentStateType, config?: RunnableConfig): Promise<Partial<AgentStateType>> {
-    const provider = state.provider || 'google';
+    const provider = state.provider || 'openai';
     
     // Override model name for OpenAI if provider is openai
     const model = provider === 'openai' 
@@ -200,6 +200,8 @@ Do NOT output JSON in this step. This is narrative planning only.
       You are a Chaos Engineering Architect.
       User Request: "${state.userRequest}"
       Approved Plan: "${state.planSummary}"
+      Target Industry: "${state.goldenDemoIndustry || 'General'}"
+      Target Use Case: "${state.goldenDemoUseCase || 'Crisis Ops'}"
 
       Task: Generate the comprehensive JSON configuration for this campaign.
       
@@ -219,19 +221,21 @@ Do NOT output JSON in this step. This is narrative planning only.
          - **Change Events:** (CRITICAL) You must include at least one 'Change Event'.
       3. **Timing:** Calculate \`delaySeconds\` so events fire sequentially with 10-150 second gaps.
       4. **Payloads:** Use Mustache tokens (\`{{faker.internet.ip}}\`, \`{{faker.date.recent}}\`) for realism.
-      5. **Team Persona:** Ensure the text in the payloads matches the request.
+      5. **Team Persona:** Ensure the text in the payloads matches the request and the target industry/use-case framing.
       6. REPETITION: If an event represents a flood or ongoing issue, set "repeatCount" to 2-5.
     `;
 
     try {
         let goldenDemoOutput: any;
+        const promptVersion = '2.4.3';
+        const modelName = provider === 'openai' ? 'gpt-5.1' : 'gemini-2.5-pro';
 
         const goldenDemoOutputSchema = z.object({
             name: z.string().describe("The name of the Golden Demo scenario (e.g., 'Black Friday Checkout Failure')"),
-            vertical: z.string().describe("The industry vertical this demo targets (e.g., 'Retail', 'FinServ', 'Healthcare')"),
-            maturityLevel: z.enum(['Reactive', 'Proactive', 'Preventative']).describe("The PagerDuty Operations Cloud maturity level demonstrated (Reactive, Proactive, Preventative)"),
+            industry: z.string().describe("The industry this demo targets (e.g., 'Retail', 'Financial Services', 'Tech & Telco')"),
+            useCase: z.string().describe("The primary use case this demo demonstrates (e.g., 'Crisis Ops', 'Agent Ops', 'DORA Compliance')"),
             narrative: z.string().describe("The full 4-stage Golden Demo narrative, including Signal, Impact, Triage, and Resolution phases, tailored to the user's request."),
-            personaNotes: z.string().optional().describe("Internal notes for the presenter about personas, key talking points, or setup."),
+            personaNotes: z.string().nullable().describe("Internal notes for the presenter about personas, key talking points, or setup."),
             configJson: z.object({
                 name: z.string().describe("The name of the campaign"),
                 description: z.string().describe("A brief description of the scenario"),
@@ -241,15 +245,15 @@ Do NOT output JSON in this step. This is narrative planning only.
                     description: z.string().describe("Description of what is happening in this stage"),
                     whatToShowInPagerDuty: z.string().describe("Instruction on what specific screen/tab to show in PagerDuty (e.g., 'Show the Service Directory')"),
                     whatToSay: z.string().describe("Script for the presenter to say"),
-                    approxTimingSec: z.number().optional()
+                    approxTimingSec: z.number().nullable().describe("Approximate timing in seconds for this beat; null if unspecified")
                 })).describe("3-5 narrative beats for the presenter script"),
                 items: z.array(z.object({
                     stepName: z.string(),
                     service: z.string().describe("The name of the service affected (e.g. 'Checkout API')"),
                     delaySeconds: z.number(),
-                    repeatCount: z.number().optional().default(1),
+                    repeatCount: z.number().describe("How many times to repeat this step; use 1 if not repeating"),
                     eventType: z.enum(['incident', 'change']),
-                    severity: z.enum(['info', 'warning', 'error', 'critical']).optional(),
+                    severity: z.enum(['info', 'warning', 'error', 'critical']).nullable().describe("Severity for incident events; null allowed for change events"),
                     payload: z.object({
                         summary: z.string(),
                         source: z.string(),
@@ -257,7 +261,7 @@ Do NOT output JSON in this step. This is narrative planning only.
                             service_name: z.string().describe("MUST match the item's 'service' field exactly for routing"),
                         }).passthrough()
                     }).passthrough().describe("The PagerDuty event payload"),
-                    slackMessageTemplate: z.string().optional()
+                    slackMessageTemplate: z.string().nullable().describe("Optional Slack summary message; null if not provided")
                 }))
             })
         });
@@ -277,8 +281,8 @@ Do NOT output JSON in this step. This is narrative planning only.
                     ${JSON.stringify(
                         {
                             name: "Generated Golden Demo Name",
-                            vertical: "Target Vertical",
-                            maturityLevel: "Reactive|Proactive|Preventative",
+                            industry: "Target Industry",
+                            useCase: "Target Use Case",
                             narrative: "The detailed 4-stage narrative.",
                             personaNotes: "Notes for the presenter.",
                             configJson: {
@@ -329,13 +333,23 @@ Do NOT output JSON in this step. This is narrative planning only.
                 (state.availableServices || []).map((svc: any) => [svc.name, svc])
             );
 
-            items.forEach((item: any) => {
+            items.forEach((item: any, idx: number) => {
                 const eventType = item.eventType || item.type || 'incident';
                 const serviceName =
                     item.service ||
                     item.logicalServiceName ||
                     item.serviceName ||
                     item?.payload?.custom_details?.service_name;
+
+                if (!item.id) {
+                    item.id = `step-${idx + 1}`;
+                }
+                if (!item.logicalServiceName && serviceName) {
+                    item.logicalServiceName = serviceName;
+                }
+                if (!item.service && serviceName) {
+                    item.service = serviceName;
+                }
 
                 if (eventType === 'change' && serviceName) {
                     const svc = serviceLookup.get(serviceName);
@@ -357,8 +371,59 @@ Do NOT output JSON in this step. This is narrative planning only.
                 if ('offsetSeconds' in item) {
                     item.offsetSeconds = clampedDelay;
                 }
+
+                const payload = item.payload && typeof item.payload === 'object' ? item.payload : {};
+                const customDetails =
+                    payload.custom_details && typeof payload.custom_details === 'object'
+                        ? payload.custom_details
+                        : {};
+                if (serviceName && !customDetails.service_name) {
+                    customDetails.service_name = serviceName;
+                }
+                const detailKeys = Object.keys(customDetails).filter((key) => key !== 'service_name');
+                if (detailKeys.length < 3) {
+                    if (eventType === 'change') {
+                        customDetails.change_id = customDetails.change_id || `CHG-{{faker.number.int(min=10000,max=99999)}}`;
+                        customDetails.deployer = customDetails.deployer || '{{faker.person.fullName}}';
+                        customDetails.git_sha = customDetails.git_sha || '{{faker.string.alphanumeric(length=8)}}';
+                        customDetails.environment = customDetails.environment || 'production';
+                        customDetails.version = customDetails.version || 'v{{faker.number.int(min=1,max=3)}}.{{faker.number.int(min=0,max=9)}}.{{faker.number.int(min=0,max=9)}}';
+                    } else {
+                        customDetails.endpoint = customDetails.endpoint || '/api/v1/{{faker.string.uuid}}';
+                        customDetails.observed_ms = customDetails.observed_ms || '{{faker.number.int(min=900,max=2600)}}';
+                        customDetails.threshold_ms = customDetails.threshold_ms || '1000';
+                        customDetails.active_connections = customDetails.active_connections || '{{faker.number.int(min=120,max=950)}}';
+                        customDetails.trace_id = customDetails.trace_id || '{{faker.string.uuid}}';
+                    }
+                }
+                payload.custom_details = customDetails;
+                payload.source = payload.source || (eventType === 'change' ? 'GitHub Actions' : 'Datadog-APM-Prod');
+                payload.summary = payload.summary || item.stepName || `${serviceName || 'Service'} ${eventType} event`;
+                item.payload = payload;
             });
         }
+
+        const summarizeGeneratedItems = (scenarioItems: any[]) => {
+            const beats = Array.isArray(goldenDemoOutput?.configJson?.beats)
+                ? goldenDemoOutput.configJson.beats
+                : [];
+            const missingServiceNameCount = scenarioItems.filter(
+                (item: any) => !item?.payload?.custom_details?.service_name
+            ).length;
+            const sparseCustomDetailsCount = scenarioItems.filter((item: any) => {
+                const details = item?.payload?.custom_details;
+                if (!details || typeof details !== 'object') return true;
+                const keys = Object.keys(details).filter((k) => k !== 'service_name');
+                return keys.length < 2;
+            }).length;
+            return {
+                eventCount: scenarioItems.length,
+                changeCount: scenarioItems.filter((item: any) => item?.eventType === 'change').length,
+                beatsCount: beats.length,
+                missingServiceNameCount,
+                sparseCustomDetailsCount,
+            };
+        };
 
         const fullNarrativeSource = state.goldenDemoNarrative || state.planSummary;
         if (fullNarrativeSource) {
@@ -458,6 +523,18 @@ Do NOT output JSON in this step. This is narrative planning only.
             };
         }
 
+        if (!goldenDemoOutput.configJson) {
+            goldenDemoOutput.configJson = {};
+        }
+        const summary = summarizeGeneratedItems(Array.isArray(items) ? items : []);
+        goldenDemoOutput.configJson.generationDiagnostics = {
+            provider,
+            model: modelName,
+            promptVersion,
+            generatedAt: new Date().toISOString(),
+            ...summary,
+        };
+
         goldenDemoOutput.createdByUserId = state.createdByUserId;
         return { goldenDemoMetadata: goldenDemoOutput }; 
     } catch (error: any) {
@@ -472,8 +549,8 @@ Do NOT output JSON in this step. This is narrative planning only.
       prompt: string; 
       provider?: 'google' | 'openai';
       services?: any[];
-      vertical?: string;
-      maturityLevel?: string;
+      industry?: string;
+      useCase?: string;
   }): Promise<string> {
     const graph = new StateGraph(AgentStateAnnotation)
       .addNode("planner", this.plannerNode.bind(this))
@@ -484,10 +561,10 @@ Do NOT output JSON in this step. This is narrative planning only.
     
     const result = await app.invoke({
         userRequest: params.prompt, 
-        provider: params.provider || 'google',
+        provider: params.provider || 'openai',
         availableServices: params.services,
-        goldenDemoVertical: params.vertical,
-        goldenDemoMaturityLevel: params.maturityLevel
+        goldenDemoIndustry: params.industry,
+        goldenDemoUseCase: params.useCase
     });
     
     if (!result.planSummary) throw new Error("No plan generated");
@@ -502,8 +579,8 @@ Do NOT output JSON in this step. This is narrative planning only.
       eventCount?: number;
       changeCount?: number;
       goldenDemoName: string;
-      vertical: string;
-      maturityLevel: string;
+      industry: string;
+      useCase: string;
       narrative: string;
       personaNotes?: string;
       createdByUserId: string;
@@ -522,13 +599,13 @@ Do NOT output JSON in this step. This is narrative planning only.
     const result = await app.invoke({
         userRequest: params.prompt, 
         planSummary: plan, 
-        provider: params.provider || 'google',
+        provider: params.provider || 'openai',
         availableServices: params.services || [],
         eventCount: params.eventCount,
         changeCount: params.changeCount,
         goldenDemoName: params.goldenDemoName,
-        goldenDemoVertical: params.vertical,
-        goldenDemoMaturityLevel: params.maturityLevel,
+        goldenDemoIndustry: params.industry,
+        goldenDemoUseCase: params.useCase,
         goldenDemoNarrative: params.narrative,
         goldenDemoPersonaNotes: params.personaNotes,
         createdByUserId: params.createdByUserId,
@@ -538,8 +615,10 @@ Do NOT output JSON in this step. This is narrative planning only.
 
     const createdGoldenDemo = await this.goldenDemoService.createGoldenDemo({
       name: result.goldenDemoMetadata.name!,
-      vertical: result.goldenDemoMetadata.vertical!,
-      maturityLevel: result.goldenDemoMetadata.maturityLevel!,
+      vertical: (result.goldenDemoMetadata as any).vertical || (result.goldenDemoMetadata as any).industry || params.industry || 'Legacy',
+      maturityLevel: (result.goldenDemoMetadata as any).maturityLevel || 'Deprecated',
+      industry: (result.goldenDemoMetadata as any).industry || params.industry,
+      useCase: (result.goldenDemoMetadata as any).useCase || params.useCase,
       narrative: result.goldenDemoMetadata.narrative!,
       configJson: result.goldenDemoMetadata.configJson || {},
       personaNotes: result.goldenDemoMetadata.personaNotes,
