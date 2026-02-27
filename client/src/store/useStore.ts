@@ -12,6 +12,7 @@ export interface ServiceMapping {
   incidentServiceId?: string | null;
   incidentServiceName?: string | null;
   incidentRoutingKeyOverride?: string | null;
+  changeRoutingKeyOverride?: string | null;
   changeServiceId?: string | null;
   changeServiceName?: string | null;
   useIncidentForChange?: boolean;
@@ -22,6 +23,7 @@ export type ServiceMappingInput = {
   incidentServiceId?: string | null;
   incidentServiceName?: string | null;
   incidentRoutingKeyOverride?: string | null;
+  changeRoutingKeyOverride?: string | null;
   changeServiceId?: string | null;
   changeServiceName?: string | null;
   useIncidentForChange?: boolean;

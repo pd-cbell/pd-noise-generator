@@ -68,7 +68,7 @@ export class MappingProfileService {
               changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
               changeServiceId: mapping.changeServiceId ?? null,
               changeServiceName: mapping.changeServiceName ?? null,
-              useIncidentForChange: mapping.useIncidentForChange ?? true,
+              useIncidentForChange: mapping.useIncidentForChange ?? false,
             })),
           }
         : undefined,
@@ -111,7 +111,7 @@ export class MappingProfileService {
                   changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
                   changeServiceId: mapping.changeServiceId ?? null,
                   changeServiceName: mapping.changeServiceName ?? null,
-                  useIncidentForChange: mapping.useIncidentForChange ?? true,
+                  useIncidentForChange: mapping.useIncidentForChange ?? false,
                 })),
               }
             : undefined,
@@ -152,7 +152,7 @@ export class MappingProfileService {
               changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
               changeServiceId: mapping.changeServiceId ?? null,
               changeServiceName: mapping.changeServiceName ?? null,
-              useIncidentForChange: mapping.useIncidentForChange ?? true,
+              useIncidentForChange: mapping.useIncidentForChange ?? false,
             },
           });
         } else {
@@ -166,7 +166,7 @@ export class MappingProfileService {
               changeRoutingKeyOverride: mapping.changeRoutingKeyOverride ?? null,
               changeServiceId: mapping.changeServiceId ?? null,
               changeServiceName: mapping.changeServiceName ?? null,
-              useIncidentForChange: mapping.useIncidentForChange ?? true,
+              useIncidentForChange: mapping.useIncidentForChange ?? false,
             },
           });
         }

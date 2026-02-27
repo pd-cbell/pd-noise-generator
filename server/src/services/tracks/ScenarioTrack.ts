@@ -224,7 +224,6 @@ export class ScenarioTrack extends SimulationTrack {
         item.changeRoutingKey ||
         item.integrationKey ||
         resolvedTarget.effectiveChangeRoutingKey ||
-        this.simulatorConfig.pdChangeEventsRoutingKey ||
         null;
 
       if (!routingKey) {

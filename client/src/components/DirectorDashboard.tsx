@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Play, Layers, AlertTriangle, Loader2, ListEnd, Link2, Star } from 'lucide-react'; // Added ListEnd icon
+import { Play, Layers, AlertTriangle, Loader2, ListEnd, Link2, Star, X, Copy, CheckCircle, XCircle, Zap, Edit2, Save } from 'lucide-react'; // Added ListEnd icon
 import { useStore, GoldenDemo, MappingProfile } from '../store/useStore';
 import { useServerSimulation } from '../hooks/useServerSimulation';
 import { useAuth } from '../contexts/AuthContext';
-import { GoldenDemoDetailModal } from './GoldenDemoDetailModal';
 import { ActiveTracksPanel } from './ActiveTracksPanel';
 import { QuickDomainConfigModal } from './QuickDomainConfigModal';
 import { getGoldenDemoQualityVerdict, hasGoldenDemoTaxonomy } from '../constants/goldenDemoTaxonomy';
+import { resolveServicePreview, EventType, SimulatorConfig } from '../utils/mappingLogic';
+import { api } from '../services/api';
 
 export const DirectorDashboard: React.FC = () => {
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -27,10 +28,13 @@ export const DirectorDashboard: React.FC = () => {
   const { impersonatorId } = useAuth();
   
   const [isLoading, setIsLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<GoldenDemo | null>(null);
   const [isActiveTracksPanelOpen, setIsActiveTracksPanelOpen] = useState(false); // New state for panel
   const [isQuickConfigOpen, setIsQuickConfigOpen] = useState(false);
+  const [editingLogicalService, setEditingLogicalService] = useState<string | null>(null);
+  const [selectedRealServiceId, setSelectedRealServiceId] = useState<string>('');
+  const [serviceQueryByLogical, setServiceQueryByLogical] = useState<Record<string, string>>({});
+  const [isSavingMapping, setIsSavingMapping] = useState(false);
 
   useEffect(() => {
     const loadDemos = async () => {
@@ -44,6 +48,10 @@ export const DirectorDashboard: React.FC = () => {
   const selectedProfile: MappingProfile | null = useMemo(
     () => mappingProfiles.find((p) => p.id === selectedMappingProfileId) || null,
     [mappingProfiles, selectedMappingProfileId]
+  );
+  const simulatorConfig: SimulatorConfig = useMemo(
+    () => ({ pdChangeEventsRoutingKey: useStore.getState().globalRoutingKey }),
+    []
   );
 
   const handleLaunch = async (demo: GoldenDemo) => {
@@ -62,7 +70,7 @@ export const DirectorDashboard: React.FC = () => {
 
   const handleCardClick = (demo: GoldenDemo) => {
     setSelectedDemo(demo);
-    setIsModalOpen(true);
+    setEditingLogicalService(null);
   };
 
   const handleCopyWebhookLink = async (demo: GoldenDemo) => {
@@ -82,9 +90,103 @@ export const DirectorDashboard: React.FC = () => {
     }
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
+  const closeDrawer = () => {
     setSelectedDemo(null);
+    setEditingLogicalService(null);
+  };
+
+  const handleCopyBrief = async (demo: GoldenDemo) => {
+    const text = [
+      `Golden Demo: ${demo.name}`,
+      demo.industry ? `Industry: ${demo.industry}` : null,
+      demo.useCase ? `Use Case: ${demo.useCase}` : null,
+      selectedProfile ? `Mapping Profile: ${selectedProfile.name}` : 'Mapping Profile: None',
+      '',
+      'Persona Notes:',
+      demo.personaNotes?.trim() || 'No persona notes provided.',
+    ].filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      addLog(`Copied launch brief for "${demo.name}"`, 'info');
+    } catch (e: any) {
+      addLog(`Failed to copy launch brief: ${e?.message || 'clipboard unavailable'}`, 'error');
+    }
+  };
+
+  const primeEditState = (logicalName: string) => {
+    if (!selectedProfile) {
+      addLog('Select a mapping profile to edit mappings.', 'warn');
+      return;
+    }
+    const existing = selectedProfile.serviceMappings?.find((m) => m.logicalServiceName === logicalName);
+    const currentRealServiceId = existing?.incidentServiceId || existing?.changeServiceId || '';
+    const currentName = services.find((s) => s.id === currentRealServiceId)?.name || existing?.incidentServiceName || existing?.changeServiceName || '';
+    setEditingLogicalService(logicalName);
+    setSelectedRealServiceId(currentRealServiceId);
+    setServiceQueryByLogical((prev) => ({ ...prev, [logicalName]: currentName }));
+  };
+
+  const handleStartEdit = async (logicalName: string) => {
+    if (!selectedProfile) {
+      addLog('Select a mapping profile to edit mappings.', 'warn');
+      return;
+    }
+    if (isSavingMapping) return;
+    if (editingLogicalService && editingLogicalService !== logicalName) {
+      const saved = await handleSaveMapping(editingLogicalService);
+      if (!saved) return;
+    }
+    primeEditState(logicalName);
+  };
+
+  const handleServiceQueryChange = (logicalName: string, value: string) => {
+    setServiceQueryByLogical((prev) => ({ ...prev, [logicalName]: value }));
+    const match = services.find((s) => s.name === value);
+    setSelectedRealServiceId(match?.id || '');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingLogicalService(null);
+    setSelectedRealServiceId('');
+  };
+
+  const handleSaveMapping = async (logicalName: string): Promise<boolean> => {
+    if (!selectedProfile) return false;
+    const typedService = (serviceQueryByLogical[logicalName] || '').trim();
+    if (typedService && !selectedRealServiceId) {
+      addLog(`Could not map "${logicalName}": service "${typedService}" was not recognized.`, 'warn');
+      return false;
+    }
+    setIsSavingMapping(true);
+    try {
+      const realService = services.find((s) => s.id === selectedRealServiceId);
+      const changeIntegrationKey =
+        realService?.changeIntegrations?.find((integration) => integration?.integrationKey)?.integrationKey || null;
+      const mappingPayload = [{
+        logicalServiceName: logicalName,
+        incidentServiceId: realService?.id || null,
+        incidentServiceName: realService?.name || null,
+        changeServiceId: realService?.id || null,
+        changeServiceName: realService?.name || null,
+        changeRoutingKeyOverride: changeIntegrationKey,
+        useIncidentForChange: false,
+      }];
+
+      await api.addMappingsToProfile(selectedProfile.id, mappingPayload);
+      await fetchMappingProfiles();
+      if (!changeIntegrationKey) {
+        addLog(`Updated mapping for ${logicalName} (change remains unmapped: no service change routing key found).`, 'warn');
+      } else {
+        addLog(`Updated mapping for ${logicalName}`, 'info');
+      }
+      setEditingLogicalService(null);
+      return true;
+    } catch (e: any) {
+      addLog(`Failed to update mapping: ${e?.message || 'unknown error'}`, 'error');
+      return false;
+    } finally {
+      setIsSavingMapping(false);
+    }
   };
 
   const [filterIndustry, setFilterIndustry] = useState<string>('');
@@ -107,6 +209,20 @@ export const DirectorDashboard: React.FC = () => {
   const uniqueIndustries = Array.from(new Set(goldenDemos.map(demo => demo.industry).filter(Boolean) as string[]));
   const uniqueUseCases = Array.from(new Set(goldenDemos.map(demo => demo.useCase).filter(Boolean) as string[]));
   const missingCredentials = !apiToken || !fromEmail;
+  const drawerLogicalServices = useMemo(() => {
+    if (!selectedDemo?.configJson?.items) return [] as Array<{ name: string; types: Set<EventType> }>;
+    const services = new Map<string, Set<EventType>>();
+    selectedDemo.configJson.items.forEach((item: any) => {
+      const logicalServiceName =
+        item.logicalServiceName || item.service || item.serviceName || item?.payload?.custom_details?.service_name || 'Unknown Service';
+      const eventType: EventType = item.eventType || item.type || 'alert';
+      if (!services.has(logicalServiceName)) services.set(logicalServiceName, new Set<EventType>());
+      services.get(logicalServiceName)!.add(eventType);
+    });
+    return Array.from(services.entries())
+      .map(([name, types]) => ({ name, types }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedDemo]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-80px)] flex flex-col">
@@ -279,6 +395,14 @@ export const DirectorDashboard: React.FC = () => {
                                   ) : (
                                     <p className="text-xs text-amber-700">Needs taxonomy update</p>
                                   )}
+                                  <div className="mt-2">
+                                    <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
+                                      Persona Brief
+                                    </span>
+                                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                      {demo.personaNotes?.trim() || 'No persona notes added yet.'}
+                                    </p>
+                                  </div>
                                   <p className="text-sm text-gray-600 mt-2 line-clamp-3">{demo.narrative}</p>
                               </div>
                               
@@ -298,15 +422,228 @@ export const DirectorDashboard: React.FC = () => {
               </div>
           </div>
       )}
-
       {selectedDemo && (
-        <GoldenDemoDetailModal
-          isOpen={isModalOpen}
-          onClose={closeModal}
-          demo={selectedDemo}
-          selectedMappingProfile={selectedProfile}
-          onLaunch={handleLaunch}
-        />
+        <>
+          <button
+            aria-label="Close launch brief"
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={closeDrawer}
+          />
+          <aside className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white border-l border-gray-200 shadow-2xl z-50 flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-200 flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">{selectedDemo.name}</h2>
+                <p className="text-xs text-gray-500 mt-1">Launch Brief</p>
+              </div>
+              <button onClick={closeDrawer} className="text-gray-500 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="px-3 py-2 rounded border bg-gray-50">
+                  <div className="text-gray-500">Industry</div>
+                  <div className="font-semibold text-gray-800">{selectedDemo.industry || 'Unspecified'}</div>
+                </div>
+                <div className="px-3 py-2 rounded border bg-gray-50">
+                  <div className="text-gray-500">Use Case</div>
+                  <div className="font-semibold text-gray-800">{selectedDemo.useCase || 'Unspecified'}</div>
+                </div>
+                <div className="px-3 py-2 rounded border bg-gray-50">
+                  <div className="text-gray-500">Mapping Profile</div>
+                  <div className="font-semibold text-gray-800">{selectedProfile?.name || 'None'}</div>
+                </div>
+              </div>
+
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-800">Persona Notes</h3>
+                  <button
+                    onClick={() => void handleCopyBrief(selectedDemo)}
+                    className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 text-gray-700"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copy Brief
+                  </button>
+                </div>
+                <div className="text-sm text-gray-700 bg-violet-50 p-3 rounded border border-violet-100 whitespace-pre-wrap leading-7">
+                  {selectedDemo.personaNotes?.trim() || 'No persona notes provided.'}
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-sm font-semibold text-gray-800 mb-2">Narrative Stage Snapshot</h3>
+                <div className="space-y-2">
+                  {[
+                    { key: 'routine_change_minor', label: 'Routine Change & Minor Incidents' },
+                    { key: 'business_impact', label: 'Business Impact' },
+                    { key: 'triage_context', label: 'Triage & Context' },
+                    { key: 'resolution_pir', label: 'Resolution & Post-Incident Review' },
+                  ].map((stage) => {
+                    const text = selectedDemo.configJson?.narrative?.stages?.[stage.key as keyof typeof selectedDemo.configJson.narrative.stages]?.text;
+                    return (
+                      <div key={stage.key} className="p-3 rounded border border-gray-200 bg-gray-50">
+                        <div className="text-xs font-semibold text-gray-700 mb-1">{stage.label}</div>
+                        <div className="text-xs text-gray-600 line-clamp-3">{text?.trim() || 'Not specified'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-800">Mapping Preview</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Profile</span>
+                    <select
+                      className="text-xs border border-gray-300 rounded px-2 py-1"
+                      value={selectedMappingProfileId || ''}
+                      onChange={(e) => setSelectedMappingProfileId(e.target.value || null)}
+                    >
+                      <option value="">No mapping profile</option>
+                      {mappingProfiles.map(profile => (
+                        <option key={profile.id} value={profile.id}>{profile.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Logical Service</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Event Type</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Mapped Service</th>
+                        <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
+                        <th className="px-3 py-2 text-right font-semibold text-gray-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {drawerLogicalServices.flatMap((svc) => {
+                        const types = Array.from(svc.types);
+                        const isEditing = editingLogicalService === svc.name;
+                        return types.map((type, typeIdx) => {
+                          const result = resolveServicePreview(
+                            { logicalServiceName: svc.name, type },
+                            selectedProfile,
+                            simulatorConfig
+                          );
+                          return (
+                            <tr key={`${svc.name}-${type}`} className="border-t border-gray-100">
+                              {typeIdx === 0 && (
+                                <td rowSpan={types.length} className="px-3 py-2 font-medium text-gray-800 align-top">
+                                  {svc.name}
+                                </td>
+                              )}
+                              <td className="px-3 py-2">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+                                  {type === 'change' ? <Zap className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                  {type}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-gray-700">
+                                {isEditing && typeIdx === 0 ? (
+                                  <div>
+                                    <input
+                                      className="w-full border border-gray-300 rounded px-2 py-1"
+                                      list={`drawer-service-options-${svc.name}`}
+                                      placeholder="Type to search services..."
+                                      value={serviceQueryByLogical[svc.name] || ''}
+                                      onChange={(e) => handleServiceQueryChange(svc.name, e.target.value)}
+                                    />
+                                    <datalist id={`drawer-service-options-${svc.name}`}>
+                                      <option value="">-- Unmapped --</option>
+                                      {services.map((s) => (
+                                        <option key={s.id} value={s.name} />
+                                      ))}
+                                    </datalist>
+                                  </div>
+                                ) : (
+                                  result.effectiveServiceName || 'N/A'
+                                )}
+                              </td>
+                              <td className="px-3 py-2">
+                                {result.isMapped && result.hasRoutingKey ? (
+                                  <span className="inline-flex items-center gap-1 text-green-600 font-medium">
+                                    <CheckCircle className="w-3 h-3" /> Mapped
+                                  </span>
+                                ) : result.isMapped ? (
+                                  <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
+                                    <AlertTriangle className="w-3 h-3" /> Missing Key
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-red-600 font-medium">
+                                    <XCircle className="w-3 h-3" /> Unmapped
+                                  </span>
+                                )}
+                              </td>
+                              {typeIdx === 0 && (
+                                <td rowSpan={types.length} className="px-3 py-2 text-right align-top">
+                                  {isEditing ? (
+                                    <div className="inline-flex items-center gap-2">
+                                      <button
+                                        onClick={() => void handleSaveMapping(svc.name)}
+                                        disabled={isSavingMapping}
+                                        className="inline-flex items-center gap-1 text-green-700 hover:text-green-900 disabled:opacity-50"
+                                        title="Save mapping"
+                                      >
+                                        {isSavingMapping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEdit}
+                                        className="text-gray-600 hover:text-gray-800"
+                                        title="Cancel"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleStartEdit(svc.name)}
+                                      className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-900"
+                                      title="Map service"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                      Map
+                                    </button>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        });
+                      })}
+                      {drawerLogicalServices.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-4 text-center text-gray-500">
+                            No logical services found in this demo.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button
+                onClick={closeDrawer}
+                className="px-3 py-2 text-sm rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => void handleLaunch(selectedDemo)}
+                className="px-4 py-2 text-sm rounded bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-2 font-semibold"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Launch Demo
+              </button>
+            </div>
+          </aside>
+        </>
       )}
       <ActiveTracksPanel isOpen={isActiveTracksPanelOpen} onClose={() => setIsActiveTracksPanelOpen(false)} />
       <QuickDomainConfigModal isOpen={isQuickConfigOpen} onClose={() => setIsQuickConfigOpen(false)} />

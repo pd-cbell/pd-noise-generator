@@ -33,7 +33,7 @@ export function resolveEventTarget(
     return {
       effectiveServiceName: logicalServiceName,
       effectiveRoutingKey: null,
-      effectiveChangeRoutingKey: simulatorConfig.pdChangeEventsRoutingKey ?? null,
+      effectiveChangeRoutingKey: null,
       notes: 'No mapping profile provided; using logical service name and default keys.',
     };
   }
@@ -49,29 +49,32 @@ export function resolveEventTarget(
     return {
       effectiveServiceName: logicalServiceName,
       effectiveRoutingKey: fallbackRoutingKey,
-      effectiveChangeRoutingKey: simulatorConfig.pdChangeEventsRoutingKey ?? null,
+      effectiveChangeRoutingKey: null,
       usedProfileId: profile.id,
       notes: 'Mapping not found; using logical service name and profile/global keys.',
     };
   }
 
   if (type === 'change') {
-    const useIncidentMapping =
-      mapping.useIncidentForChange || (!mapping.changeServiceId && !mapping.changeServiceName);
-    const effectiveChangeName = useIncidentMapping
-      ? mapping.incidentServiceName ?? logicalServiceName
-      : mapping.changeServiceName ?? logicalServiceName;
-    const effectiveChangeId = useIncidentMapping ? mapping.incidentServiceId : mapping.changeServiceId;
+    const effectiveChangeName =
+      mapping.changeServiceName ??
+      mapping.incidentServiceName ??
+      logicalServiceName;
+    const effectiveChangeId = mapping.changeServiceId ?? mapping.incidentServiceId;
+    const explicitChangeRoutingKey =
+      mapping.changeRoutingKeyOverride && mapping.changeRoutingKeyOverride.trim().length > 0
+        ? mapping.changeRoutingKeyOverride.trim()
+        : null;
 
     return {
       effectiveServiceName: effectiveChangeName,
       effectiveServiceId: effectiveChangeId ?? undefined,
       effectiveRoutingKey: null,
-      effectiveChangeRoutingKey: mapping.changeRoutingKeyOverride ?? simulatorConfig.pdChangeEventsRoutingKey ?? null,
+      effectiveChangeRoutingKey: explicitChangeRoutingKey,
       usedProfileId: profile.id,
-      notes: useIncidentMapping
-        ? 'Resolved change event using incident mapping (useIncidentForChange=true or no explicit change mapping).'
-        : 'Resolved change event using explicit change mapping.',
+      notes: explicitChangeRoutingKey
+        ? 'Resolved change event using explicit change routing key mapping.'
+        : 'Change service selected without an explicit change routing key; change remains unmapped.',
     };
   }
 

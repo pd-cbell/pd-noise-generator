@@ -27,7 +27,7 @@ export interface ResolvedTarget {
 export function resolveServicePreview(
   logicalTarget: LogicalEventTarget,
   profile: MappingProfile | null,
-  simulatorConfig: SimulatorConfig
+  _simulatorConfig: SimulatorConfig
 ): ResolvedTarget {
   const { logicalServiceName, type } = logicalTarget;
 
@@ -35,7 +35,7 @@ export function resolveServicePreview(
     return {
       effectiveServiceName: logicalServiceName,
       effectiveRoutingKey: null,
-      effectiveChangeRoutingKey: simulatorConfig.pdChangeEventsRoutingKey ?? null,
+      effectiveChangeRoutingKey: null,
       notes: 'No mapping profile provided; using logical service name and default keys.',
       isMapped: false,
       hasRoutingKey: false,
@@ -53,22 +53,24 @@ export function resolveServicePreview(
     return {
       effectiveServiceName: logicalServiceName,
       effectiveRoutingKey: fallbackRoutingKey,
-      effectiveChangeRoutingKey: simulatorConfig.pdChangeEventsRoutingKey ?? null,
+      effectiveChangeRoutingKey: null,
       usedProfileId: profile.id,
       notes: 'Mapping not found; using logical service name and profile/global keys.',
       isMapped: false,
-      hasRoutingKey: !!fallbackRoutingKey || !!simulatorConfig.pdChangeEventsRoutingKey,
+      hasRoutingKey: !!fallbackRoutingKey,
     };
   }
 
   if (type === 'change') {
-    const useIncidentMapping =
-      mapping.useIncidentForChange || (!mapping.changeServiceId && !mapping.changeServiceName);
-    const effectiveChangeName = useIncidentMapping
-      ? mapping.incidentServiceName ?? logicalServiceName
-      : mapping.changeServiceName ?? logicalServiceName;
-    const effectiveChangeId = useIncidentMapping ? mapping.incidentServiceId : mapping.changeServiceId;
-    const effectiveChangeRoutingKey = simulatorConfig.pdChangeEventsRoutingKey ?? null;
+    const effectiveChangeName =
+      mapping.changeServiceName ??
+      mapping.incidentServiceName ??
+      logicalServiceName;
+    const effectiveChangeId = mapping.changeServiceId ?? mapping.incidentServiceId;
+    const effectiveChangeRoutingKey =
+      mapping.changeRoutingKeyOverride && mapping.changeRoutingKeyOverride.trim().length > 0
+        ? mapping.changeRoutingKeyOverride.trim()
+        : null;
 
 
     return {
@@ -77,10 +79,10 @@ export function resolveServicePreview(
       effectiveRoutingKey: null,
       effectiveChangeRoutingKey: effectiveChangeRoutingKey,
       usedProfileId: profile.id,
-      notes: useIncidentMapping
-        ? 'Resolved change event using incident mapping (useIncidentForChange=true or no explicit change mapping).'
-        : 'Resolved change event using explicit change mapping.',
-      isMapped: true,
+      notes: effectiveChangeRoutingKey
+        ? 'Resolved change event using explicit change routing key mapping.'
+        : 'Change service selected without an explicit change routing key; change remains unmapped.',
+      isMapped: !!effectiveChangeRoutingKey,
       hasRoutingKey: !!effectiveChangeRoutingKey,
     };
   }

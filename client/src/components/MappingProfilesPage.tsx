@@ -76,7 +76,8 @@ const MappingProfilesPage: React.FC = () => {
         incidentRoutingKeyOverride: m.incidentRoutingKeyOverride || '',
         changeServiceId: m.changeServiceId || '',
         changeServiceName: m.changeServiceName || '',
-        useIncidentForChange: m.useIncidentForChange ?? true,
+        useIncidentForChange: false,
+        changeRoutingKeyOverride: m.changeRoutingKeyOverride || '',
       }))
     );
     setSelectedMappingProfileId(id);
@@ -112,16 +113,14 @@ const MappingProfilesPage: React.FC = () => {
         incidentServiceId: serviceId,
         incidentServiceName: serviceName,
       });
-      if (mappings[index]?.useIncidentForChange) {
-        handleMappingChange(index, {
-          changeServiceId: '',
-          changeServiceName: '',
-        });
-      }
     } else {
+      const changeIntegrationKey =
+        match?.changeIntegrations?.find((integration) => integration?.integrationKey)?.integrationKey || '';
       handleMappingChange(index, {
         changeServiceId: serviceId,
         changeServiceName: serviceName,
+        changeRoutingKeyOverride: changeIntegrationKey,
+        useIncidentForChange: false,
       });
     }
   };
@@ -136,7 +135,8 @@ const handleAddMapping = () => {
       incidentRoutingKeyOverride: '',
       changeServiceId: '',
       changeServiceName: '',
-      useIncidentForChange: true,
+      changeRoutingKeyOverride: '',
+      useIncidentForChange: false,
     },
   ]);
   };
@@ -189,9 +189,10 @@ const handleAddMapping = () => {
             incidentServiceId: m.incidentServiceId || undefined,
             incidentServiceName: m.incidentServiceName || undefined,
             incidentRoutingKeyOverride: m.incidentRoutingKeyOverride || undefined,
-            changeServiceId: m.useIncidentForChange ? undefined : m.changeServiceId || undefined,
-            changeServiceName: m.useIncidentForChange ? undefined : m.changeServiceName || undefined,
-            useIncidentForChange: m.useIncidentForChange ?? true,
+            changeServiceId: m.changeServiceId || undefined,
+            changeServiceName: m.changeServiceName || undefined,
+            changeRoutingKeyOverride: m.changeRoutingKeyOverride || undefined,
+            useIncidentForChange: false,
           }))
         : undefined,
     };
@@ -420,7 +421,7 @@ const handleAddMapping = () => {
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Incident Service</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Incident Routing Key</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Change Service</th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Use Incident?</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Change Routing Key</th>
                     <th className="px-3 py-2"></th>
                   </tr>
                 </thead>
@@ -470,42 +471,35 @@ const handleAddMapping = () => {
                           />
                         </td>
                         <td className="px-3 py-2 align-top">
-                          {mapping.useIncidentForChange ? (
-                            <div className="text-xs text-gray-500 italic">Using incident service</div>
-                          ) : (
-                            <div>
-                              <input
-                                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
-                                list={`change-services-${idx}`}
-                                placeholder="Type to search services..."
-                                value={changeLabel || ''}
-                                onChange={(e) => handleServiceInput(idx, 'change', e.target.value)}
-                                disabled={mapping.useIncidentForChange}
-                              />
-                              <datalist id={`change-services-${idx}`}>
-                                {serviceOptions.map((svc) => (
-                                  <option key={svc.id} value={svc.name} />
-                                ))}
-                              </datalist>
-                            </div>
-                          )}
-                          {!mapping.useIncidentForChange && changeLabel && (
+                          <div>
+                            <input
+                              className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                              list={`change-services-${idx}`}
+                              placeholder="Type to search services..."
+                              value={changeLabel || ''}
+                              onChange={(e) => handleServiceInput(idx, 'change', e.target.value)}
+                            />
+                            <datalist id={`change-services-${idx}`}>
+                              {serviceOptions.map((svc) => (
+                                <option key={svc.id} value={svc.name} />
+                              ))}
+                            </datalist>
+                          </div>
+                          {changeLabel && (
                             <p className="text-[11px] text-gray-500 mt-1">{changeLabel}</p>
                           )}
                         </td>
-                        <td className="px-3 py-2 align-top text-center">
+                        <td className="px-3 py-2 align-top">
                           <input
-                            type="checkbox"
-                            checked={mapping.useIncidentForChange}
-                            onChange={(e) =>
-                              handleMappingChange(idx, {
-                                useIncidentForChange: e.target.checked,
-                                ...(e.target.checked
-                                  ? { changeServiceId: '', changeServiceName: '' }
-                                  : {}),
-                              })
-                            }
+                            type="text"
+                            className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+                            value={mapping.changeRoutingKeyOverride || ''}
+                            onChange={(e) => handleMappingChange(idx, { changeRoutingKeyOverride: e.target.value })}
+                            placeholder="Required for mapped change events"
                           />
+                          <p className={`text-[11px] mt-1 ${mapping.changeRoutingKeyOverride ? 'text-green-600' : 'text-amber-600'}`}>
+                            {mapping.changeRoutingKeyOverride ? 'Mapped for change events' : 'Unmapped: no change routing key'}
+                          </p>
                         </td>
                         <td className="px-3 py-2 align-top text-right">
                           <button

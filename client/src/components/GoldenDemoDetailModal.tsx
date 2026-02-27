@@ -89,17 +89,19 @@ export const GoldenDemoDetailModal: React.FC<GoldenDemoDetailModalProps> = ({
         logicalServiceName: logicalName,
         incidentServiceId: realService?.id || null,
         incidentServiceName: realService?.name || null,
-        changeServiceId: changeIntegrationKey ? (realService?.id || null) : null,
-        changeServiceName: changeIntegrationKey ? (realService?.name || null) : null,
-        changeRoutingKeyOverride: changeIntegrationKey,
-        // Resetting overrides to defaults for simplicity, or we could preserve them if we looked them up
-        // For quick mapping, standardizing on the selected service is usually desired.
-        useIncidentForChange: !changeIntegrationKey,
+        changeServiceId: realService?.id || null,
+        changeServiceName: realService?.name || null,
+        changeRoutingKeyOverride: changeIntegrationKey || null,
+        useIncidentForChange: false,
       }];
 
       await api.addMappingsToProfile(effectiveProfile.id, mappingPayload);
       await fetchMappingProfiles(); // Refresh to update preview
-      addLog(`Updated mapping for ${logicalName}`, 'info');
+      if (!changeIntegrationKey) {
+        addLog(`Updated mapping for ${logicalName} (change events remain unmapped: no change routing key found).`, 'warn');
+      } else {
+        addLog(`Updated mapping for ${logicalName}`, 'info');
+      }
       setEditingLogicalService(null);
     } catch (e: any) {
       addLog(`Failed to update mapping: ${e.message}`, 'error');
