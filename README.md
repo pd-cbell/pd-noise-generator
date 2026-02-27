@@ -17,6 +17,10 @@ v2.4.3 is a patch release that hardens agent generation and improves Golden Demo
 -   **Generation Diagnostics + Quality Signals:** Provider/prompt metadata and readiness-quality indicators are surfaced in demo workflows.
 -   **Repeat-Burst Scheduling:** Event `Repeat Count` now runs concurrently with timeline progression for realistic burst behavior.
 -   **Provider Harness Fixtures:** Repeatable cross-provider validation harness and fixtures added for regression checks.
+-   **Director Launch Brief UX:** Director cards now open a launch brief drawer with persona notes, stage snapshot, mapping preview, and inline mapping edits.
+-   **Session History Reliability:** Director launches now persist session history correctly (including launcher identity + profile context).
+-   **Scenario Severity Fidelity:** Scenario events now honor per-event configured severity values.
+-   **Change Event Mapping Guardrails:** Change events require explicit change routing keys; mappings without a key are surfaced as unmapped.
 
 ## 🧠 Core Concepts: Hybrid Architecture
 
