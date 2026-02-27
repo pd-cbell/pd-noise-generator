@@ -1,16 +1,15 @@
-# Agent Notes - v2.4 (Track Monitor + Presenter Guide)
+# Agent Notes - v2.4.3 (Taxonomy + Provider Hardening)
 
 **Branch:** `main`
 
 ## Status
-v2.4 is complete. v2.4.2 is in progress with local validation in progress and cloud validation pending.
+v2.4.3 patch work is complete. Local validation is complete; broader beta validation is in progress.
 
-## v2.4.2 Focus
-- Runtime reliability hardening (track stop/restart, lifecycle status/log cleanup)
-- Director UX polish (track visibility labels, launch error surfacing, webhook copy links)
-- Golden Demo UX improvements (session history for Director/Webhook launches)
-- Agentic quality fixes (narrative stage extraction + faker token compatibility)
-- Mapping/editor validation and workflow clarity
+## v2.4.3 Focus
+- OpenAI provider hardening (proposal/build reliability and output schema compatibility)
+- Golden Demo taxonomy transition to `Industry + Use Case`
+- Repeat-burst event scheduling with concurrent timeline behavior
+- Provider diagnostics, quality surfacing, and regression harness fixtures
 
 ## Current Platform Snapshot
 - **App name:** PagerDuty Customer Sim & Demo Platform (formerly “PagerDuty Noise Simulator”).

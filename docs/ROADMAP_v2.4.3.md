@@ -261,55 +261,55 @@ Why
 
 ### P0 (Foundation / Low-Risk Validation)
 
-- [ ] Inventory and test OpenAI provider behavior across proposal/build flows
-- [ ] Capture provider-specific failures (format drift, schema violations, stage parsing misses)
-- [ ] Build a lightweight provider comparison harness (same prompt set across `google` and `openai`)
-- [ ] Capture baseline fixtures/examples for proposal/build outputs used in regression checks
-- [ ] Define patch-safe taxonomy migration strategy and field naming (`industry`, `useCase`)
-- [ ] Confirm transitional behavior for legacy `vertical` (hidden vs read-only in edit UI)
+- [x] Inventory and test OpenAI provider behavior across proposal/build flows
+- [x] Capture provider-specific failures (format drift, schema violations, stage parsing misses)
+- [x] Build a lightweight provider comparison harness (same prompt set across `google` and `openai`)
+- [x] Capture baseline fixtures/examples for proposal/build outputs used in regression checks
+- [x] Define patch-safe taxonomy migration strategy and field naming (`industry`, `useCase`)
+- [x] Confirm transitional behavior for legacy `vertical` (hidden vs read-only in edit UI)
 
 ### P1 (Provider Hardening)
 
-- [ ] Tune OpenAI prompts for proposal/build outputs (schema compliance and stage extraction reliability)
-- [ ] Add/strengthen output validation and error messages for OpenAI paths
-- [ ] Add regression test cases or fixtures for provider output normalization/parsing
-- [ ] Add provider safety limits/error UX for truncation/invalid-output cases
-- [ ] Add generation diagnostics summary (provider, retries, validation/stage extraction outcomes)
-- [ ] Add prompt version metadata for generated demos/builds (or equivalent traceability)
+- [x] Tune OpenAI prompts for proposal/build outputs (schema compliance and stage extraction reliability)
+- [x] Add/strengthen output validation and error messages for OpenAI paths
+- [x] Add regression test cases or fixtures for provider output normalization/parsing
+- [x] Add provider safety limits/error UX for truncation/invalid-output cases
+- [x] Add generation diagnostics summary (provider, retries, validation/stage extraction outcomes)
+- [x] Add prompt version metadata for generated demos/builds (or equivalent traceability)
 
 ### P1 (Taxonomy / UX)
 
-- [ ] Add `industry` + `useCase` fields (schema/API) with patch-safe compatibility
-- [ ] Replace `Vertical` + `Maturity` UI with `Industry` + `Use Case` dropdowns in Golden Demo create/edit flows
-- [ ] Update Golden Demo library/detail displays and filtering to show `Industry` + `Use Case`
-- [ ] Update agent generation inputs/prompts to consume `industry + useCase`
-- [ ] Define how `useCase` influences narrative generation (stage emphasis, business framing, incident/change balance)
-- [ ] Define how `industry` influences narrative generation (domain language, terminology, examples)
-- [ ] Add basic Director surfacing/filtering for `Use Case`
-- [ ] Add basic Director surfacing/filtering for `Industry`
-- [ ] Remove `maturityLevel` from UI, prompts, filtering, and API write paths
-- [ ] Add "Needs taxonomy update" indicator for demos missing `industry` or `useCase`
-- [ ] Manually normalize existing demos to approved `Industry` + `Use Case` values (small set)
+- [x] Add `industry` + `useCase` fields (schema/API) with patch-safe compatibility
+- [x] Replace `Vertical` + `Maturity` UI with `Industry` + `Use Case` dropdowns in Golden Demo create/edit flows
+- [x] Update Golden Demo library/detail displays and filtering to show `Industry` + `Use Case`
+- [x] Update agent generation inputs/prompts to consume `industry + useCase`
+- [x] Define how `useCase` influences narrative generation (stage emphasis, business framing, incident/change balance)
+- [x] Define how `industry` influences narrative generation (domain language, terminology, examples)
+- [x] Add basic Director surfacing/filtering for `Use Case`
+- [x] Add basic Director surfacing/filtering for `Industry`
+- [x] Remove `maturityLevel` from UI, prompts, filtering, and API write paths
+- [x] Add "Needs taxonomy update" indicator for demos missing `industry` or `useCase`
+- [ ] Manually normalize existing demos to approved `Industry` + `Use Case` values (small set) — documented as manual follow-up
 - [ ] Add Composer stage preserve/lock mode to protect manual edits
 
 ### P1 (Simulation Timeline / Event UX)
 
-- [ ] Restore per-event repeat burst behavior with concurrent scheduling semantics
-- [ ] Add inline `Delay` + `Repeat Count` controls in event editor rows
-- [ ] Ensure repeat cadence is configurable/sane and does not block subsequent events
-- [ ] Add regression validation for overlapping events with repeats (A repeats while B/C fire on schedule)
+- [x] Restore per-event repeat burst behavior with concurrent scheduling semantics
+- [x] Add inline `Delay` + `Repeat Count` controls in event editor rows
+- [x] Ensure repeat cadence is configurable/sane and does not block subsequent events
+- [x] Add regression validation for overlapping events with repeats (A repeats while B/C fire on schedule)
 
 ### P2 (Event Generation Prep for v2.5)
 
-- [ ] Refactor event generation into clearer parse/normalize/prep steps (no behavior break)
-- [ ] Normalize generated event metadata/required fields before save/render
-- [ ] Document seams intended for `v2.5` adapter/template integration
+- [x] Refactor event generation into clearer parse/normalize/prep steps (no behavior break)
+- [x] Normalize generated event metadata/required fields before save/render
+- [x] Document seams intended for `v2.5` adapter/template integration
 - [ ] Add unit tests for parse/normalize/prep edge cases (service mismatches, missing fields, unresolved placeholders)
 
 ### P3 (Docs / Validation)
 
-- [ ] Add `v2.4.3` validation checklist (OpenAI path + taxonomy transition smoke tests)
-- [ ] Update changelog/README/user-facing notes for `Industry` / `Use Case` terminology
+- [x] Add `v2.4.3` validation checklist (OpenAI path + taxonomy transition smoke tests)
+- [x] Update changelog/README/user-facing notes for `Industry` / `Use Case` terminology
 
 ---
 
