@@ -5,7 +5,8 @@ interface PagerDutyClientConfig {
   apiToken: string;
   fromEmail: string;
   apiBase?: string;
-  pdRegion?: string; // New: PagerDuty Region
+  eventsBase?: string;
+  pdRegion?: string;
   onRequest?: () => void;
 }
 
@@ -16,16 +17,20 @@ export class PagerDutyClient {
   private readonly minRequestInterval: number = 200; // 5 requests per second max
 
   constructor(config: PagerDutyClientConfig) {
-    let apiBase = 'https://api.pagerduty.com';
+    let apiBase = config.apiBase || 'https://api.pagerduty.com';
+    let eventsBase = 'https://events.pagerduty.com';
     if (config.pdRegion === 'EU') {
         apiBase = 'https://api.eu.pagerduty.com';
+        eventsBase = 'https://events.eu.pagerduty.com';
     } else if (config.pdRegion === 'STAGING') {
         apiBase = 'https://api.pd-staging.com';
+        eventsBase = 'https://events.pd-staging.com';
     }
 
     this.config = {
-      apiBase: apiBase, // Use determined apiBase
-      ...config
+      ...config,
+      apiBase,
+      eventsBase,
     };
     // If we ever need proxy
     // if (process.env.HTTP_PROXY) {
@@ -262,7 +267,7 @@ export class PagerDutyClient {
   // These do NOT use apiToken or fromEmail headers
   async triggerEvent(eventBody: any) {
     const sanitized = this.sanitizeEventBody(eventBody);
-    const res = await fetch('https://events.pagerduty.com/v2/enqueue', {
+    const res = await fetch(`${this.config.eventsBase}/v2/enqueue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventBody)
@@ -280,7 +285,7 @@ export class PagerDutyClient {
   async triggerChangeEvent(eventBody: any) {
     const sanitized = this.sanitizeEventBody(eventBody);
     console.log('[PagerDutyClient] Sending change event:', JSON.stringify(sanitized, null, 2));
-    const res = await fetch('https://events.pagerduty.com/v2/change/enqueue', {
+    const res = await fetch(`${this.config.eventsBase}/v2/change/enqueue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventBody)
