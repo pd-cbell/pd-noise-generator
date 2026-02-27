@@ -137,8 +137,13 @@ Deliverables
 
 Dropdown Options (Confirmed)
 
-Use Case (left 6)
+Use Case (approved list)
 - `Agent Ops`
+- `Incident Management`
+- `Major Incident Management`
+- `On-Call Operations`
+- `Event Orchestration`
+- `Customer Service Ops`
 - `Security Incident Management`
 - `Data Ops`
 - `DORA Compliance`

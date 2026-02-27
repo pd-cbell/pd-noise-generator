@@ -1,5 +1,10 @@
 export const GOLDEN_DEMO_USE_CASE_OPTIONS = [
   'Agent Ops',
+  'Incident Management',
+  'Major Incident Management',
+  'On-Call Operations',
+  'Event Orchestration',
+  'Customer Service Ops',
   'Security Incident Management',
   'Data Ops',
   'DORA Compliance',
