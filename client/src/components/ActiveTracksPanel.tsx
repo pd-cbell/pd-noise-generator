@@ -14,6 +14,20 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
   const { trackRunsById, goldenDemos, mappingProfiles } = useStore();
   const { impersonatorId } = useAuth();
 
+  const runByTrackId = Object.values(trackRunsById || {}).reduce<Record<string, {
+    goldenDemoId?: string | null;
+    mappingProfileId?: string | null;
+    runId: string;
+  }>>((acc, run) => {
+    if (!run.trackId) return acc;
+    acc[run.trackId] = {
+      goldenDemoId: run.goldenDemoId || null,
+      mappingProfileId: run.mappingProfileId || null,
+      runId: run.trackRunId,
+    };
+    return acc;
+  }, {});
+
   const scenarioTracks = currentSimState?.tracks?.filter(t => t.type === 'scenario' && t.status === 'running') || [];
   const sharedScenarioRuns = Object.values(trackRunsById || {})
     .filter(run => run.isActive && run.trackId)
@@ -32,9 +46,9 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
     ...scenarioTracks.map(track => ({
       id: track.id,
       name: track.name,
-      runId: undefined,
-      goldenDemoId: null,
-      mappingProfileId: null,
+      runId: runByTrackId[track.id]?.runId,
+      goldenDemoId: runByTrackId[track.id]?.goldenDemoId || null,
+      mappingProfileId: runByTrackId[track.id]?.mappingProfileId || null,
       source: 'session-track' as const,
     })),
     ...sharedScenarioRuns,
@@ -103,6 +117,11 @@ export const ActiveTracksPanel: React.FC<ActiveTracksPanelProps> = ({ isOpen, on
                   Running...
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="text-[10px] px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
+                    Scenario: {track.goldenDemoId
+                      ? (goldenDemos.find((demo) => demo.id === track.goldenDemoId)?.name || 'Unknown')
+                      : (track.name || 'Unknown')}
+                  </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
                     track.source === 'session-track'
                       ? 'bg-green-50 text-green-700 border-green-200'

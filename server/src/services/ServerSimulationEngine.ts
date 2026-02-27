@@ -394,7 +394,8 @@ export class SimulationSession {
       requesterName?: string | null;
       requesterEmail?: string | null;
       source?: SessionSource;
-    }
+    },
+    goldenDemoId?: string
   ) {
       const id = trackId || crypto.randomUUID();
       
@@ -407,6 +408,7 @@ export class SimulationSession {
               ...this.config, // Inherit base config
               items: configOrItems, // Override items
               mappingProfileId: effectiveMappingProfileId,
+              goldenDemoId: goldenDemoId || this.config.goldenDemoId,
           };
           const trackRunId = crypto.randomUUID();
           const requester = launchContext?.requesterId || this.userId;
